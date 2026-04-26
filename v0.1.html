@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Fieldnote v0.1</title>
+<title>Fieldnote v0.2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <link href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
     --ink: #1a1d1a;
@@ -353,7 +354,7 @@
 </head>
 <body>
 
-<div class="proto-label">Fieldnote v0.1 · prototype</div>
+<div class="proto-label">Fieldnote v0.2 · prototype</div>
 
 <div class="phone" id="phone">
 
@@ -468,18 +469,18 @@
           <polyline points="12 19 5 12 12 5"/>
         </svg>
       </button>
-      <div class="screen-title">About v0.1</div>
+      <div class="screen-title">About v0.2</div>
     </div>
     <div class="screen-body">
       <div class="about-block">
-        <b>v0.1 — One hardcoded tour with GPS triggers.</b>
-        Goal: prove that maps + GPS + pins work together in a browser.
+        <b>v0.2 — Same tour, served from Supabase.</b>
+        Goal: prove a real backend works. Same trigger logic as v0.1, but the tour data now comes from a database instead of being baked into the file.
       </div>
       <div class="about-block muted">
-        Three pins along a Fossvogsdalur walk. Walk into a pin's radius, get a chime and a note. Tap a visited pin to reread.
+        Open with <code>?tour=&lt;slug&gt;</code> to load a different tour. Default is <code>fossvogsdalur-001</code>.
       </div>
       <div class="about-block muted">
-        No authoring. No multi-device. No persistence. Those are v0.2 and beyond.
+        Still no authoring, no realtime, no multi-device sync. Those are v0.3 and beyond.
       </div>
     </div>
   </div>
@@ -488,48 +489,27 @@
 
 <script>
 // ╭──────────────────────────────────────────────────────╮
-// │  v0.1 — ONE HARDCODED TOUR WITH GPS TRIGGERS        │
+// │  v0.2 — TOUR FETCHED FROM SUPABASE                   │
 // ╰──────────────────────────────────────────────────────╯
 
-// ── 0. CONFIG — paste your Mapbox public token here ──
-// This is a public token (pk.*) and is meant to live in client-side code.
-// Protect it by restricting URLs in your Mapbox dashboard:
-// https://account.mapbox.com/access-tokens/  →  edit token  →  URL restrictions
-// Add only the domains you'll serve this file from (localhost, *.pages.dev, your custom domain).
+// ── 0. CONFIG ──
+// Public client-side credentials. Both are designed to live in client code.
+// Mapbox token: protected by URL allowlist in Mapbox dashboard.
+// Supabase publishable key: protected by Row Level Security (RLS) policies
+// on the database — anon key can only do what the policies explicitly allow.
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiZmllbGRub3RlMSIsImEiOiJjbW9mbmhtZmcwMGI2MnNzZmpmOG95OTYyIn0.ZkANytVZy65-RZf4--aEzQ';
+const SUPABASE_URL = 'https://xgelrfdrdvrlltcsquqh.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_56-3xMMvHZFtw2LGKkcqew_09NhbiB0';
+
+// Default tour slug used when the URL doesn't specify one.
+// Open the app with ?tour=some-slug to load a different tour.
+const DEFAULT_TOUR_SLUG = 'fossvogsdalur-001';
 
 // ── 1. THE TOUR ──
-// Hardcoded for v0.1. In v0.5 this becomes user-authored, in v0.2 it might come from a JSON file.
-const TOUR = {
-  id: 'fossvogsdalur-001',
-  name: 'Fossvogsdalur',
-  subtitle: 'a walk from Gautland 21',
-  // Where the map opens initially
-  home: { lng: -21.874559, lat: 64.121801 },
-  pins: [
-    {
-      id: 'p1',
-      lng: -21.874559, lat: 64.121801,
-      radius: 35,  // meters — the trigger zone
-      title: 'First fork',
-      body: "Two paths split here. The smaller one curving up has a view; the main path stays level. We'll rejoin at the pond."
-    },
-    {
-      id: 'p2',
-      lng: -21.8650, lat: 64.1190,
-      radius: 50,
-      title: 'The pond',
-      body: "Ducks year-round. There's a bench on the north side most people miss — walk behind the willow."
-    },
-    {
-      id: 'p3',
-      lng: -21.8500, lat: 64.1200,
-      radius: 40,
-      title: 'End of the valley',
-      body: "Where the valley opens into Kópavogur. Turn back, or loop the south ridge (+15 min)."
-    }
-  ]
-};
+// Loaded from Supabase at runtime. Until loadTour() resolves, this stays null
+// and the app shows a loading state. Shape after load:
+//   { id, slug, name, subtitle, home: {lng, lat}, pins: [...] }
+let TOUR = null;
 
 // ── 2. STATE ──
 // Everything that changes while the app is running.
@@ -584,16 +564,113 @@ window.addEventListener('resize', () => {
 let map = null;  // Mapbox map instance
 
 // ── 4. BOOT ──
-// Token is hardcoded above. If you forgot to paste yours, fail loud.
-if (!MAPBOX_TOKEN || !MAPBOX_TOKEN.startsWith('pk.')) {
-  document.getElementById('mapbox-map').innerHTML =
-    '<div style="position:absolute; inset:0; padding:40px; display:flex; align-items:center; justify-content:center; text-align:center; font-family:\'JetBrains Mono\',monospace; font-size:12px; color:var(--mark); line-height:1.6;">' +
-    'Mapbox token missing.<br><br>' +
-    'Open this file and paste your public token (pk.…) into the <b>MAPBOX_TOKEN</b> constant near the top of the script.' +
-    '</div>';
-} else {
+// Order of operations:
+//   1. Validate config (Mapbox + Supabase) — fail loud if missing
+//   2. Read ?tour=<slug> from URL, default if absent
+//   3. Show loading state
+//   4. Fetch tour from Supabase
+//   5. Init map with the loaded tour, or show error screen if fetch failed
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function boot() {
+  // Config sanity check.
+  if (!MAPBOX_TOKEN || !MAPBOX_TOKEN.startsWith('pk.')) {
+    showFatalError('Mapbox token missing. Paste your public token (pk.…) into the MAPBOX_TOKEN constant.');
+    return;
+  }
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    showFatalError('Supabase config missing. Set SUPABASE_URL and SUPABASE_KEY at the top of the script.');
+    return;
+  }
+
+  // Which tour are we loading? URL param wins, otherwise default.
+  const params = new URLSearchParams(window.location.search);
+  const slug = params.get('tour') || DEFAULT_TOUR_SLUG;
+
+  showLoading(`Loading ${slug}…`);
+
+  // Fetch the row from Supabase. .single() asserts exactly one match;
+  // if zero or many rows match, it returns an error in `error`.
+  const { data, error } = await supabase
+    .from('tours')
+    .select('id, slug, name, subtitle, home_lng, home_lat, pins')
+    .eq('slug', slug)
+    .single();
+
+  if (error || !data) {
+    showFatalError(`Couldn't load tour "${slug}". ${error ? error.message : 'No tour found with that slug.'}`);
+    return;
+  }
+
+  // Map DB row → in-memory TOUR object the rest of the app expects.
+  TOUR = {
+    id: data.id,
+    slug: data.slug,
+    name: data.name,
+    subtitle: data.subtitle,
+    home: { lng: data.home_lng, lat: data.home_lat },
+    pins: data.pins,
+  };
+
+  // Update the menu masthead with the loaded tour's name.
+  applyTourMetadata();
+
+  hideLoading();
   initMap(MAPBOX_TOKEN);
 }
+
+function applyTourMetadata() {
+  // Replace the menu's static title with whatever the loaded tour says.
+  // Cheap parsing of the name into "Lead<em>End</em>" if it's one word, otherwise full text.
+  const masthead = document.querySelector('.menu-masthead h1');
+  const sub = document.querySelector('.menu-masthead .sub');
+  const stamp = document.querySelector('.menu-masthead-stamp');
+  if (masthead) masthead.textContent = TOUR.name;
+  if (sub) sub.textContent = TOUR.subtitle || '';
+  if (stamp) stamp.textContent = `Tour · ${TOUR.slug}`;
+}
+
+function showLoading(msg) {
+  let el = document.getElementById('loading-screen');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'loading-screen';
+    el.style.cssText =
+      'position:absolute; inset:0; z-index:90; background:var(--paper);' +
+      'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+      'gap:20px; padding:40px; text-align:center;';
+    el.innerHTML =
+      '<div style="font-family:\'Fraunces\',serif; font-style:italic; font-size:22px; color:var(--ink);" id="loading-msg"></div>' +
+      '<div style="font-family:\'JetBrains Mono\',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">Fieldnote</div>';
+    document.getElementById('phone').appendChild(el);
+  }
+  document.getElementById('loading-msg').textContent = msg;
+}
+function hideLoading() {
+  const el = document.getElementById('loading-screen');
+  if (el) el.remove();
+}
+function showFatalError(msg) {
+  hideLoading();
+  let el = document.getElementById('error-screen');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'error-screen';
+    el.style.cssText =
+      'position:absolute; inset:0; z-index:95; background:var(--paper);' +
+      'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+      'gap:20px; padding:40px; text-align:center;';
+    document.getElementById('phone').appendChild(el);
+  }
+  el.innerHTML =
+    '<div style="font-family:\'Fraunces\',serif; font-style:italic; font-size:22px; color:var(--mark);">Something went wrong</div>' +
+    '<div style="font-family:\'JetBrains Mono\',monospace; font-size:12px; line-height:1.6; color:var(--rule); max-width:300px;">' +
+    msg.replace(/</g, '&lt;') +
+    '</div>';
+}
+
+boot();
 
 // ── 5. MAP INIT ──
 function initMap(token) {
