@@ -571,7 +571,10 @@ let map = null;  // Mapbox map instance
 //   4. Fetch tour from Supabase
 //   5. Init map with the loaded tour, or show error screen if fetch failed
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// `window.supabase` is the global injected by the CDN bundle (which owns that name);
+// we destructure createClient out and name our instance `supabaseClient` to avoid shadowing.
+const { createClient } = window.supabase;
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function boot() {
   // Config sanity check.
@@ -592,7 +595,7 @@ async function boot() {
 
   // Fetch the row from Supabase. .single() asserts exactly one match;
   // if zero or many rows match, it returns an error in `error`.
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('tours')
     .select('id, slug, name, subtitle, home_lng, home_lat, pins')
     .eq('slug', slug)
