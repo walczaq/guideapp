@@ -99,8 +99,10 @@
   }
   .overlay-svg {
     position: absolute; inset: 0;
+    width: 100%; height: 100%;
     pointer-events: none;
     z-index: 2;
+    overflow: visible;
   }
   .overlay-svg .pin-group { pointer-events: auto; }
 
@@ -546,6 +548,24 @@ const signalText = document.getElementById('signal-text');
 const gpsBanner = document.getElementById('gps-banner');
 const gpsBannerMsg = document.getElementById('gps-banner-msg');
 
+// ── SVG OVERLAY SIZING ──
+// The overlay SVG sits on top of Mapbox. For its internal coordinate system
+// to match screen pixels (so translate(400, 300) means "400px right, 300px down"),
+// its viewBox must equal its pixel dimensions. We set this on load and on resize.
+function syncOverlaySize() {
+  const stage = document.getElementById('stage');
+  const w = stage.clientWidth;
+  const h = stage.clientHeight;
+  overlay.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  overlay.setAttribute('width', w);
+  overlay.setAttribute('height', h);
+}
+syncOverlaySize();
+window.addEventListener('resize', () => {
+  syncOverlaySize();
+  renderAll();
+});
+
 let map = null;  // Mapbox map instance
 
 // ── 4. BOOT ──
@@ -776,8 +796,10 @@ function renderYou() {
   g.setAttribute('class', 'you-group');
   g.setAttribute('transform', `translate(${x}, ${y})`);
 
-  // accuracy halo — only when we have real GPS with known accuracy
-  if (state.gpsMode === 'real' && state.accuracy) {
+  // accuracy halo — only when we have real GPS with known accuracy.
+  // Cap visually so a wildly imprecise WiFi-based fix (which can be 10km+)
+  // doesn't blot out the entire map.
+  if (state.gpsMode === 'real' && state.accuracy && state.accuracy < 200) {
     const acc = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     acc.setAttribute('class', 'you-accuracy');
     acc.setAttribute('r', state.accuracy * ppm);
