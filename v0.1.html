@@ -321,10 +321,16 @@
     font-size: 13px; line-height: 1.4;
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     z-index: 8;
-    transform: translateY(-120px);
+    transform: translateY(-200px);
     transition: transform 0.3s cubic-bezier(0.3, 0.8, 0.3, 1);
+    pointer-events: none;
+    visibility: hidden;
   }
-  .gps-banner.show { transform: translateY(0); }
+  .gps-banner.show {
+    transform: translateY(0);
+    pointer-events: auto;
+    visibility: visible;
+  }
   .gps-banner b {
     font-weight: 700;
     display: block;
