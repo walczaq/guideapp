@@ -108,7 +108,9 @@
 
   /* HUD */
   .map-hud {
-    position: absolute; top: 50px; left: 0; right: 0;
+    position: absolute;
+    top: env(safe-area-inset-top, 0);
+    left: 0; right: 0;
     display: flex; justify-content: space-between; align-items: flex-start;
     padding: 12px 16px; pointer-events: none; z-index: 5;
   }
@@ -313,7 +315,8 @@
 
   /* GPS error banner — when location fails or is denied */
   .gps-banner {
-    position: absolute; left: 16px; right: 16px; top: 110px;
+    position: absolute; left: 16px; right: 16px;
+    top: calc(env(safe-area-inset-top, 0) + 76px);
     background: var(--mark);
     color: var(--paper);
     padding: 12px 16px;
