@@ -1,0 +1,1784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Fieldnote v0.4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/idb@8/build/umd.js"></script>
+<style>
+  :root {
+    --ink: #1a1d1a;
+    --paper: #ebe5d7;
+    --paper-2: #dcd4c2;
+    --paper-3: #d0c7b3;
+    --rule: #2a2e2a;
+    --rule-soft: rgba(42,46,42,0.15);
+    --mark: #b8331d;
+    --pin-ring: rgba(184, 51, 29, 0.18);
+    --you: #1a1d1a;
+    --armed: #c79428;
+    --signal-good: #48835a;
+    --signal-weak: #c79428;
+    --signal-bad: #b8331d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+  body {
+    font-family: 'Fraunces', Georgia, serif;
+    background: #1a1a1a;
+    color: var(--ink);
+    font-feature-settings: "ss01" on;
+    user-select: none; -webkit-user-select: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* phone frame on desktop only */
+  .phone {
+    position: relative;
+    width: 390px; height: 844px;
+    max-height: calc(100dvh - 32px);
+    background: var(--paper);
+    overflow: hidden;
+    border-radius: 44px;
+    box-shadow: 0 0 0 10px #0a0a0a, 0 0 0 12px #2a2a2a, 0 40px 80px rgba(0,0,0,0.4);
+  }
+  .phone::before {
+    content: ""; position: absolute;
+    top: 10px; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 28px;
+    background: #0a0a0a; border-radius: 20px;
+    z-index: 200; pointer-events: none;
+  }
+  .proto-label {
+    position: fixed; top: 14px; left: 50%;
+    transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: #777;
+    pointer-events: none;
+  }
+  @media (max-width: 500px), (pointer: coarse) {
+    body { background: var(--paper); }
+    .phone {
+      width: 100vw; height: 100dvh; max-height: 100dvh;
+      border-radius: 0; box-shadow: none;
+    }
+    .phone::before { display: none; }
+    .proto-label { display: none; }
+  }
+
+  /* screens stack */
+  .screen {
+    position: absolute; inset: 0;
+    background: var(--paper);
+    display: flex; flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.28s cubic-bezier(0.3, 0.8, 0.3, 1);
+    z-index: 50; overflow: hidden;
+  }
+  .screen.visible { transform: translateX(0); }
+  .screen.home { transform: translateX(0); z-index: 1; transition: none; }
+  .status-bar { height: 50px; flex-shrink: 0; padding-top: env(safe-area-inset-top); }
+
+  /* map */
+  .map-stage { position: relative; flex: 1; overflow: hidden; }
+  #mapbox-map { position: absolute; inset: 0; z-index: 0; }
+  .mapboxgl-ctrl-bottom-left,
+  .mapboxgl-ctrl-top-right {
+    display: none !important;
+  }
+  .mapboxgl-ctrl-attrib {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px !important;
+    background: rgba(235,229,215,0.8) !important;
+    padding: 2px 6px !important;
+  }
+  .overlay-svg {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 2;
+    overflow: visible;
+  }
+  .overlay-svg .pin-group { pointer-events: auto; }
+
+  /* HUD */
+  .map-hud {
+    position: absolute;
+    top: env(safe-area-inset-top, 0);
+    left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 12px 16px; pointer-events: none; z-index: 5;
+  }
+  .map-hud > * { pointer-events: auto; }
+  .icon-btn {
+    width: 48px; height: 48px;
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--ink);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    transition: background 0.1s, transform 0.1s;
+  }
+  .icon-btn:active { transform: scale(0.94); background: var(--paper-2); }
+  .icon-btn svg { width: 22px; height: 22px; }
+
+  /* signal indicator (top-right) */
+  .signal {
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 14px;
+    padding: 0 14px; height: 48px;
+    display: flex; align-items: center; gap: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em;
+    color: var(--rule);
+  }
+  .signal-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--signal-bad);
+    transition: background 0.3s;
+  }
+  .signal-dot.good { background: var(--signal-good); }
+  .signal-dot.weak { background: var(--signal-weak); }
+  .signal-dot.searching { background: var(--signal-bad); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  /* zoom + follow */
+  .zoom-controls {
+    position: absolute; right: 16px; bottom: 30px;
+    display: flex; flex-direction: column; gap: 4px; z-index: 5;
+  }
+  .zoom-btn {
+    width: 44px; height: 44px;
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px; font-weight: 700; color: var(--ink);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  }
+  .zoom-btn:active { background: var(--paper-2); }
+  .zoom-btn.active {
+    background: var(--ink); color: var(--paper); border-color: var(--ink);
+  }
+
+  /* pins */
+  .pin-group { cursor: pointer; }
+  .pin-radius {
+    fill: var(--pin-ring);
+    stroke: var(--mark); stroke-width: 1; stroke-dasharray: 4 3;
+    opacity: 0.55;
+  }
+  .pin-group.armed .pin-radius {
+    fill: rgba(199, 148, 40, 0.25);
+    stroke: var(--armed); opacity: 0.9;
+    animation: armedPulse 1.2s ease-in-out infinite;
+  }
+  @keyframes armedPulse { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
+  .pin-marker { fill: var(--mark); stroke: var(--ink); stroke-width: 1.5; }
+  .pin-group.visited .pin-marker { fill: var(--paper-2); stroke: var(--rule); }
+  .pin-group.visited .pin-label { fill: var(--rule); }
+  .pin-group.visited .pin-radius { opacity: 0.2; }
+  .pin-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700;
+    fill: var(--paper); text-anchor: middle; pointer-events: none;
+  }
+
+  /* you dot — accuracy halo + heading */
+  .you-accuracy {
+    fill: rgba(72, 131, 90, 0.15);
+    stroke: rgba(72, 131, 90, 0.4);
+    stroke-width: 1;
+  }
+  .you-dot { fill: var(--you); stroke: var(--paper); stroke-width: 2.5; }
+  .you-halo { fill: var(--ink); opacity: 0.12; }
+
+  /* generic screen header */
+  .screen-header {
+    display: flex; align-items: center;
+    padding: 14px 16px; gap: 12px;
+    border-bottom: 1px solid var(--rule-soft);
+    background: var(--paper);
+  }
+  .back-btn {
+    width: 40px; height: 40px;
+    background: transparent; border: none; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--ink); margin-left: -8px;
+  }
+  .back-btn:active { background: var(--paper-2); }
+  .back-btn svg { width: 22px; height: 22px; }
+  .screen-title {
+    font-family: 'Fraunces', serif; font-weight: 400;
+    font-size: 22px; flex: 1;
+    font-variation-settings: "opsz" 90;
+  }
+  .screen-title em { font-style: italic; color: var(--mark); }
+  .screen-body {
+    flex: 1; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px 20px 40px;
+  }
+
+  /* menu */
+  .menu-masthead {
+    padding: 8px 4px 24px; margin-bottom: 8px;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .menu-masthead-stamp {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule); margin-bottom: 8px;
+  }
+  .menu-masthead h1 {
+    font-family: 'Fraunces', serif; font-weight: 400;
+    font-size: 34px; line-height: 1;
+    font-variation-settings: "opsz" 90;
+  }
+  .menu-masthead h1 em { font-style: italic; color: var(--mark); }
+  .menu-masthead .sub {
+    margin-top: 6px; font-size: 14px; font-style: italic; color: #4a4a4a;
+  }
+  .menu-list { display: flex; flex-direction: column; }
+  .menu-item {
+    display: flex; align-items: center; gap: 14px;
+    padding: 18px 4px;
+    border: none; border-bottom: 1px solid var(--rule-soft);
+    background: transparent;
+    cursor: pointer; text-align: left; width: 100%;
+    font-family: 'Fraunces', serif;
+    font-size: 17px; color: var(--ink);
+  }
+  .menu-item:active { background: var(--paper-2); }
+  .menu-icon {
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--paper-2); border-radius: 10px; flex-shrink: 0;
+  }
+  .menu-icon svg { width: 18px; height: 18px; color: var(--ink); }
+  .menu-label { flex: 1; }
+  .menu-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule); opacity: 0.7; margin-left: 6px;
+  }
+  .menu-chevron { color: var(--rule); opacity: 0.4; font-size: 22px; }
+
+  /* arrived popup */
+  .pin-popup {
+    position: absolute; left: 16px; right: 16px;
+    top: 50%;
+    transform: translateY(calc(-50% + 20px));
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 0 0 8px var(--paper-2);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.3s, transform 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.1), visibility 0s linear 0.3s;
+    z-index: 20;
+  }
+  .pin-popup.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(-50%);
+    pointer-events: auto;
+    transition: opacity 0.3s, transform 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.1), visibility 0s;
+  }
+  .popup-header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .popup-stamp {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--mark);
+  }
+  .popup-close {
+    background: transparent; border: none;
+    font-size: 20px; cursor: pointer;
+    padding: 4px 8px; margin: -4px -8px;
+    color: var(--ink);
+  }
+  .popup-body { padding: 18px 20px 22px; }
+  .popup-body h2 {
+    font-weight: 400; font-size: 24px; line-height: 1.15;
+    margin-bottom: 10px;
+    font-variation-settings: "opsz" 90;
+  }
+  .popup-body p { font-size: 15px; line-height: 1.55; color: #2a2e2a; }
+
+  /* GPS error banner — when location fails or is denied */
+  .gps-banner {
+    position: absolute; left: 16px; right: 16px;
+    top: calc(env(safe-area-inset-top, 0) + 76px);
+    background: var(--mark);
+    color: var(--paper);
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 13px; line-height: 1.4;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 8;
+    transform: translateY(-200px);
+    transition: transform 0.3s cubic-bezier(0.3, 0.8, 0.3, 1);
+    pointer-events: none;
+    visibility: hidden;
+  }
+  .gps-banner.show {
+    transform: translateY(0);
+    pointer-events: auto;
+    visibility: visible;
+  }
+  .gps-banner b {
+    font-weight: 700;
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  /* about screen text */
+  .about-block {
+    font-size: 15px; line-height: 1.55; color: #2a2e2a;
+    margin-bottom: 14px;
+  }
+  .about-block.muted { color: #4a4a4a; }
+  .about-block b { font-weight: 600; color: var(--ink); }
+</style>
+</head>
+<body>
+
+<div class="proto-label">Fieldnote v0.4 · prototype</div>
+
+<div class="phone" id="phone">
+
+  <!-- HOME (map) -->
+  <div class="screen home" id="screen-home">
+    <div class="map-stage" id="stage">
+      <div id="mapbox-map"></div>
+
+      <svg class="overlay-svg" id="overlay">
+        <g id="pins-layer"></g>
+        <g id="you-layer"></g>
+      </svg>
+
+      <div class="map-hud">
+        <button class="icon-btn" id="burger-btn" aria-label="Menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="4" y1="7" x2="20" y2="7"/>
+            <line x1="4" y1="12" x2="20" y2="12"/>
+            <line x1="4" y1="17" x2="20" y2="17"/>
+          </svg>
+        </button>
+        <div class="signal" id="signal">
+          <span class="signal-dot searching" id="signal-dot"></span>
+          <span id="signal-text">Searching</span>
+        </div>
+      </div>
+
+      <!-- GPS error banner -->
+      <div class="gps-banner" id="gps-banner">
+        <b>Location unavailable</b>
+        <span id="gps-banner-msg">Checking…</span>
+      </div>
+
+      <div class="zoom-controls">
+        <button class="zoom-btn" id="zoom-in">+</button>
+        <button class="zoom-btn" id="zoom-out">−</button>
+        <button class="zoom-btn" id="recenter" style="margin-top: 4px;" title="Follow me">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <line x1="12" y1="2" x2="12" y2="5"/>
+            <line x1="12" y1="19" x2="12" y2="22"/>
+            <line x1="2" y1="12" x2="5" y2="12"/>
+            <line x1="19" y1="12" x2="22" y2="12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="pin-popup" id="popup">
+        <div class="popup-header">
+          <span class="popup-stamp" id="popup-stamp">Pin № 01 · Arrived</span>
+          <button class="popup-close" id="popup-close">✕</button>
+        </div>
+        <div class="popup-body">
+          <h2 id="popup-title">…</h2>
+          <p id="popup-body-el">…</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MENU -->
+  <div class="screen" id="screen-menu">
+    <div class="status-bar"></div>
+    <div class="screen-header">
+      <button class="back-btn" data-close-screen>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </button>
+      <div class="screen-title">Menu</div>
+    </div>
+    <div class="screen-body">
+      <div class="menu-masthead">
+        <div class="menu-masthead-stamp">Tour № 001 · Hardcoded</div>
+        <h1>Fossvogs<em>dalur</em></h1>
+        <div class="sub">a walk from Gautland 21</div>
+      </div>
+      <div class="menu-list">
+        <button class="menu-item" data-action="reset">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="1 4 1 10 7 10"/>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+          </div>
+          <div class="menu-label">Reset visited pins</div>
+          <span class="menu-chevron">›</span>
+        </button>
+        <button class="menu-item" data-action="about">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="16" x2="12" y2="12"/>
+              <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+          </div>
+          <div class="menu-label">About this build</div>
+          <span class="menu-chevron">›</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ABOUT -->
+  <div class="screen" id="screen-about">
+    <div class="status-bar"></div>
+    <div class="screen-header">
+      <button class="back-btn" data-close-screen>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </button>
+      <div class="screen-title">About v0.4</div>
+    </div>
+    <div class="screen-body">
+      <div class="about-block">
+        <b>v0.4 — Live guide view.</b>
+        Guides log in with an invite code, create sessions, and (eventually) see passenger dots updating on a map in real time.
+      </div>
+      <div class="about-block muted">
+        Chunk A done: invite-code auth. Open <code>?role=guide</code> and you'll be asked for a code. Future chunks: catch-up query, realtime subscription, color states, guide-visibility toggle, passenger names.
+      </div>
+      <div class="about-block muted">
+        v0.3 still works: GPS fixes captured locally, queued in IndexedDB, synced to Supabase when network is available.
+      </div>
+      <div class="about-block muted" id="about-debug">
+        <!-- populated at runtime with session + passenger info -->
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ╭──────────────────────────────────────────────────────╮
+// │  v0.3 — SESSIONS & OFFLINE-FIRST FOUNDATION          │
+// ╰──────────────────────────────────────────────────────╯
+
+// ── 0. CONFIG ──
+// Public client-side credentials. Both are designed to live in client code.
+// Mapbox token: protected by URL allowlist in Mapbox dashboard.
+// Supabase publishable key: protected by Row Level Security (RLS) policies
+// on the database — anon key can only do what the policies explicitly allow.
+const MAPBOX_TOKEN = 'pk.eyJ1IjoiZmllbGRub3RlMSIsImEiOiJjbW9mbmhtZmcwMGI2MnNzZmpmOG95OTYyIn0.ZkANytVZy65-RZf4--aEzQ';
+const SUPABASE_URL = 'https://xgelrfdrdvrlltcsquqh.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_56-3xMMvHZFtw2LGKkcqew_09NhbiB0';
+
+// Default tour slug used when neither ?session nor ?tour is in the URL,
+// and the user hasn't yet created a session. Used by the "create session"
+// form as the tour to attach the new session to.
+const DEFAULT_TOUR_SLUG = 'fossvogsdalur-001';
+
+// Generate an 8-character nanoid (URL-safe, ~218 trillion possible values).
+// Not cryptographically perfect, but plenty for a session join token where
+// the only attack is "guess someone else's session ID."
+const NANOID_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+function nanoid8() {
+  // crypto.getRandomValues is available in all modern browsers + secure contexts.
+  // Fills a Uint8Array with cryptographically random bytes.
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  let id = '';
+  for (let i = 0; i < 8; i++) {
+    id += NANOID_ALPHABET[bytes[i] % NANOID_ALPHABET.length];
+  }
+  return id;
+}
+
+// Build a human-readable session label from tour + date + guide name.
+// Format: YYYY-MM-DD-INITIALS-tourshort
+// Used in dashboards/logs/Linear comments — never in URLs (URL uses nanoid).
+function makeSessionLabel(tourSlug, guideName) {
+  const d = new Date();
+  const date = d.toISOString().slice(0, 10);  // "2026-04-26"
+  const initials = (guideName || '?')
+    .split(/\s+/)
+    .map(w => w[0] || '')
+    .join('')
+    .toUpperCase()
+    .slice(0, 3) || '?';
+  // Take the first chunk of the slug before any dashes
+  const tourShort = (tourSlug || 'tour').split('-')[0].slice(0, 8);
+  return `${date}-${initials}-${tourShort}`;
+}
+
+// ── PASSENGER ID ──
+// A stable per-device identifier. Generated once, stored in localStorage,
+// reused on every visit. Lets the guide distinguish "Sigrún's phone" from
+// "another phone called Sigrún" across reloads.
+//
+// We use a longer nanoid (16 chars) here than for sessions, because:
+//  - Passenger IDs aren't typed by humans, so there's no readability cost
+//  - They live forever per device, so collision over time matters more
+//  - 16 chars = ~10^28 possible values, effectively zero collision risk
+//
+// Reset path: clearing site data / using incognito / a different browser
+// produces a new ID. That's intentional — we don't have user accounts yet,
+// so "this device" is the unit of identity for v0.3.
+const PASSENGER_ID_KEY = 'fieldnote_passenger_id';
+
+function nanoid16() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let id = '';
+  for (let i = 0; i < 16; i++) {
+    id += NANOID_ALPHABET[bytes[i] % NANOID_ALPHABET.length];
+  }
+  return id;
+}
+
+function getOrCreatePassengerId() {
+  // localStorage can throw in private mode on some old browsers, so we wrap.
+  try {
+    let id = localStorage.getItem(PASSENGER_ID_KEY);
+    if (!id) {
+      id = nanoid16();
+      localStorage.setItem(PASSENGER_ID_KEY, id);
+    }
+    return id;
+  } catch (err) {
+    // Fallback: generate an in-memory ID that lasts for this page load only.
+    // Better than crashing; worse than persistent (the user will look like a
+    // new passenger every refresh). Real fix is to detect this and warn.
+    console.warn('localStorage unavailable; using in-memory passenger ID', err);
+    return nanoid16();
+  }
+}
+
+// Resolved at module load — every other piece of code can rely on this being set.
+const PASSENGER_ID = getOrCreatePassengerId();
+
+// ── GUIDE AUTH ──
+// Custom auth (not Supabase Auth). Beta guides redeem an invite code once,
+// receive a device token stored in localStorage, and use that token to
+// identify themselves on every subsequent visit.
+//
+// Two server-side RPCs do the work:
+//   redeem_invite_code(code, name, token) — first-time redemption
+//   lookup_guide_by_token(token) — check if a stored token is still valid
+//
+// Direct read/write to `guides` and `invite_codes` is denied by RLS; the RPCs
+// run as security-definer and are the only way clients can touch those tables.
+//
+// Token format: 32-char nanoid. Long enough to be effectively unguessable.
+
+const GUIDE_TOKEN_KEY = 'fieldnote_guide_token';
+
+function nanoid32() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  let id = '';
+  for (let i = 0; i < 32; i++) {
+    id += NANOID_ALPHABET[bytes[i] % NANOID_ALPHABET.length];
+  }
+  return id;
+}
+
+function getStoredGuideToken() {
+  try { return localStorage.getItem(GUIDE_TOKEN_KEY) || null; }
+  catch { return null; }
+}
+
+function storeGuideToken(token) {
+  try { localStorage.setItem(GUIDE_TOKEN_KEY, token); }
+  catch (err) { console.warn('Could not persist guide token', err); }
+}
+
+function clearGuideToken() {
+  try { localStorage.removeItem(GUIDE_TOKEN_KEY); }
+  catch {}
+}
+
+// Set when we successfully verify the guide on this load. Used by:
+//  - the "create session" form (we now know the guide's name)
+//  - the role=guide gate (we know we're allowed in)
+//  - future v0.4 features that attach session ownership to a guide
+let GUIDE = null;  // shape: { id, name } when logged in, otherwise null
+
+// Verify the stored token against the server. Returns the guide or null.
+// Network errors return null too (treat as logged-out, fail safe).
+async function verifyGuideToken() {
+  const token = getStoredGuideToken();
+  if (!token) return null;
+
+  const { data, error } = await supabaseClient.rpc('lookup_guide_by_token', {
+    p_token: token,
+  });
+
+  if (error) {
+    console.warn('Guide token lookup failed', error);
+    return null;
+  }
+  // The RPC returns a table (array) — empty if no match.
+  if (!data || data.length === 0) {
+    // Token was invalid (probably revoked). Clean it up so the user is sent
+    // back to the invite form on next interaction.
+    clearGuideToken();
+    return null;
+  }
+  return { id: data[0].guide_id, name: data[0].guide_name };
+}
+
+// Try to redeem an invite code. Returns the new guide on success, or throws.
+async function redeemInviteCode(code, name) {
+  const token = nanoid32();
+  const { data, error } = await supabaseClient.rpc('redeem_invite_code', {
+    p_code: code.trim(),
+    p_name: name.trim(),
+    p_token: token,
+  });
+  if (error) {
+    // Surface the error message to the form. Common cases:
+    //  "Invalid invite code"
+    //  "Invite code has already been used"
+    throw new Error(error.message || 'Could not redeem invite code');
+  }
+  if (!data || data.length === 0) {
+    throw new Error('Unexpected response from server');
+  }
+  storeGuideToken(token);
+  return { id: data[0].guide_id, name: data[0].guide_name };
+}
+
+// ── LOCATION QUEUE (IndexedDB) ──
+// Every GPS fix is written here first. A separate sync worker (chunk D) will
+// later drain this queue to Supabase when the network is available.
+//
+// Why: phones go offline. WiFi disappears. Pages reload. We must capture every
+// fix on the device, persistently, *before* even thinking about the network.
+// That's the whole point of "offline-first" — the local store is the source of
+// truth; the network is a sync mechanism.
+//
+// Schema:
+//   Database: "fieldnote"
+//   Object store: "pending_locations"
+//   Key: auto-incrementing integer (used to delete a row after sync)
+//   Value: {
+//     session_id, passenger_id, lng, lat, accuracy, client_recorded_at
+//   }
+//
+// Indexes:
+//   "by_session" on session_id — for inspecting a session's queue
+//   "by_recorded" on client_recorded_at — for sending oldest-first
+
+const DB_NAME = 'fieldnote';
+const DB_VERSION = 1;
+const STORE_LOCATIONS = 'pending_locations';
+
+let _dbPromise = null;
+
+// Open (or create) the database. Cached as a promise so concurrent callers
+// share the same open DB instead of racing.
+function openDB() {
+  if (_dbPromise) return _dbPromise;
+  _dbPromise = idb.openDB(DB_NAME, DB_VERSION, {
+    upgrade(db, oldVersion, newVersion) {
+      // upgrade() runs once, the first time the user visits with this DB_VERSION.
+      // For chunk C we have a single store; later chunks may add more.
+      if (!db.objectStoreNames.contains(STORE_LOCATIONS)) {
+        const store = db.createObjectStore(STORE_LOCATIONS, {
+          keyPath: 'id',
+          autoIncrement: true,
+        });
+        store.createIndex('by_session', 'session_id');
+        store.createIndex('by_recorded', 'client_recorded_at');
+      }
+    },
+  });
+  return _dbPromise;
+}
+
+// Append one location row to the queue.
+// `fix` shape: { lng, lat, accuracy, client_recorded_at }
+// session_id and passenger_id are added here so callers don't have to thread them.
+async function queueLocation(fix) {
+  if (!SESSION) {
+    // No session, nothing to queue against. Useful guard for the legacy ?tour mode.
+    return;
+  }
+  const db = await openDB();
+  await db.add(STORE_LOCATIONS, {
+    session_id: SESSION.id,
+    passenger_id: PASSENGER_ID,
+    lng: fix.lng,
+    lat: fix.lat,
+    accuracy: fix.accuracy ?? null,
+    client_recorded_at: fix.client_recorded_at,  // ISO string
+  });
+  // Nudge the sync worker. Bails fast if offline or if a sync is already
+  // running, so this is essentially free when we can't actually send.
+  syncOnce().catch(() => {});
+}
+
+// Read all queued rows, oldest first. Used by the sync worker (chunk D)
+// and by the debug panel to show queue contents.
+async function getQueuedLocations(limit = 1000) {
+  const db = await openDB();
+  return db.getAllFromIndex(STORE_LOCATIONS, 'by_recorded', null, limit);
+}
+
+// Count rows currently in the queue. Lightweight; called frequently to update
+// the debug indicator.
+async function getQueueSize() {
+  const db = await openDB();
+  return db.count(STORE_LOCATIONS);
+}
+
+// Delete a queued row by its auto-incrementing id. Called by chunk D after a
+// successful sync of that row to Supabase.
+async function deleteQueuedLocation(id) {
+  const db = await openDB();
+  await db.delete(STORE_LOCATIONS, id);
+}
+
+// Wipe the queue entirely. Useful for testing and for a "reset" button.
+async function clearLocationQueue() {
+  const db = await openDB();
+  await db.clear(STORE_LOCATIONS);
+}
+
+// ── SYNC WORKER ──
+// Periodically (and on connectivity change) drains the local queue to Supabase.
+//
+// Rules of the worker:
+//  1. Never delete a row before Supabase has confirmed the insert. If we delete
+//     first, a network error mid-send loses data permanently.
+//  2. Only one sync runs at a time. We use a simple in-flight flag because
+//     overlapping syncs would cause duplicate-key errors and double-deletes.
+//  3. Failures are silent and retried — no error popups for "couldn't reach
+//     Supabase," because that's the normal state when offline. The queue
+//     count in the UI is the user-visible signal.
+//  4. Batches are bounded (50 rows) to keep individual requests small and to
+//     bound the worst case if the queue ever grows huge.
+//
+// Triggers for a sync attempt:
+//   - On a fixed interval (every 10s) — handles the "we just had a fix queued"
+//     case while online, and the slow drip while offline.
+//   - On `window.addEventListener('online', ...)` — fires the instant WiFi
+//     comes back, so reconnection drains the queue immediately.
+//   - On every queueLocation() write — cheap to attempt; bails fast if offline
+//     or if a sync is already running.
+
+const SYNC_INTERVAL_MS = 10000;
+const SYNC_BATCH_SIZE = 50;
+let _syncInFlight = false;
+let _syncTimer = null;
+// Stats kept for the debug panel — purely informational.
+const _syncStats = {
+  lastAttemptAt: null,   // ms timestamp of the last sync attempt
+  lastSuccessAt: null,   // ms timestamp of the last successful sync
+  lastError: null,       // error message from the most recent failure
+  totalSynced: 0,        // running count of rows successfully sent this page-load
+};
+
+async function syncOnce() {
+  if (_syncInFlight) return;          // already running
+  if (!navigator.onLine) return;      // browser knows we're offline; skip
+  _syncInFlight = true;
+  _syncStats.lastAttemptAt = Date.now();
+
+  try {
+    // Get oldest rows first. Using getAllFromIndex with the by_recorded index
+    // means rows come back in client_recorded_at order, which is also roughly
+    // insertion order — newest data lands in Supabase chronologically.
+    const rows = await getQueuedLocations(SYNC_BATCH_SIZE);
+    if (rows.length === 0) {
+      // Nothing to sync. Update stats so the UI shows we *checked*.
+      _syncStats.lastSuccessAt = Date.now();
+      _syncStats.lastError = null;
+      return;
+    }
+
+    // Build the payload Supabase expects. We strip the local `id` field — the
+    // DB auto-assigns its own bigserial id on insert. Everything else is the
+    // schema we agreed on.
+    const payload = rows.map(r => ({
+      session_id: r.session_id,
+      passenger_id: r.passenger_id,
+      lng: r.lng,
+      lat: r.lat,
+      accuracy: r.accuracy,
+      client_recorded_at: r.client_recorded_at,
+    }));
+
+    const { error } = await supabaseClient
+      .from('passenger_locations')
+      .insert(payload);
+
+    if (error) {
+      // Could be RLS, schema mismatch, network blip, server outage. We don't
+      // distinguish — leave rows in place and try again later.
+      _syncStats.lastError = error.message;
+      console.warn('[sync] insert failed', error);
+      return;
+    }
+
+    // Insert succeeded — now safe to delete those rows from the local queue.
+    // We delete by id one at a time (idb has no bulk delete by primary-key
+    // array, and we're only doing 50 max).
+    for (const r of rows) {
+      try {
+        await deleteQueuedLocation(r.id);
+      } catch (err) {
+        // If a delete fails (extremely rare), the next sync will see this row
+        // again and try to re-insert it — Supabase will accept the duplicate
+        // (different bigserial id, no unique constraint that would reject).
+        // Mild data dup is worse than data loss; we accept it.
+        console.warn('[sync] queue delete failed for row', r.id, err);
+      }
+    }
+
+    _syncStats.totalSynced += rows.length;
+    _syncStats.lastSuccessAt = Date.now();
+    _syncStats.lastError = null;
+
+    // If we hit the batch limit, more rows are probably waiting. Kick another
+    // sync immediately rather than waiting for the next interval.
+    if (rows.length === SYNC_BATCH_SIZE) {
+      // setTimeout 0 yields to the event loop so we don't recurse synchronously.
+      setTimeout(() => { syncOnce().catch(() => {}); }, 0);
+    }
+  } catch (err) {
+    _syncStats.lastError = (err && err.message) || String(err);
+    console.warn('[sync] unexpected error', err);
+  } finally {
+    _syncInFlight = false;
+    updateDebugQueueCount();
+  }
+}
+
+// Kick the worker on page load and set up triggers. Called from boot() once
+// we have a session — no point syncing before then.
+function startSyncWorker() {
+  if (_syncTimer) return;             // already running
+  // Periodic ticker.
+  _syncTimer = setInterval(() => {
+    syncOnce().catch(() => {});
+  }, SYNC_INTERVAL_MS);
+  // Reconnection trigger — fires when the browser regains network.
+  window.addEventListener('online', () => {
+    syncOnce().catch(() => {});
+  });
+  // Try once immediately so any leftover rows from a previous session-load
+  // start draining without waiting for the first interval.
+  syncOnce().catch(() => {});
+}
+
+// ── 1. THE TOUR ──
+// Loaded from Supabase at runtime. Until loadTour() resolves, this stays null
+// and the app shows a loading state. Shape after load:
+//   { id, slug, name, subtitle, home: {lng, lat}, pins: [...] }
+let TOUR = null;
+
+// ── 1b. THE SESSION ──
+// Set when the URL contains ?session=<id> and the row was found.
+// Shape: { id, label, tour_slug, guide_name, started_at, ended_at }
+// Stays null when running in legacy ?tour=<slug> mode (no session).
+let SESSION = null;
+
+// ── 2. STATE ──
+// Everything that changes while the app is running.
+const state = {
+  // GPS-related
+  gpsMode: 'searching',  // 'searching' | 'real' | 'simulated' | 'denied' | 'unavailable'
+  youLng: null,
+  youLat: null,
+  accuracy: null,        // GPS accuracy radius in meters
+  heading: null,         // degrees, may be null on phones not moving
+
+  // Tour-related
+  armedPinId: null,      // pin currently inside its radius
+  firedPinIds: new Set(),// pins whose chime has already fired this session
+
+  // UI
+  following: false,      // map auto-centers on YOU when true
+};
+
+// ── 3. DOM REFERENCES ──
+const overlay = document.getElementById('overlay');
+const pinsLayer = document.getElementById('pins-layer');
+const youLayer = document.getElementById('you-layer');
+const popup = document.getElementById('popup');
+const popupTitle = document.getElementById('popup-title');
+const popupBodyEl = document.getElementById('popup-body-el');
+const popupStamp = document.getElementById('popup-stamp');
+const popupClose = document.getElementById('popup-close');
+const signalDot = document.getElementById('signal-dot');
+const signalText = document.getElementById('signal-text');
+const gpsBanner = document.getElementById('gps-banner');
+const gpsBannerMsg = document.getElementById('gps-banner-msg');
+
+// ── SVG OVERLAY SIZING ──
+// The overlay SVG sits on top of Mapbox. For its internal coordinate system
+// to match screen pixels (so translate(400, 300) means "400px right, 300px down"),
+// its viewBox must equal its pixel dimensions. We set this on load and on resize.
+function syncOverlaySize() {
+  const stage = document.getElementById('stage');
+  const w = stage.clientWidth;
+  const h = stage.clientHeight;
+  overlay.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  overlay.setAttribute('width', w);
+  overlay.setAttribute('height', h);
+}
+syncOverlaySize();
+window.addEventListener('resize', () => {
+  syncOverlaySize();
+  renderAll();
+});
+
+let map = null;  // Mapbox map instance
+
+// ── 4. BOOT ──
+// Order of operations:
+//   1. Validate config (Mapbox + Supabase) — fail loud if missing
+//   2. Read ?tour=<slug> from URL, default if absent
+//   3. Show loading state
+//   4. Fetch tour from Supabase
+//   5. Init map with the loaded tour, or show error screen if fetch failed
+
+// `window.supabase` is the global injected by the CDN bundle (which owns that name);
+// we destructure createClient out and name our instance `supabaseClient` to avoid shadowing.
+const { createClient } = window.supabase;
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── 4. BOOT ──
+// Three URL states for v0.3 chunk A:
+//
+//   ?session=<id>            → join the named session, fetch its tour, render map
+//   ?tour=<slug>             → legacy v0.2 mode, load tour directly (kept for testing)
+//   (neither)                → show "create session" form so a guide can start one
+//
+// The "create session" path generates a nanoid, inserts a session row,
+// then redirects to ?session=<newId>.
+
+async function boot() {
+  // Config sanity check.
+  if (!MAPBOX_TOKEN || !MAPBOX_TOKEN.startsWith('pk.')) {
+    showFatalError('Mapbox token missing. Paste your public token (pk.…) into the MAPBOX_TOKEN constant.');
+    return;
+  }
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    showFatalError('Supabase config missing. Set SUPABASE_URL and SUPABASE_KEY at the top of the script.');
+    return;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get('session');
+  const tourSlug = params.get('tour');
+  const role = params.get('role');
+
+  // Verify any stored guide token. Cheap — one RPC call. Result populates
+  // module-level GUIDE so downstream code knows whether we're a logged-in guide.
+  GUIDE = await verifyGuideToken();
+
+  // Auth gate: ?role=guide requires a valid token. If missing or invalid,
+  // show the invite-code form. After successful redemption the form reloads
+  // the page, taking us through this boot path again.
+  if (role === 'guide' && !GUIDE) {
+    showInviteCodeForm();
+    return;
+  }
+
+  if (sessionId) {
+    // Path 1: join an existing session.
+    await loadSessionAndTour(sessionId);
+  } else if (tourSlug) {
+    // Path 2: legacy direct-tour mode (v0.2 behavior). Useful for testing
+    // a tour without going through the session flow.
+    await loadTourDirectly(tourSlug);
+  } else {
+    // Path 3: no URL params — show the create-session form.
+    // Anonymous create is still allowed in chunk A; full guide-only enforcement
+    // lands later in v0.4 once we have session ownership wired up.
+    showCreateSessionForm();
+  }
+}
+
+// Load a session by ID, then load its tour, then init the map.
+async function loadSessionAndTour(sessionId) {
+  showLoading(`Joining session ${sessionId}…`);
+
+  // Fetch the session row.
+  const { data: session, error: sessionErr } = await supabaseClient
+    .from('sessions')
+    .select('id, label, tour_slug, guide_name, started_at, ended_at')
+    .eq('id', sessionId)
+    .single();
+
+  if (sessionErr || !session) {
+    showFatalError(`Couldn't find session "${sessionId}". The link may be wrong, or the session may have been deleted.`);
+    return;
+  }
+
+  // Fetch the tour referenced by the session.
+  const { data: tour, error: tourErr } = await supabaseClient
+    .from('tours')
+    .select('id, slug, name, subtitle, home_lng, home_lat, pins')
+    .eq('slug', session.tour_slug)
+    .single();
+
+  if (tourErr || !tour) {
+    showFatalError(`Session "${sessionId}" references tour "${session.tour_slug}", which couldn't be loaded.`);
+    return;
+  }
+
+  // Stash session + tour into module state.
+  SESSION = session;
+  TOUR = {
+    id: tour.id,
+    slug: tour.slug,
+    name: tour.name,
+    subtitle: tour.subtitle,
+    home: { lng: tour.home_lng, lat: tour.home_lat },
+    pins: tour.pins,
+  };
+
+  applyTourMetadata();
+  hideLoading();
+  initMap(MAPBOX_TOKEN);
+
+  // Now that we have a session, start the sync worker. It will pick up any
+  // leftover rows from a previous page-load and stream new fixes to Supabase.
+  startSyncWorker();
+}
+
+// Legacy v0.2 path — load a tour directly without a session.
+// Kept around so we can test tour rendering without the session flow.
+async function loadTourDirectly(slug) {
+  showLoading(`Loading ${slug}…`);
+  const { data, error } = await supabaseClient
+    .from('tours')
+    .select('id, slug, name, subtitle, home_lng, home_lat, pins')
+    .eq('slug', slug)
+    .single();
+
+  if (error || !data) {
+    showFatalError(`Couldn't load tour "${slug}". ${error ? error.message : 'No tour found with that slug.'}`);
+    return;
+  }
+
+  TOUR = {
+    id: data.id,
+    slug: data.slug,
+    name: data.name,
+    subtitle: data.subtitle,
+    home: { lng: data.home_lng, lat: data.home_lat },
+    pins: data.pins,
+  };
+
+  applyTourMetadata();
+  hideLoading();
+  initMap(MAPBOX_TOKEN);
+}
+
+// Render the invite-code redemption form. Shown when ?role=guide is in the URL
+// but no valid guide token is present. Reloads the page after successful
+// redemption so the boot flow can pick up the new GUIDE.
+function showInviteCodeForm() {
+  hideLoading();
+  let el = document.getElementById('invite-code-screen');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'invite-code-screen';
+  el.style.cssText =
+    'position:absolute; inset:0; z-index:90; background:var(--paper);' +
+    'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+    'gap:18px; padding:40px; text-align:center;';
+  el.innerHTML = `
+    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
+      Fieldnote · Guide access
+    </div>
+    <div style="font-family:'Fraunces',serif; font-style:italic; font-size:22px; color:var(--ink); max-width:280px; line-height:1.3;">
+      Beta access only.
+    </div>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:260px; line-height:1.5;">
+      Paste your invite code below. If you don't have one, ask Filip.
+    </div>
+    <input
+      id="invite-code-input"
+      type="text"
+      placeholder="invite code"
+      autocomplete="off"
+      autocapitalize="off"
+      style="font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:6px; text-align:center;"
+    />
+    <input
+      id="invite-name-input"
+      type="text"
+      placeholder="your name"
+      style="font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:6px; text-align:center;"
+    />
+    <button
+      id="invite-redeem-btn"
+      style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+    >
+      Redeem
+    </button>
+    <div id="invite-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
+  `;
+  document.getElementById('phone').appendChild(el);
+
+  const codeInput = document.getElementById('invite-code-input');
+  const nameInput = document.getElementById('invite-name-input');
+  const errorEl = document.getElementById('invite-error');
+  const btn = document.getElementById('invite-redeem-btn');
+
+  async function trySubmit() {
+    const code = (codeInput.value || '').trim();
+    const name = (nameInput.value || '').trim();
+    errorEl.textContent = '';
+    if (!code) { codeInput.focus(); errorEl.textContent = 'Enter your invite code.'; return; }
+    if (!name) { nameInput.focus(); errorEl.textContent = 'Enter your name.'; return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Redeeming…';
+    try {
+      await redeemInviteCode(code, name);
+      // On success, just reload — boot() will see the new token and proceed.
+      window.location.reload();
+    } catch (err) {
+      errorEl.textContent = err.message || 'Could not redeem.';
+      btn.disabled = false;
+      btn.textContent = 'Redeem';
+    }
+  }
+
+  btn.addEventListener('click', trySubmit);
+  // Press Enter in either field to submit.
+  [codeInput, nameInput].forEach(input => {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') trySubmit();
+    });
+  });
+  codeInput.focus();
+}
+
+// Render the "create session" form — a name input + a button.
+// On submit: generate nanoid, insert session row, redirect to ?session=<id>.
+function showCreateSessionForm() {
+  hideLoading();
+  let el = document.getElementById('create-session-screen');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'create-session-screen';
+  el.style.cssText =
+    'position:absolute; inset:0; z-index:90; background:var(--paper);' +
+    'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+    'gap:24px; padding:40px; text-align:center;';
+  el.innerHTML = `
+    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
+      Fieldnote · Start a tour
+    </div>
+    <div style="font-family:'Fraunces',serif; font-style:italic; font-size:24px; color:var(--ink); max-width:280px; line-height:1.3;">
+      Start a session to share your tour with passengers.
+    </div>
+    <input
+      id="guide-name-input"
+      type="text"
+      placeholder="Your name (e.g. Filip)"
+      value="${GUIDE ? GUIDE.name.replace(/"/g, '&quot;') : ''}"
+      style="font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:6px; text-align:center;"
+    />
+    <button
+      id="create-session-btn"
+      style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+    >
+      Start Session
+    </button>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); opacity:0.5;">
+      Tour: <code>${DEFAULT_TOUR_SLUG}</code>
+    </div>
+  `;
+  document.getElementById('phone').appendChild(el);
+
+  document.getElementById('create-session-btn').addEventListener('click', async () => {
+    const nameInput = document.getElementById('guide-name-input');
+    const guideName = (nameInput.value || '').trim();
+    if (!guideName) {
+      nameInput.focus();
+      nameInput.style.borderColor = 'var(--mark)';
+      return;
+    }
+    await createSession(DEFAULT_TOUR_SLUG, guideName);
+  });
+}
+
+// Insert a new session row, then redirect the page to ?session=<newId>.
+async function createSession(tourSlug, guideName) {
+  showLoading('Creating session…');
+
+  const id = nanoid8();
+  const label = makeSessionLabel(tourSlug, guideName);
+
+  const { data, error } = await supabaseClient
+    .from('sessions')
+    .insert({ id, label, tour_slug: tourSlug, guide_name: guideName })
+    .select()
+    .single();
+
+  if (error || !data) {
+    showFatalError(`Couldn't create session. ${error ? error.message : 'Unknown error.'}`);
+    return;
+  }
+
+  // Redirect to the new session URL. This causes a fresh boot() call
+  // which will then take the ?session=<id> path.
+  const newUrl = `${window.location.pathname}?session=${id}`;
+  window.location.replace(newUrl);
+}
+
+function applyTourMetadata() {
+  // Replace the menu's static title with whatever the loaded tour says.
+  const masthead = document.querySelector('.menu-masthead h1');
+  const sub = document.querySelector('.menu-masthead .sub');
+  const stamp = document.querySelector('.menu-masthead-stamp');
+  if (masthead) masthead.textContent = TOUR.name;
+  if (sub) sub.textContent = TOUR.subtitle || '';
+  if (stamp) stamp.textContent = `Tour · ${TOUR.slug}`;
+
+  // Populate the About-screen debug block so we can verify session + passenger
+  // identity from inside the running app (instead of hunting in the URL bar).
+  const debug = document.getElementById('about-debug');
+  if (debug) {
+    const sessionLine = SESSION
+      ? `Session: <code>${SESSION.id}</code><br>Label: <code>${SESSION.label}</code><br>Guide: <code>${SESSION.guide_name}</code>`
+      : `No session (legacy ?tour mode)`;
+    const guideLine = GUIDE
+      ? `Logged-in guide: <code>${GUIDE.name}</code> <button id="debug-logout" style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:3px 7px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">log out</button>`
+      : `Not logged in as a guide`;
+    debug.innerHTML = `
+      ${guideLine}<br>
+      ${sessionLine}<br>
+      Passenger: <code>${PASSENGER_ID.slice(0, 8)}…</code><br>
+      Queue: <code id="debug-queue-count">…</code>
+      <button id="debug-clear-queue" style="margin-left:8px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 8px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">clear</button>
+      <button id="debug-force-sync" style="margin-left:4px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 8px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">sync now</button>
+      <br>
+      <span id="debug-sync-stats" style="opacity:0.7;">Sync: idle</span>
+    `;
+    if (GUIDE) {
+      const logoutBtn = document.getElementById('debug-logout');
+      if (logoutBtn) logoutBtn.addEventListener('click', () => {
+        clearGuideToken();
+        window.location.reload();
+      });
+    }
+    document.getElementById('debug-clear-queue').addEventListener('click', async () => {
+      await clearLocationQueue();
+      updateDebugQueueCount();
+    });
+    document.getElementById('debug-force-sync').addEventListener('click', () => {
+      syncOnce().catch(() => {});
+    });
+    updateDebugQueueCount();
+    // Refresh the sync-stats line every couple seconds so it reflects activity.
+    setInterval(updateDebugSyncStats, 2000);
+    updateDebugSyncStats();
+  }
+}
+
+// Render a compact one-line sync status for the debug panel.
+function updateDebugSyncStats() {
+  const el = document.getElementById('debug-sync-stats');
+  if (!el) return;
+  const fmtAgo = (ts) => {
+    if (!ts) return 'never';
+    const sec = Math.round((Date.now() - ts) / 1000);
+    if (sec < 60) return `${sec}s ago`;
+    const min = Math.round(sec / 60);
+    return `${min}m ago`;
+  };
+  const online = navigator.onLine ? 'online' : 'offline';
+  const last = _syncStats.lastSuccessAt
+    ? `last ok ${fmtAgo(_syncStats.lastSuccessAt)}`
+    : 'no syncs yet';
+  const total = `${_syncStats.totalSynced} synced this load`;
+  const err = _syncStats.lastError ? ` · err: ${_syncStats.lastError}` : '';
+  el.textContent = `Sync: ${online} · ${last} · ${total}${err}`;
+}
+
+// Update the queue-size readout in the About panel. Called on initial load,
+// after every queue write, and after the manual "clear" button.
+async function updateDebugQueueCount() {
+  const el = document.getElementById('debug-queue-count');
+  if (!el) return;
+  try {
+    const n = await getQueueSize();
+    el.textContent = `${n} pending`;
+  } catch (err) {
+    el.textContent = 'error';
+  }
+}
+
+function showLoading(msg) {
+  let el = document.getElementById('loading-screen');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'loading-screen';
+    el.style.cssText =
+      'position:absolute; inset:0; z-index:90; background:var(--paper);' +
+      'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+      'gap:20px; padding:40px; text-align:center;';
+    el.innerHTML =
+      '<div style="font-family:\'Fraunces\',serif; font-style:italic; font-size:22px; color:var(--ink);" id="loading-msg"></div>' +
+      '<div style="font-family:\'JetBrains Mono\',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">Fieldnote</div>';
+    document.getElementById('phone').appendChild(el);
+  }
+  document.getElementById('loading-msg').textContent = msg;
+}
+function hideLoading() {
+  const el = document.getElementById('loading-screen');
+  if (el) el.remove();
+}
+function showFatalError(msg) {
+  hideLoading();
+  let el = document.getElementById('error-screen');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'error-screen';
+    el.style.cssText =
+      'position:absolute; inset:0; z-index:95; background:var(--paper);' +
+      'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+      'gap:20px; padding:40px; text-align:center;';
+    document.getElementById('phone').appendChild(el);
+  }
+  el.innerHTML =
+    '<div style="font-family:\'Fraunces\',serif; font-style:italic; font-size:22px; color:var(--mark);">Something went wrong</div>' +
+    '<div style="font-family:\'JetBrains Mono\',monospace; font-size:12px; line-height:1.6; color:var(--rule); max-width:300px;">' +
+    msg.replace(/</g, '&lt;') +
+    '</div>';
+}
+
+boot();
+
+// ── 5. MAP INIT ──
+function initMap(token) {
+  mapboxgl.accessToken = token;
+
+  // Compute the geographic bounds of this tour.
+  // We take all pins + the home point, find min/max lng/lat, add a margin
+  // so pins near the edge don't get clipped.
+  const allPoints = [TOUR.home, ...TOUR.pins];
+  const lngs = allPoints.map(p => p.lng);
+  const lats = allPoints.map(p => p.lat);
+  const PADDING_DEG = 0.002;  // ~200m padding around the tour
+  const bounds = [
+    [Math.min(...lngs) - PADDING_DEG, Math.min(...lats) - PADDING_DEG],  // SW
+    [Math.max(...lngs) + PADDING_DEG, Math.max(...lats) + PADDING_DEG],  // NE
+  ];
+
+  map = new mapboxgl.Map({
+    container: 'mapbox-map',
+    style: 'mapbox://styles/mapbox/outdoors-v12',
+    bounds: bounds,             // open with the whole tour visible
+    fitBoundsOptions: { padding: 40 },
+    maxBounds: bounds,          // user can't pan outside this box
+    minZoom: 13,                // can't zoom out further than ~city scale
+    maxZoom: 19,                // can't zoom in past street level
+    attributionControl: false,
+    pitchWithRotate: false,
+    dragRotate: false,
+  });
+  map.touchZoomRotate.disableRotation();
+  map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
+
+  map.on('load', () => {
+    renderAll();
+    startGeolocation();
+  });
+  map.on('move', renderAll);
+  map.on('zoom', renderAll);
+
+  // user dragging the map breaks follow mode
+  map.on('dragstart', () => {
+    if (state.following) {
+      state.following = false;
+      document.getElementById('recenter').classList.remove('active');
+    }
+  });
+}
+
+// ── 6. GEOLOCATION ──
+// Using watchPosition for continuous tracking. Accuracy and update frequency
+// are at the browser's discretion — we ask for high accuracy but don't get a guarantee.
+let geoWatchId = null;
+
+function startGeolocation() {
+  if (!('geolocation' in navigator)) {
+    state.gpsMode = 'unavailable';
+    showGpsBanner('Your browser does not support geolocation. Use the "skip" option to test with a simulated walker.');
+    updateSignal();
+    return;
+  }
+
+  state.gpsMode = 'searching';
+  updateSignal();
+
+  geoWatchId = navigator.geolocation.watchPosition(
+    onGpsSuccess,
+    onGpsError,
+    {
+      enableHighAccuracy: true,
+      maximumAge: 2000,   // ok to use a position up to 2 seconds old
+      timeout: 30000,     // give up after 30 seconds if no fix
+    }
+  );
+}
+
+// 5-second throttle for queueing fixes. The browser may give us 1-3 fixes per
+// second; we only persist one every 5s to keep DB size + bandwidth sane.
+// State is held in module scope so it survives between handler calls.
+const QUEUE_INTERVAL_MS = 5000;
+let _lastQueuedAt = 0;
+
+function onGpsSuccess(pos) {
+  // First fix? Hide any "searching" banner.
+  hideGpsBanner();
+  state.gpsMode = 'real';
+  state.youLng = pos.coords.longitude;
+  state.youLat = pos.coords.latitude;
+  state.accuracy = pos.coords.accuracy;
+  state.heading = pos.coords.heading;  // null if not moving
+
+  updateSignal();
+  checkTriggers();
+
+  // Persist to local queue, throttled. Only queues when we're inside a session.
+  // Errors are caught and logged so a queue write failure never breaks GPS UI.
+  const now = Date.now();
+  if (SESSION && now - _lastQueuedAt >= QUEUE_INTERVAL_MS) {
+    _lastQueuedAt = now;
+    queueLocation({
+      lng: state.youLng,
+      lat: state.youLat,
+      accuracy: state.accuracy,
+      client_recorded_at: new Date(pos.timestamp || now).toISOString(),
+    }).then(() => {
+      updateDebugQueueCount();
+    }).catch(err => {
+      console.warn('queueLocation failed', err);
+    });
+  }
+
+  // first fix in this session — center the map on us
+  if (map && !state._everCentered) {
+    map.easeTo({ center: [state.youLng, state.youLat], duration: 800 });
+    state._everCentered = true;
+  }
+  if (state.following && map) {
+    map.setCenter([state.youLng, state.youLat]);
+  }
+  renderYou();
+}
+
+function onGpsError(err) {
+  // The error codes:
+  //   1 = PERMISSION_DENIED
+  //   2 = POSITION_UNAVAILABLE
+  //   3 = TIMEOUT
+  if (err.code === 1) {
+    state.gpsMode = 'denied';
+    showGpsBanner("Location permission was denied. Open your browser's site settings to allow it, or skip and use simulated mode.");
+  } else if (err.code === 2) {
+    state.gpsMode = 'unavailable';
+    showGpsBanner("Couldn't get a GPS fix. If you're indoors, step outside. Otherwise, this can take up to a minute.");
+  } else if (err.code === 3) {
+    state.gpsMode = 'unavailable';
+    showGpsBanner("GPS timed out. Make sure location services are enabled.");
+  }
+  updateSignal();
+}
+
+function showGpsBanner(msg) {
+  gpsBannerMsg.textContent = msg;
+  gpsBanner.classList.add('show');
+}
+function hideGpsBanner() {
+  gpsBanner.classList.remove('show');
+}
+
+// ── 7. SIGNAL INDICATOR (top-right) ──
+// Reflects gps state at a glance.
+function updateSignal() {
+  signalDot.classList.remove('good', 'weak', 'searching');
+  if (state.gpsMode === 'real') {
+    if (state.accuracy != null && state.accuracy <= 20) {
+      signalDot.classList.add('good');
+      signalText.textContent = `±${Math.round(state.accuracy)}m`;
+    } else if (state.accuracy != null && state.accuracy <= 50) {
+      signalDot.classList.add('weak');
+      signalText.textContent = `±${Math.round(state.accuracy)}m`;
+    } else {
+      signalDot.classList.add('weak');
+      signalText.textContent = state.accuracy ? `±${Math.round(state.accuracy)}m` : 'Weak';
+    }
+  } else if (state.gpsMode === 'searching') {
+    signalDot.classList.add('searching');
+    signalText.textContent = 'Searching';
+  } else {
+    signalText.textContent = 'No GPS';
+  }
+}
+
+// ── 8. RENDER PINS + YOU DOT ──
+// Convert lng/lat to screen pixels via Mapbox's projection.
+function project(lng, lat) {
+  if (map) return map.project([lng, lat]);
+  return { x: 0, y: 0 };
+}
+
+function pxPerMeter() {
+  if (!map) return 1;
+  const p1 = map.project([TOUR.home.lng, TOUR.home.lat]);
+  const p2 = map.project([TOUR.home.lng, TOUR.home.lat + 1/111000]);
+  return Math.abs(p2.y - p1.y);
+}
+
+function renderAll() {
+  renderPins();
+  renderYou();
+}
+
+function renderPins() {
+  pinsLayer.innerHTML = '';
+  const ppm = pxPerMeter();
+  TOUR.pins.forEach((pin, i) => {
+    const { x, y } = project(pin.lng, pin.lat);
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    let classes = 'pin-group';
+    if (pin.id === state.armedPinId) classes += ' armed';
+    if (state.firedPinIds.has(pin.id) && pin.id !== state.armedPinId) classes += ' visited';
+    g.setAttribute('class', classes);
+    g.setAttribute('transform', `translate(${x}, ${y})`);
+
+    // trigger radius — scales with zoom (real meters)
+    const r = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    r.setAttribute('class', 'pin-radius');
+    r.setAttribute('r', pin.radius * ppm);
+    g.appendChild(r);
+
+    // marker — fixed screen size
+    const m = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    m.setAttribute('class', 'pin-marker');
+    m.setAttribute('x', -12); m.setAttribute('y', -12);
+    m.setAttribute('width', 24); m.setAttribute('height', 24);
+    m.setAttribute('rx', 2);
+    g.appendChild(m);
+
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('class', 'pin-label');
+    t.setAttribute('y', 4);
+    t.textContent = String(i + 1).padStart(2, '0');
+    g.appendChild(t);
+
+    // tap a pin to re-read its note (any time)
+    g.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showPopup(pin);
+    });
+    pinsLayer.appendChild(g);
+  });
+}
+
+function renderYou() {
+  youLayer.innerHTML = '';
+  if (state.youLng == null) return;
+  const { x, y } = project(state.youLng, state.youLat);
+  const ppm = pxPerMeter();
+
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  g.setAttribute('class', 'you-group');
+  g.setAttribute('transform', `translate(${x}, ${y})`);
+
+  // accuracy halo — only when we have real GPS with known accuracy.
+  // Cap visually so a wildly imprecise WiFi-based fix (which can be 10km+)
+  // doesn't blot out the entire map.
+  if (state.gpsMode === 'real' && state.accuracy && state.accuracy < 200) {
+    const acc = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    acc.setAttribute('class', 'you-accuracy');
+    acc.setAttribute('r', state.accuracy * ppm);
+    g.appendChild(acc);
+  }
+
+  const halo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  halo.setAttribute('class', 'you-halo');
+  halo.setAttribute('r', 18);
+  g.appendChild(halo);
+
+  // heading triangle (only if we have one)
+  if (state.heading != null && !isNaN(state.heading)) {
+    const heading = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    heading.setAttribute('points', '12,0 5,-4 5,4');
+    heading.setAttribute('fill', 'var(--ink)');
+    // GPS heading is degrees clockwise from north; SVG rotate is clockwise from positive-x (east).
+    // Convert: svgRotation = headingFromNorth - 90
+    heading.setAttribute('transform', `rotate(${state.heading - 90})`);
+    g.appendChild(heading);
+  }
+
+  const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  dot.setAttribute('class', 'you-dot');
+  dot.setAttribute('r', 9);
+  g.appendChild(dot);
+
+  youLayer.appendChild(g);
+}
+
+// ── 9. TRIGGERS ──
+// On every position update (real GPS or simulated drag), check whether
+// the walker is inside any pin's radius. The closest one becomes "armed".
+// First time a pin arms, fire the chime + popup. Walking out doesn't re-fire.
+function metersBetween(lng1, lat1, lng2, lat2) {
+  const R = 6371000;
+  const toRad = (d) => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function checkTriggers() {
+  if (state.youLng == null) return;
+  let closest = null;
+  let closestDist = Infinity;
+  for (const p of TOUR.pins) {
+    if (state.firedPinIds.has(p.id)) continue;
+    const d = metersBetween(state.youLng, state.youLat, p.lng, p.lat);
+    if (d < p.radius && d < closestDist) {
+      closest = p;
+      closestDist = d;
+    }
+  }
+  if (closest && closest.id !== state.armedPinId) {
+    firePin(closest);
+  } else if (!closest && state.armedPinId) {
+    state.armedPinId = null;
+    renderPins();
+  }
+}
+
+function firePin(pin) {
+  state.armedPinId = pin.id;
+  state.firedPinIds.add(pin.id);
+  renderPins();
+  showPopup(pin);
+  playChime();
+}
+
+function showPopup(pin) {
+  const idx = TOUR.pins.findIndex(p => p.id === pin.id);
+  popupStamp.textContent = `Pin № ${String(idx + 1).padStart(2, '0')} · Arrived`;
+  popupTitle.textContent = pin.title;
+  popupBodyEl.textContent = pin.body;
+  popup.classList.add('show');
+}
+function closePopup() { popup.classList.remove('show'); }
+popupClose.addEventListener('click', closePopup);
+
+// ── 10. CHIME ──
+let audioCtx = null;
+function playChime() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = audioCtx.currentTime;
+    [660, 880].forEach((f, i) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0, now + i * 0.12);
+      g.gain.linearRampToValueAtTime(0.18, now + i * 0.12 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.7);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(now + i * 0.12); o.stop(now + i * 0.12 + 0.75);
+    });
+  } catch (e) {
+    // audio may be blocked until user interaction; silent fail
+  }
+}
+
+// ── 11. ZOOM + FOLLOW CONTROLS ──
+document.getElementById('zoom-in').addEventListener('click', () => {
+  if (map) map.zoomIn();
+});
+document.getElementById('zoom-out').addEventListener('click', () => {
+  if (map) map.zoomOut();
+});
+document.getElementById('recenter').addEventListener('click', () => {
+  state.following = !state.following;
+  document.getElementById('recenter').classList.toggle('active', state.following);
+  if (state.following && map && state.youLng != null) {
+    map.easeTo({ center: [state.youLng, state.youLat], duration: 300 });
+  }
+});
+
+// ── 12. SCREEN STACK ──
+const screenStack = [];
+function openScreen(id) {
+  document.getElementById(id).classList.add('visible');
+  screenStack.push(id);
+}
+function closeScreen() {
+  if (!screenStack.length) return;
+  document.getElementById(screenStack.pop()).classList.remove('visible');
+}
+document.querySelectorAll('[data-close-screen]').forEach(b => b.addEventListener('click', closeScreen));
+
+document.getElementById('burger-btn').addEventListener('click', () => openScreen('screen-menu'));
+document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const action = item.dataset.action;
+    if (action === 'reset') {
+      state.firedPinIds.clear();
+      state.armedPinId = null;
+      closePopup();
+      renderPins();
+      while (screenStack.length) closeScreen();
+    } else if (action === 'about') {
+      openScreen('screen-about');
+    }
+  });
+});
+</script>
+</body>
+</html>
