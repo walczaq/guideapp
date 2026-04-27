@@ -10,6 +10,7 @@
 <link href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/idb@8/build/umd.js"></script>
 <style>
   :root {
     --ink: #1a1d1a;
@@ -477,7 +478,7 @@
         Guides start a session, passengers join via link. The data pipeline that captures every GPS fix to Supabase (with offline queue + sync) is being built in stages.
       </div>
       <div class="about-block muted">
-        Chunk A done: sessions can be created and joined. Chunk B done: each device has a stable passenger ID. Chunks C and D — local queue and sync worker — coming.
+        Chunk A done: sessions can be created and joined. Chunk B done: each device has a stable passenger ID. Chunk C done: GPS fixes are queued in IndexedDB every 5 seconds. Chunk D — sync worker that drains the queue to Supabase — coming next.
       </div>
       <div class="about-block muted" id="about-debug">
         <!-- populated at runtime with session + passenger info -->
@@ -584,6 +585,100 @@ function getOrCreatePassengerId() {
 
 // Resolved at module load — every other piece of code can rely on this being set.
 const PASSENGER_ID = getOrCreatePassengerId();
+
+// ── LOCATION QUEUE (IndexedDB) ──
+// Every GPS fix is written here first. A separate sync worker (chunk D) will
+// later drain this queue to Supabase when the network is available.
+//
+// Why: phones go offline. WiFi disappears. Pages reload. We must capture every
+// fix on the device, persistently, *before* even thinking about the network.
+// That's the whole point of "offline-first" — the local store is the source of
+// truth; the network is a sync mechanism.
+//
+// Schema:
+//   Database: "fieldnote"
+//   Object store: "pending_locations"
+//   Key: auto-incrementing integer (used to delete a row after sync)
+//   Value: {
+//     session_id, passenger_id, lng, lat, accuracy, client_recorded_at
+//   }
+//
+// Indexes:
+//   "by_session" on session_id — for inspecting a session's queue
+//   "by_recorded" on client_recorded_at — for sending oldest-first
+
+const DB_NAME = 'fieldnote';
+const DB_VERSION = 1;
+const STORE_LOCATIONS = 'pending_locations';
+
+let _dbPromise = null;
+
+// Open (or create) the database. Cached as a promise so concurrent callers
+// share the same open DB instead of racing.
+function openDB() {
+  if (_dbPromise) return _dbPromise;
+  _dbPromise = idb.openDB(DB_NAME, DB_VERSION, {
+    upgrade(db, oldVersion, newVersion) {
+      // upgrade() runs once, the first time the user visits with this DB_VERSION.
+      // For chunk C we have a single store; later chunks may add more.
+      if (!db.objectStoreNames.contains(STORE_LOCATIONS)) {
+        const store = db.createObjectStore(STORE_LOCATIONS, {
+          keyPath: 'id',
+          autoIncrement: true,
+        });
+        store.createIndex('by_session', 'session_id');
+        store.createIndex('by_recorded', 'client_recorded_at');
+      }
+    },
+  });
+  return _dbPromise;
+}
+
+// Append one location row to the queue.
+// `fix` shape: { lng, lat, accuracy, client_recorded_at }
+// session_id and passenger_id are added here so callers don't have to thread them.
+async function queueLocation(fix) {
+  if (!SESSION) {
+    // No session, nothing to queue against. Useful guard for the legacy ?tour mode.
+    return;
+  }
+  const db = await openDB();
+  await db.add(STORE_LOCATIONS, {
+    session_id: SESSION.id,
+    passenger_id: PASSENGER_ID,
+    lng: fix.lng,
+    lat: fix.lat,
+    accuracy: fix.accuracy ?? null,
+    client_recorded_at: fix.client_recorded_at,  // ISO string
+  });
+}
+
+// Read all queued rows, oldest first. Used by the sync worker (chunk D)
+// and by the debug panel to show queue contents.
+async function getQueuedLocations(limit = 1000) {
+  const db = await openDB();
+  return db.getAllFromIndex(STORE_LOCATIONS, 'by_recorded', null, limit);
+}
+
+// Count rows currently in the queue. Lightweight; called frequently to update
+// the debug indicator.
+async function getQueueSize() {
+  const db = await openDB();
+  return db.count(STORE_LOCATIONS);
+}
+
+// Delete a queued row by its auto-incrementing id. Called by chunk D after a
+// successful sync of that row to Supabase.
+async function deleteQueuedLocation(id) {
+  const db = await openDB();
+  await db.delete(STORE_LOCATIONS, id);
+}
+
+// Wipe the queue entirely. Useful for testing and for a "reset" button.
+async function clearLocationQueue() {
+  const db = await openDB();
+  await db.clear(STORE_LOCATIONS);
+}
 
 // ── 1. THE TOUR ──
 // Loaded from Supabase at runtime. Until loadTour() resolves, this stays null
@@ -864,8 +959,28 @@ function applyTourMetadata() {
       : `No session (legacy ?tour mode)`;
     debug.innerHTML = `
       ${sessionLine}<br>
-      Passenger: <code>${PASSENGER_ID.slice(0, 8)}…</code>
+      Passenger: <code>${PASSENGER_ID.slice(0, 8)}…</code><br>
+      Queue: <code id="debug-queue-count">…</code>
+      <button id="debug-clear-queue" style="margin-left:8px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 8px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">clear</button>
     `;
+    document.getElementById('debug-clear-queue').addEventListener('click', async () => {
+      await clearLocationQueue();
+      updateDebugQueueCount();
+    });
+    updateDebugQueueCount();
+  }
+}
+
+// Update the queue-size readout in the About panel. Called on initial load,
+// after every queue write, and after the manual "clear" button.
+async function updateDebugQueueCount() {
+  const el = document.getElementById('debug-queue-count');
+  if (!el) return;
+  try {
+    const n = await getQueueSize();
+    el.textContent = `${n} pending`;
+  } catch (err) {
+    el.textContent = 'error';
   }
 }
 
@@ -984,6 +1099,12 @@ function startGeolocation() {
   );
 }
 
+// 5-second throttle for queueing fixes. The browser may give us 1-3 fixes per
+// second; we only persist one every 5s to keep DB size + bandwidth sane.
+// State is held in module scope so it survives between handler calls.
+const QUEUE_INTERVAL_MS = 5000;
+let _lastQueuedAt = 0;
+
 function onGpsSuccess(pos) {
   // First fix? Hide any "searching" banner.
   hideGpsBanner();
@@ -995,6 +1116,23 @@ function onGpsSuccess(pos) {
 
   updateSignal();
   checkTriggers();
+
+  // Persist to local queue, throttled. Only queues when we're inside a session.
+  // Errors are caught and logged so a queue write failure never breaks GPS UI.
+  const now = Date.now();
+  if (SESSION && now - _lastQueuedAt >= QUEUE_INTERVAL_MS) {
+    _lastQueuedAt = now;
+    queueLocation({
+      lng: state.youLng,
+      lat: state.youLat,
+      accuracy: state.accuracy,
+      client_recorded_at: new Date(pos.timestamp || now).toISOString(),
+    }).then(() => {
+      updateDebugQueueCount();
+    }).catch(err => {
+      console.warn('queueLocation failed', err);
+    });
+  }
 
   // first fix in this session — center the map on us
   if (map && !state._everCentered) {
