@@ -469,18 +469,18 @@
           <polyline points="12 19 5 12 12 5"/>
         </svg>
       </button>
-      <div class="screen-title">About v0.2</div>
+      <div class="screen-title">About v0.3</div>
     </div>
     <div class="screen-body">
       <div class="about-block">
-        <b>v0.2 — Same tour, served from Supabase.</b>
-        Goal: prove a real backend works. Same trigger logic as v0.1, but the tour data now comes from a database instead of being baked into the file.
+        <b>v0.3 — Sessions & offline-first foundation.</b>
+        Guides start a session, passengers join via link. The data pipeline that captures every GPS fix to Supabase (with offline queue + sync) is being built in stages.
       </div>
       <div class="about-block muted">
-        Open with <code>?tour=&lt;slug&gt;</code> to load a different tour. Default is <code>fossvogsdalur-001</code>.
+        Chunk A done: sessions can be created and joined. Chunk B done: each device has a stable passenger ID. Chunks C and D — local queue and sync worker — coming.
       </div>
-      <div class="about-block muted">
-        Still no authoring, no realtime, no multi-device sync. Those are v0.3 and beyond.
+      <div class="about-block muted" id="about-debug">
+        <!-- populated at runtime with session + passenger info -->
       </div>
     </div>
   </div>
@@ -489,7 +489,7 @@
 
 <script>
 // ╭──────────────────────────────────────────────────────╮
-// │  v0.2 — TOUR FETCHED FROM SUPABASE                   │
+// │  v0.3 — SESSIONS & OFFLINE-FIRST FOUNDATION          │
 // ╰──────────────────────────────────────────────────────╯
 
 // ── 0. CONFIG ──
@@ -538,6 +538,52 @@ function makeSessionLabel(tourSlug, guideName) {
   const tourShort = (tourSlug || 'tour').split('-')[0].slice(0, 8);
   return `${date}-${initials}-${tourShort}`;
 }
+
+// ── PASSENGER ID ──
+// A stable per-device identifier. Generated once, stored in localStorage,
+// reused on every visit. Lets the guide distinguish "Sigrún's phone" from
+// "another phone called Sigrún" across reloads.
+//
+// We use a longer nanoid (16 chars) here than for sessions, because:
+//  - Passenger IDs aren't typed by humans, so there's no readability cost
+//  - They live forever per device, so collision over time matters more
+//  - 16 chars = ~10^28 possible values, effectively zero collision risk
+//
+// Reset path: clearing site data / using incognito / a different browser
+// produces a new ID. That's intentional — we don't have user accounts yet,
+// so "this device" is the unit of identity for v0.3.
+const PASSENGER_ID_KEY = 'fieldnote_passenger_id';
+
+function nanoid16() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let id = '';
+  for (let i = 0; i < 16; i++) {
+    id += NANOID_ALPHABET[bytes[i] % NANOID_ALPHABET.length];
+  }
+  return id;
+}
+
+function getOrCreatePassengerId() {
+  // localStorage can throw in private mode on some old browsers, so we wrap.
+  try {
+    let id = localStorage.getItem(PASSENGER_ID_KEY);
+    if (!id) {
+      id = nanoid16();
+      localStorage.setItem(PASSENGER_ID_KEY, id);
+    }
+    return id;
+  } catch (err) {
+    // Fallback: generate an in-memory ID that lasts for this page load only.
+    // Better than crashing; worse than persistent (the user will look like a
+    // new passenger every refresh). Real fix is to detect this and warn.
+    console.warn('localStorage unavailable; using in-memory passenger ID', err);
+    return nanoid16();
+  }
+}
+
+// Resolved at module load — every other piece of code can rely on this being set.
+const PASSENGER_ID = getOrCreatePassengerId();
 
 // ── 1. THE TOUR ──
 // Loaded from Supabase at runtime. Until loadTour() resolves, this stays null
@@ -802,13 +848,25 @@ async function createSession(tourSlug, guideName) {
 
 function applyTourMetadata() {
   // Replace the menu's static title with whatever the loaded tour says.
-  // Cheap parsing of the name into "Lead<em>End</em>" if it's one word, otherwise full text.
   const masthead = document.querySelector('.menu-masthead h1');
   const sub = document.querySelector('.menu-masthead .sub');
   const stamp = document.querySelector('.menu-masthead-stamp');
   if (masthead) masthead.textContent = TOUR.name;
   if (sub) sub.textContent = TOUR.subtitle || '';
   if (stamp) stamp.textContent = `Tour · ${TOUR.slug}`;
+
+  // Populate the About-screen debug block so we can verify session + passenger
+  // identity from inside the running app (instead of hunting in the URL bar).
+  const debug = document.getElementById('about-debug');
+  if (debug) {
+    const sessionLine = SESSION
+      ? `Session: <code>${SESSION.id}</code><br>Label: <code>${SESSION.label}</code><br>Guide: <code>${SESSION.guide_name}</code>`
+      : `No session (legacy ?tour mode)`;
+    debug.innerHTML = `
+      ${sessionLine}<br>
+      Passenger: <code>${PASSENGER_ID.slice(0, 8)}…</code>
+    `;
+  }
 }
 
 function showLoading(msg) {
