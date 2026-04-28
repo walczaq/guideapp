@@ -673,7 +673,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-28-2256';
+const BUILD_VERSION = '0.4 · build 2026-04-28-2259';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2051,8 +2051,8 @@ function renderPassengers() {
   // Pass 1: trails (so they render below dots).
   // Single solid line in the passenger's primary color.
   // Selection-aware: when a passenger is selected, their trail goes
-  // full-opacity + thicker; all other trails dim. When nothing is selected,
-  // every trail uses the default styling.
+  // full-opacity + thicker (6px); all other trails fade to near-ghost
+  // (0.08 opacity, thin). When nothing is selected, every trail uses default.
   for (const [passengerId, p] of PASSENGERS) {
     if (!p.trail || p.trail.length < 2) continue;
     const [colorA] = colorsForPassenger(passengerId);
@@ -2063,11 +2063,11 @@ function renderPassengers() {
       strokeWidth = 3;
       opacity = 0.8;
     } else if (isSelected) {
-      strokeWidth = 4;
+      strokeWidth = 6;     // bold — really stands out
       opacity = 1.0;
     } else {
-      strokeWidth = 2;
-      opacity = 0.15;
+      strokeWidth = 1.5;   // thin
+      opacity = 0.08;      // ghost
     }
     const points = p.trail.map(t => {
       const { x, y } = project(t.lng, t.lat);
@@ -2090,17 +2090,22 @@ function renderPassengers() {
   // Half-half rendering: two semicircles, one for each color, with a thin
   // hairline between them so the split is visible at small sizes.
   // Tappable: tap to select-and-highlight, tap again to deselect.
+  // Selection-aware: when a passenger is selected, all OTHER passenger dots
+  // dim to 0.4 opacity so the selected one visually wins.
   const DOT_R = 8;     // bumped up from 6 — half-half needs more room to read
   const HALO_R = 13;
   for (const [passengerId, p] of PASSENGERS) {
     const { x, y } = project(p.lng, p.lat);
     const [colorA, colorB] = colorsForPassenger(passengerId);
     const isSelected = SELECTED_PASSENGER === passengerId;
+    const noneSelected = SELECTED_PASSENGER === null;
+    const dotOpacity = (noneSelected || isSelected) ? 1.0 : 0.4;
 
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('class', 'passenger-group' + (isSelected ? ' selected' : ''));
     g.setAttribute('data-passenger-id', passengerId);
     g.setAttribute('transform', `translate(${x}, ${y})`);
+    g.setAttribute('opacity', String(dotOpacity));
     g.style.cursor = 'pointer';
 
     // Make the group tappable. SVG groups need pointer-events: visiblePainted
