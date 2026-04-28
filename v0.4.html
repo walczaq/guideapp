@@ -1217,7 +1217,6 @@ function getLastSession() {
 function clearLastSession() {
   try { localStorage.removeItem(LAST_SESSION_KEY); } catch {}
 }
-}
 
 // Load a session by ID, then load its tour, then init the map.
 async function loadSessionAndTour(sessionId) {
