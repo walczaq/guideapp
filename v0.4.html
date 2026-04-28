@@ -1177,13 +1177,24 @@ async function boot() {
 
   if (sessionId) {
     // Path 1: join an existing session.
+    // If we're a logged-in guide, remember this session so we can resume
+    // it on next bare-URL visit (instead of always landing in "create new").
+    if (GUIDE) rememberLastSession(sessionId);
     await loadSessionAndTour(sessionId);
   } else if (tourSlug) {
     // Path 2: legacy direct-tour mode (v0.2 behavior). Useful for testing
     // a tour without going through the session flow.
     await loadTourDirectly(tourSlug);
   } else if (GUIDE) {
-    // Path 3a: logged-in guide visiting bare URL → show create-session form.
+    // Path 3a: logged-in guide visiting bare URL. If they have a recent
+    // session, take them straight back to it. Otherwise show create-session form.
+    const last = getLastSession();
+    if (last) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('session', last);
+      window.location.replace(url.toString());
+      return;
+    }
     showCreateSessionForm();
   } else {
     // Path 3b: nobody's logged in and there's no session/tour to join.
@@ -1191,6 +1202,21 @@ async function boot() {
     // Send them to the invite form (it's the only thing they can do).
     showInviteCodeForm();
   }
+}
+
+// Remember the last session a guide opened, so visiting the bare URL on the
+// same device next time resumes that session instead of always starting new.
+// Cleared explicitly via "End session" button (chunk H, deferred).
+const LAST_SESSION_KEY = 'fieldnote_last_session';
+function rememberLastSession(sessionId) {
+  try { localStorage.setItem(LAST_SESSION_KEY, sessionId); } catch {}
+}
+function getLastSession() {
+  try { return localStorage.getItem(LAST_SESSION_KEY) || null; } catch { return null; }
+}
+function clearLastSession() {
+  try { localStorage.removeItem(LAST_SESSION_KEY); } catch {}
+}
 }
 
 // Load a session by ID, then load its tour, then init the map.
@@ -1497,16 +1523,21 @@ function applyTourMetadata() {
     const roleSwitchLine = (GUIDE && SESSION)
       ? `Role: <code>${ROLE}</code> <button id="debug-role-switch" style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:3px 7px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">view as ${ROLE === 'guide' ? 'passenger' : 'guide'}</button>`
       : '';
+    const newSessionLine = (GUIDE && SESSION)
+      ? `<button id="debug-new-session" style="font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">start new session</button>`
+      : '';
     debug.innerHTML = `
       ${guideLine}<br>
       ${roleSwitchLine ? roleSwitchLine + '<br>' : ''}
       ${sessionLine}<br>
+      ${newSessionLine ? newSessionLine + '<br>' : ''}
       Passenger: <code>${PASSENGER_ID.slice(0, 8)}…</code><br>
       Queue: <code id="debug-queue-count">…</code>
       <button id="debug-clear-queue" style="margin-left:8px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 8px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">clear</button>
       <button id="debug-force-sync" style="margin-left:4px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 8px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">sync now</button>
       <br>
-      <span id="debug-sync-stats" style="opacity:0.7;">Sync: idle</span>
+      <span id="debug-sync-stats" style="opacity:0.7;">Sync: idle</span><br>
+      <span id="debug-passengers" style="opacity:0.7;">Passengers: idle</span>
     `;
     if (GUIDE) {
       const logoutBtn = document.getElementById('debug-logout');
@@ -1523,6 +1554,13 @@ function applyTourMetadata() {
         url.searchParams.set('role', ROLE === 'guide' ? 'passenger' : 'guide');
         window.location.href = url.toString();
       });
+      const newSessionBtn = document.getElementById('debug-new-session');
+      if (newSessionBtn) newSessionBtn.addEventListener('click', () => {
+        // Drop sticky last-session memory and visit the bare URL — boot's
+        // path 3a will see no last-session and show create-session form.
+        clearLastSession();
+        window.location.href = window.location.pathname;
+      });
     }
     document.getElementById('debug-clear-queue').addEventListener('click', async () => {
       await clearLocationQueue();
@@ -1534,8 +1572,31 @@ function applyTourMetadata() {
     updateDebugQueueCount();
     // Refresh the sync-stats line every couple seconds so it reflects activity.
     setInterval(updateDebugSyncStats, 2000);
+    setInterval(updateDebugPassengers, 2000);
     updateDebugSyncStats();
+    updateDebugPassengers();
   }
+}
+
+// Render a compact one-line passenger summary for the debug panel.
+// Helps tell at a glance whether catch-up returned data and whether trails
+// have enough points to render.
+function updateDebugPassengers() {
+  const el = document.getElementById('debug-passengers');
+  if (!el) return;
+  const count = PASSENGERS.size;
+  if (count === 0) {
+    el.textContent = `Passengers: 0`;
+    return;
+  }
+  let totalPoints = 0;
+  let trailable = 0;
+  for (const [, p] of PASSENGERS) {
+    const n = p.trail ? p.trail.length : 0;
+    totalPoints += n;
+    if (n >= 2) trailable += 1;
+  }
+  el.textContent = `Passengers: ${count} · ${totalPoints} fixes · ${trailable} with trails`;
 }
 
 // Render a compact one-line sync status for the debug panel.
@@ -1815,7 +1876,11 @@ function renderPassengers() {
     line.setAttribute('data-passenger-id', passengerId);
     line.setAttribute('points', points);
     line.setAttribute('stroke', color);
+    line.setAttribute('stroke-width', '3');
+    line.setAttribute('stroke-linecap', 'round');
+    line.setAttribute('stroke-linejoin', 'round');
     line.setAttribute('fill', 'none');
+    line.setAttribute('opacity', '0.75');
     passengersLayer.appendChild(line);
   }
 
@@ -1960,6 +2025,10 @@ function applySheetState() {
   else if (_sheetState === 'half') h = SHEET_STATES.half;
   else h = Math.round(phoneHeight * SHEET_STATES.full);
   _sheetEl.style.height = h + 'px';
+  // Push the zoom controls above the sheet so they're always tappable.
+  // Plus a small margin so the bottom button isn't flush with the handle.
+  const zoomCtrl = document.querySelector('.zoom-controls');
+  if (zoomCtrl) zoomCtrl.style.bottom = (h + 12) + 'px';
 }
 
 function bindSheetDrag() {
@@ -1982,6 +2051,9 @@ function bindSheetDrag() {
     let h = _sheetDrag.startHeight - dy;
     h = Math.max(SHEET_STATES.collapsed, Math.min(phoneHeight * SHEET_STATES.full, h));
     _sheetEl.style.height = h + 'px';
+    // Keep zoom controls above the sheet during drag.
+    const zoomCtrl = document.querySelector('.zoom-controls');
+    if (zoomCtrl) zoomCtrl.style.bottom = (h + 12) + 'px';
   });
   handle.addEventListener('pointerup', () => {
     if (!_sheetDrag) return;
