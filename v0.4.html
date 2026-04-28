@@ -1205,11 +1205,55 @@ async function boot() {
     }
     showCreateSessionForm();
   } else {
-    // Path 3b: nobody's logged in and there's no session/tour to join.
-    // Bare URL is meaningless to a passenger — they need a session link.
-    // Send them to the invite form (it's the only thing they can do).
-    showInviteCodeForm();
+    // Path 3b: bare URL, not a logged-in guide. This person is most likely
+    // a passenger who needs a session link from their guide. Show a friendly
+    // landing screen with two paths: "I have a code" (guides) or "I'm joining
+    // a tour" (passengers — explains they need a link).
+    showLandingScreen();
   }
+}
+
+// Bare-URL landing for users who aren't logged in and don't have a session/tour.
+// Two paths out:
+//   - "I'm a guide" → opens the invite-code form
+//   - "I'm joining a tour" → explains they need a link from their guide
+function showLandingScreen() {
+  hideLoading();
+  let el = document.getElementById('landing-screen');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'landing-screen';
+  el.style.cssText =
+    'position:absolute; inset:0; z-index:90; background:var(--paper);' +
+    'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+    'gap:20px; padding:40px; text-align:center;';
+  el.innerHTML = `
+    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
+      Fieldnote
+    </div>
+    <div style="font-family:'Fraunces',serif; font-style:italic; font-size:24px; color:var(--ink); max-width:280px; line-height:1.3;">
+      Welcome.
+    </div>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:260px; line-height:1.6;">
+      Joining a tour? Open the link your guide sent you — it ends with <code>?session=…</code>.
+    </div>
+    <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--rule); width:240px;"></div>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule);">
+      Are you a guide?
+    </div>
+    <button
+      id="landing-guide-btn"
+      style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+    >
+      Guide login
+    </button>
+  `;
+  document.getElementById('phone').appendChild(el);
+
+  document.getElementById('landing-guide-btn').addEventListener('click', () => {
+    el.remove();
+    showInviteCodeForm();
+  });
 }
 
 // Remember the last session a guide opened, so visiting the bare URL on the
