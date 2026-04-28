@@ -672,7 +672,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-28-2211';
+const BUILD_VERSION = '0.4 · build 2026-04-28-2226';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -1912,35 +1912,58 @@ function startGuideShell() {
 const PASSENGERS = new Map();
 
 // Curated color palette for passenger dots and trails.
-// Picked to be visually distinct from each other AND from reserved utility colors:
-//   green/dimmed-green/orange/red/grey (chunk E state colors)
-//   blue (the guide)
-// Twelve entries — collisions only happen at >12 simultaneous passengers in a session.
+// Picked to be:
+//   - Visually distinct from each other (hues spread around the wheel)
+//   - Each measurably contrasts (≥3:1 WCAG) against the cream paper background
+//   - Quieter / more "designer" register than primary saturated brights
+//   - Distinct from utility colors used by state (chunk E adds green/orange/red/grey)
+//     and from guide blue
+// Twelve entries pair-combined gives 12 × 11 = 132 unique two-color combos —
+// enough for an extreme-upper-bound 60-passenger session.
 const PASSENGER_PALETTE = [
-  '#d946ef',  // fuchsia
-  '#06b6d4',  // cyan
-  '#f59e0b',  // amber
-  '#a855f7',  // purple
-  '#14b8a6',  // teal
-  '#ec4899',  // pink
-  '#84cc16',  // lime (different enough from state-green)
-  '#8b5cf6',  // violet
-  '#f97316',  // orange-deep (different from state-orange)
-  '#22d3ee',  // sky
-  '#e11d48',  // rose (different from state-red)
-  '#7c3aed',  // indigo-violet
+  '#b86342',  // terracotta
+  '#c44a3e',  // coral red
+  '#9a3a30',  // brick
+  '#6e3a55',  // plum
+  '#7e5e8a',  // mauve
+  '#5e3a6a',  // aubergine
+  '#54688a',  // slate blue
+  '#1f6e7a',  // pacific
+  '#3d7a7a',  // teal
+  '#2e6e4a',  // forest
+  '#6e8a4e',  // sage deep
+  '#b8657d',  // dusty pink
 ];
 
-// Map passenger_id → palette color, deterministically.
-// Same passenger always gets the same color across reloads / devices.
-// Simple FNV-1a-like hash over the id string, mod palette length.
-function colorForPassenger(passengerId) {
-  let hash = 2166136261;  // FNV offset basis
+// Map passenger_id → [primaryColor, secondaryColor], deterministically.
+// Uses two FNV-1a hashes (different starting seeds) to pick two distinct
+// indices into the palette. Same passenger always gets the same pair across
+// reloads / devices / tabs.
+function colorsForPassenger(passengerId) {
+  // Hash 1 — primary color
+  let h1 = 2166136261;
   for (let i = 0; i < passengerId.length; i++) {
-    hash ^= passengerId.charCodeAt(i);
-    hash = (hash * 16777619) >>> 0;  // FNV prime, keep 32-bit unsigned
+    h1 ^= passengerId.charCodeAt(i);
+    h1 = (h1 * 16777619) >>> 0;
   }
-  return PASSENGER_PALETTE[hash % PASSENGER_PALETTE.length];
+  // Hash 2 — different seed so it's not correlated with hash 1
+  let h2 = 3338459;
+  for (let i = 0; i < passengerId.length; i++) {
+    h2 ^= passengerId.charCodeAt(i);
+    h2 = (h2 * 16777619) >>> 0;
+  }
+  const i1 = h1 % PASSENGER_PALETTE.length;
+  // Force the secondary index to differ from primary — without this, a
+  // passenger could end up with two halves of the same color.
+  let i2 = h2 % PASSENGER_PALETTE.length;
+  if (i2 === i1) i2 = (i2 + 1) % PASSENGER_PALETTE.length;
+  return [PASSENGER_PALETTE[i1], PASSENGER_PALETTE[i2]];
+}
+
+// Backwards-compat shim — earlier code calls colorForPassenger() (singular)
+// expecting one color. Returns the primary so existing callers don't break.
+function colorForPassenger(passengerId) {
+  return colorsForPassenger(passengerId)[0];
 }
 
 // Catch-up query: ask Supabase for all rows in this session, ordered oldest
@@ -2019,48 +2042,85 @@ function renderPassengers() {
   if (PASSENGERS.size === 0) return;
 
   // Pass 1: trails (so they render below dots).
+  // Each trail alternates between the two passenger colors, segment-by-segment.
+  // We build pairs of consecutive points: each segment becomes a 2-point
+  // <polyline> stroked in one of the two colors. Slight overhead vs single
+  // polyline but trivial at typical scale.
   for (const [passengerId, p] of PASSENGERS) {
-    if (!p.trail || p.trail.length < 2) continue;  // need ≥2 points for a line
-    const color = colorForPassenger(passengerId);
-    const points = p.trail.map(t => {
-      const { x, y } = project(t.lng, t.lat);
-      return `${x},${y}`;
-    }).join(' ');
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-    line.setAttribute('class', 'passenger-trail');
-    line.setAttribute('data-passenger-id', passengerId);
-    line.setAttribute('points', points);
-    line.setAttribute('stroke', color);
-    line.setAttribute('stroke-width', '3');
-    line.setAttribute('stroke-linecap', 'round');
-    line.setAttribute('stroke-linejoin', 'round');
-    line.setAttribute('fill', 'none');
-    line.setAttribute('opacity', '0.75');
-    passengersLayer.appendChild(line);
+    if (!p.trail || p.trail.length < 2) continue;
+    const [colorA, colorB] = colorsForPassenger(passengerId);
+    const projected = p.trail.map(t => project(t.lng, t.lat));
+    for (let i = 0; i < projected.length - 1; i++) {
+      const a = projected[i];
+      const b = projected[i + 1];
+      const seg = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      seg.setAttribute('x1', a.x);
+      seg.setAttribute('y1', a.y);
+      seg.setAttribute('x2', b.x);
+      seg.setAttribute('y2', b.y);
+      seg.setAttribute('stroke', i % 2 === 0 ? colorA : colorB);
+      seg.setAttribute('stroke-width', '3');
+      seg.setAttribute('stroke-linecap', 'round');
+      seg.setAttribute('opacity', '0.8');
+      passengersLayer.appendChild(seg);
+    }
   }
 
   // Pass 2: dots (drawn after trails so they sit visually on top).
+  // Half-half rendering: two semicircles, one for each color, with a thin
+  // hairline between them so the split is visible at small sizes.
+  const DOT_R = 8;     // bumped up from 6 — half-half needs more room to read
+  const HALO_R = 13;
   for (const [passengerId, p] of PASSENGERS) {
     const { x, y } = project(p.lng, p.lat);
-    const color = colorForPassenger(passengerId);
+    const [colorA, colorB] = colorsForPassenger(passengerId);
 
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('class', 'passenger-group');
     g.setAttribute('data-passenger-id', passengerId);
     g.setAttribute('transform', `translate(${x}, ${y})`);
 
+    // Halo — soft outer glow in colorA. Single color is fine; halo is meant
+    // to be a presence indicator, not part of the identity signal.
     const halo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     halo.setAttribute('class', 'passenger-halo');
-    halo.setAttribute('r', 11);
-    halo.setAttribute('fill', color);
+    halo.setAttribute('r', HALO_R);
+    halo.setAttribute('fill', colorA);
     halo.setAttribute('opacity', '0.18');
     g.appendChild(halo);
 
-    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    dot.setAttribute('class', 'passenger-dot');
-    dot.setAttribute('r', 6);
-    dot.setAttribute('fill', color);
-    g.appendChild(dot);
+    // Left half — a path that draws a semicircle on the LEFT of (0,0).
+    // SVG path: M 0 -r  A r r 0 0 0  0 r  Z
+    //   move to top, arc clockwise=0 to bottom, close back to top.
+    const halfL = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    halfL.setAttribute('d', `M 0 ${-DOT_R} A ${DOT_R} ${DOT_R} 0 0 0 0 ${DOT_R} Z`);
+    halfL.setAttribute('fill', colorA);
+    g.appendChild(halfL);
+
+    // Right half — same arc but clockwise=1 puts it on the right.
+    const halfR = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    halfR.setAttribute('d', `M 0 ${-DOT_R} A ${DOT_R} ${DOT_R} 0 0 1 0 ${DOT_R} Z`);
+    halfR.setAttribute('fill', colorB);
+    g.appendChild(halfR);
+
+    // Hairline between halves so the split reads clearly even at small sizes.
+    // Thin, paper-colored — looks like the dot has a vertical highlight.
+    const split = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    split.setAttribute('x1', 0); split.setAttribute('y1', -DOT_R);
+    split.setAttribute('x2', 0); split.setAttribute('y2', DOT_R);
+    split.setAttribute('stroke', 'var(--paper)');
+    split.setAttribute('stroke-width', '1');
+    g.appendChild(split);
+
+    // Outer ring — paper-colored, so the dot reads as a clean disc against
+    // any underlying map color.
+    const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    ring.setAttribute('class', 'passenger-dot');
+    ring.setAttribute('r', DOT_R);
+    ring.setAttribute('fill', 'none');
+    ring.setAttribute('stroke', 'var(--paper)');
+    ring.setAttribute('stroke-width', '2');
+    g.appendChild(ring);
 
     passengersLayer.appendChild(g);
   }
