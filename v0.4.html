@@ -672,7 +672,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-28-2226';
+const BUILD_VERSION = '0.4 · build 2026-04-28-2245';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -1913,26 +1913,26 @@ const PASSENGERS = new Map();
 
 // Curated color palette for passenger dots and trails.
 // Picked to be:
-//   - Visually distinct from each other (hues spread around the wheel)
+//   - Vibrant — saturated enough to read clearly on small half-dots
 //   - Each measurably contrasts (≥3:1 WCAG) against the cream paper background
-//   - Quieter / more "designer" register than primary saturated brights
-//   - Distinct from utility colors used by state (chunk E adds green/orange/red/grey)
-//     and from guide blue
+//   - No blues (reserved for the guide's beacon-blue identity at #2563eb)
+//   - State colors (green/orange/red/grey for staleness in chunk E) override
+//     identity color when active, so brief overlap with those hues is fine
 // Twelve entries pair-combined gives 12 × 11 = 132 unique two-color combos —
-// enough for an extreme-upper-bound 60-passenger session.
+// enough for the extreme upper-bound case of 60 passengers in one session.
 const PASSENGER_PALETTE = [
-  '#b86342',  // terracotta
-  '#c44a3e',  // coral red
-  '#9a3a30',  // brick
-  '#6e3a55',  // plum
-  '#7e5e8a',  // mauve
-  '#5e3a6a',  // aubergine
-  '#54688a',  // slate blue
-  '#1f6e7a',  // pacific
-  '#3d7a7a',  // teal
-  '#2e6e4a',  // forest
-  '#6e8a4e',  // sage deep
-  '#b8657d',  // dusty pink
+  '#dc2626',  // vibrant red
+  '#be123c',  // crimson
+  '#e11d48',  // hot pink
+  '#db2777',  // vibrant pink
+  '#c026d3',  // magenta
+  '#86198f',  // plum vivid
+  '#7c3aed',  // royal purple
+  '#15803d',  // forest vibrant
+  '#4d7c0f',  // lime deep
+  '#854d0e',  // olive vibrant
+  '#b45309',  // rust
+  '#c2410c',  // burnt orange
 ];
 
 // Map passenger_id → [primaryColor, secondaryColor], deterministically.
@@ -2042,10 +2042,11 @@ function renderPassengers() {
   if (PASSENGERS.size === 0) return;
 
   // Pass 1: trails (so they render below dots).
-  // Each trail alternates between the two passenger colors, segment-by-segment.
-  // We build pairs of consecutive points: each segment becomes a 2-point
-  // <polyline> stroked in one of the two colors. Slight overhead vs single
-  // polyline but trivial at typical scale.
+  // Each trail alternates between the two passenger colors in BLOCKS, not
+  // segment-by-segment — the latter looked like a barber-pole / spiral and
+  // read as visual noise. Blocks of ~5 segments per color give the trail a
+  // calm rhythm that still encodes the pair identity.
+  const SEGMENTS_PER_COLOR_BLOCK = 5;
   for (const [passengerId, p] of PASSENGERS) {
     if (!p.trail || p.trail.length < 2) continue;
     const [colorA, colorB] = colorsForPassenger(passengerId);
@@ -2053,12 +2054,14 @@ function renderPassengers() {
     for (let i = 0; i < projected.length - 1; i++) {
       const a = projected[i];
       const b = projected[i + 1];
+      // Block index toggles every SEGMENTS_PER_COLOR_BLOCK segments.
+      const useA = Math.floor(i / SEGMENTS_PER_COLOR_BLOCK) % 2 === 0;
       const seg = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       seg.setAttribute('x1', a.x);
       seg.setAttribute('y1', a.y);
       seg.setAttribute('x2', b.x);
       seg.setAttribute('y2', b.y);
-      seg.setAttribute('stroke', i % 2 === 0 ? colorA : colorB);
+      seg.setAttribute('stroke', useA ? colorA : colorB);
       seg.setAttribute('stroke-width', '3');
       seg.setAttribute('stroke-linecap', 'round');
       seg.setAttribute('opacity', '0.8');
