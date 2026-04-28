@@ -169,10 +169,14 @@
 
   /* pins */
   .pin-group { cursor: pointer; }
+  /* The radius circle is purely decorative — never intercept touches.
+     If it did, dragging the map (or pinch-zooming) inside a pin's radius
+     would be eaten by the SVG instead of going to Mapbox. */
   .pin-radius {
     fill: var(--pin-ring);
     stroke: var(--mark); stroke-width: 1; stroke-dasharray: 4 3;
     opacity: 0.55;
+    pointer-events: none;
   }
   .pin-group.armed .pin-radius {
     fill: rgba(199, 148, 40, 0.25);
@@ -180,7 +184,11 @@
     animation: armedPulse 1.2s ease-in-out infinite;
   }
   @keyframes armedPulse { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
-  .pin-marker { fill: var(--mark); stroke: var(--ink); stroke-width: 1.5; }
+  /* The marker rect IS tappable — it's the small target the user actually clicks. */
+  .pin-marker {
+    fill: var(--mark); stroke: var(--ink); stroke-width: 1.5;
+    pointer-events: auto;
+  }
   .pin-group.visited .pin-marker { fill: var(--paper-2); stroke: var(--rule); }
   .pin-group.visited .pin-label { fill: var(--rule); }
   .pin-group.visited .pin-radius { opacity: 0.2; }
@@ -1895,14 +1903,14 @@ function renderPassengers() {
 
     const halo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     halo.setAttribute('class', 'passenger-halo');
-    halo.setAttribute('r', 14);
+    halo.setAttribute('r', 11);
     halo.setAttribute('fill', color);
     halo.setAttribute('opacity', '0.18');
     g.appendChild(halo);
 
     const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     dot.setAttribute('class', 'passenger-dot');
-    dot.setAttribute('r', 7);
+    dot.setAttribute('r', 6);
     dot.setAttribute('fill', color);
     g.appendChild(dot);
 
@@ -2239,10 +2247,17 @@ function renderPins() {
     g.setAttribute('class', classes);
     g.setAttribute('transform', `translate(${x}, ${y})`);
 
-    // trigger radius — scales with zoom (real meters)
+    // Trigger radius — visual representation of the pin's reach.
+    // We cap the rendered circle at a max screen size so it doesn't fill
+    // the screen when zoomed in close. The actual trigger logic still uses
+    // pin.radius in real meters; this is purely how it LOOKS to the user.
+    const VISUAL_RADIUS_MAX_PX = 28;     // never draw a circle bigger than this
+    const VISUAL_RADIUS_MIN_PX = 14;     // never smaller, so it stays visible
+    const realPx = pin.radius * ppm;
+    const visualPx = Math.max(VISUAL_RADIUS_MIN_PX, Math.min(VISUAL_RADIUS_MAX_PX, realPx));
     const r = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     r.setAttribute('class', 'pin-radius');
-    r.setAttribute('r', pin.radius * ppm);
+    r.setAttribute('r', visualPx);
     g.appendChild(r);
 
     // marker — fixed screen size
