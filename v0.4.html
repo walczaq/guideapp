@@ -597,6 +597,7 @@ const PASSENGER_ID = getOrCreatePassengerId();
 // Two server-side RPCs do the work:
 //   redeem_invite_code(code, name, token) — first-time redemption
 //   lookup_guide_by_token(token) — check if a stored token is still valid
+//   recover_guide_access(code, name, new_token) — recover access on a new device
 //
 // Direct read/write to `guides` and `invite_codes` is denied by RLS; the RPCs
 // run as security-definer and are the only way clients can touch those tables.
@@ -673,6 +674,47 @@ async function redeemInviteCode(code, name) {
     //  "Invalid invite code"
     //  "Invite code has already been used"
     throw new Error(error.message || 'Could not redeem invite code');
+  }
+  if (!data || data.length === 0) {
+    throw new Error('Unexpected response from server');
+  }
+  storeGuideToken(token);
+  return { id: data[0].guide_id, name: data[0].guide_name };
+}
+
+// Recover access on a fresh device. Caller provides the original invite code
+// + the name they used at registration; on match, a new device token is
+// issued (rotating the old one out). Two-factor by design: code is the
+// private secret, name is the public identifier.
+async function recoverGuideAccess(code, name) {
+  const token = nanoid32();
+  const { data, error } = await supabaseClient.rpc('recover_guide_access', {
+    p_code: code.trim(),
+    p_name: name.trim(),
+    p_new_token: token,
+  });
+  if (error) {
+    throw new Error(error.message || 'Could not recover access');
+  }
+  if (!data || data.length === 0) {
+    throw new Error('Unexpected response from server');
+  }
+  storeGuideToken(token);
+  return { id: data[0].guide_id, name: data[0].guide_name };
+}
+
+// Recover access on a new device. Requires the original invite code + the name
+// the guide registered with. Issues a fresh device token, replacing whatever
+// token was previously valid. Old tokens stop working immediately.
+async function recoverGuideAccess(code, name) {
+  const token = nanoid32();
+  const { data, error } = await supabaseClient.rpc('recover_guide_access', {
+    p_code: code.trim(),
+    p_name: name.trim(),
+    p_new_token: token,
+  });
+  if (error) {
+    throw new Error(error.message || 'Could not recover access');
   }
   if (!data || data.length === 0) {
     throw new Error('Unexpected response from server');
@@ -1113,8 +1155,11 @@ async function loadTourDirectly(slug) {
 }
 
 // Render the invite-code redemption form. Shown when ?role=guide is in the URL
-// but no valid guide token is present. Reloads the page after successful
-// redemption so the boot flow can pick up the new GUIDE.
+// but no valid guide token is present. Two modes:
+//   - "first" — code hasn't been redeemed yet, first-time registration
+//   - "recover" — code was previously redeemed; new device, same guide
+// User toggles between them via the link at the bottom. Reloads the page after
+// successful redemption/recovery so boot() picks up the new token.
 function showInviteCodeForm() {
   hideLoading();
   let el = document.getElementById('invite-code-screen');
@@ -1129,10 +1174,10 @@ function showInviteCodeForm() {
     <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
       Fieldnote · Guide access
     </div>
-    <div style="font-family:'Fraunces',serif; font-style:italic; font-size:22px; color:var(--ink); max-width:280px; line-height:1.3;">
+    <div id="invite-headline" style="font-family:'Fraunces',serif; font-style:italic; font-size:22px; color:var(--ink); max-width:280px; line-height:1.3;">
       Beta access only.
     </div>
-    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:260px; line-height:1.5;">
+    <div id="invite-blurb" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:260px; line-height:1.5;">
       Paste your invite code below. If you don't have one, ask Filip.
     </div>
     <input
@@ -1156,6 +1201,9 @@ function showInviteCodeForm() {
       Redeem
     </button>
     <div id="invite-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
+    <a id="invite-mode-toggle" href="#" style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); text-decoration:underline;">
+      Already had access? Recover.
+    </a>
   `;
   document.getElementById('phone').appendChild(el);
 
@@ -1163,6 +1211,33 @@ function showInviteCodeForm() {
   const nameInput = document.getElementById('invite-name-input');
   const errorEl = document.getElementById('invite-error');
   const btn = document.getElementById('invite-redeem-btn');
+  const headline = document.getElementById('invite-headline');
+  const blurb = document.getElementById('invite-blurb');
+  const toggle = document.getElementById('invite-mode-toggle');
+
+  let mode = 'first';  // 'first' or 'recover'
+
+  function applyMode() {
+    if (mode === 'first') {
+      headline.textContent = 'Beta access only.';
+      blurb.textContent = "Paste your invite code below. If you don't have one, ask Filip.";
+      btn.textContent = 'Redeem';
+      toggle.textContent = 'Already had access? Recover.';
+    } else {
+      headline.textContent = 'Recover access.';
+      blurb.textContent = 'Enter the invite code you originally redeemed and your name. Your new device replaces the old one.';
+      btn.textContent = 'Recover';
+      toggle.textContent = "First time? Redeem an invite.";
+    }
+    errorEl.textContent = '';
+  }
+
+  toggle.addEventListener('click', e => {
+    e.preventDefault();
+    mode = (mode === 'first') ? 'recover' : 'first';
+    applyMode();
+    codeInput.focus();
+  });
 
   async function trySubmit() {
     const code = (codeInput.value || '').trim();
@@ -1172,15 +1247,19 @@ function showInviteCodeForm() {
     if (!name) { nameInput.focus(); errorEl.textContent = 'Enter your name.'; return; }
 
     btn.disabled = true;
-    btn.textContent = 'Redeeming…';
+    btn.textContent = (mode === 'first') ? 'Redeeming…' : 'Recovering…';
     try {
-      await redeemInviteCode(code, name);
+      if (mode === 'first') {
+        await redeemInviteCode(code, name);
+      } else {
+        await recoverGuideAccess(code, name);
+      }
       // On success, just reload — boot() will see the new token and proceed.
       window.location.reload();
     } catch (err) {
-      errorEl.textContent = err.message || 'Could not redeem.';
+      errorEl.textContent = err.message || 'Could not complete.';
       btn.disabled = false;
-      btn.textContent = 'Redeem';
+      btn.textContent = (mode === 'first') ? 'Redeem' : 'Recover';
     }
   }
 
