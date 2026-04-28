@@ -11,7 +11,7 @@
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/idb@8/build/umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 <style>
   :root {
@@ -592,8 +592,8 @@
         Scan with another phone's camera, or copy the link.
       </div>
       <div id="share-qr-wrap" style="display:flex; justify-content:center; padding:24px; background:var(--paper); border:1px solid var(--rule); border-radius:12px; margin-bottom:18px;">
-        <!-- QR canvas inserted at runtime by qrcode lib -->
-        <canvas id="share-qr"></canvas>
+        <!-- QR SVG inserted at runtime by qrcode-generator -->
+        <div id="share-qr" style="display:flex; align-items:center; justify-content:center; min-height:240px; min-width:240px;"></div>
       </div>
       <div id="share-url" style="padding:12px 14px; background:var(--paper-2); border:1px solid var(--rule); border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:11px; word-break:break-all; user-select:all; line-height:1.5; margin-bottom:14px;"></div>
       <button
@@ -672,7 +672,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-28-2204';
+const BUILD_VERSION = '0.4 · build 2026-04-28-2208';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2743,21 +2743,29 @@ function openShareScreen() {
   const urlEl = document.getElementById('share-url');
   if (urlEl) urlEl.textContent = url;
 
-  // Render QR using the qrcode lib's canvas mode. width=240px gives us a
-  // chunky, easily-scannable code on phone screens. Margin is 1 module
-  // (the lib's smallest valid value); the parent div already adds visual padding.
+  // Render QR using qrcode-generator. typeNumber=0 auto-picks the smallest
+  // QR size that fits the data; ECC level 'M' = ~15% error correction, fine
+  // for casual scanning. createSvgTag returns an SVG string we drop in directly.
   const qrEl = document.getElementById('share-qr');
-  if (qrEl && typeof QRCode !== 'undefined') {
-    QRCode.toCanvas(qrEl, url, {
-      width: 240,
-      margin: 1,
-      color: { dark: '#1a1a1a', light: '#f4ecd8' },  // ink on paper, matches the app
-    }, (err) => {
-      if (err) {
-        console.warn('QR render failed', err);
-        qrEl.outerHTML = '<div style="font-family:\'JetBrains Mono\',monospace; font-size:11px; color:var(--mark);">QR could not be generated.</div>';
+  if (qrEl && typeof qrcode === 'function') {
+    try {
+      const qr = qrcode(0, 'M');
+      qr.addData(url);
+      qr.make();
+      qrEl.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true });
+      const svg = qrEl.querySelector('svg');
+      if (svg) {
+        svg.style.maxWidth = '240px';
+        svg.style.width = '100%';
+        svg.style.height = 'auto';
+        svg.style.display = 'block';
       }
-    });
+    } catch (err) {
+      console.warn('QR render failed', err);
+      qrEl.innerHTML = '<div style="font-family:\'JetBrains Mono\',monospace; font-size:11px; color:var(--mark);">QR could not be generated.</div>';
+    }
+  } else if (qrEl) {
+    qrEl.innerHTML = '<div style="font-family:\'JetBrains Mono\',monospace; font-size:11px; color:var(--mark);">QR library not loaded.</div>';
   }
 
   // Wire up the copy button (idempotent — re-binding is fine on re-open).
