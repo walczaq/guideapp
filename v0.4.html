@@ -591,9 +591,9 @@
       <div style="text-align:center; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); line-height:1.5; margin-bottom:20px;">
         Scan with another phone's camera, or copy the link.
       </div>
-      <div id="share-qr-wrap" style="display:flex; justify-content:center; padding:24px; background:var(--paper); border:1px solid var(--rule); border-radius:12px; margin-bottom:18px;">
+      <div id="share-qr-wrap" style="display:flex; justify-content:center; padding:20px; background:#ffffff; border:2px solid var(--ink); border-radius:12px; margin-bottom:18px;">
         <!-- QR SVG inserted at runtime by qrcode-generator -->
-        <div id="share-qr" style="display:flex; align-items:center; justify-content:center; min-height:240px; min-width:240px;"></div>
+        <div id="share-qr" style="display:flex; align-items:center; justify-content:center; min-height:240px; min-width:240px; background:#ffffff;"></div>
       </div>
       <div id="share-url" style="padding:12px 14px; background:var(--paper-2); border:1px solid var(--rule); border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:11px; word-break:break-all; user-select:all; line-height:1.5; margin-bottom:14px;"></div>
       <button
@@ -672,7 +672,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-28-2208';
+const BUILD_VERSION = '0.4 · build 2026-04-28-2211';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2752,13 +2752,20 @@ function openShareScreen() {
       const qr = qrcode(0, 'M');
       qr.addData(url);
       qr.make();
-      qrEl.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true });
+      qrEl.innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
       const svg = qrEl.querySelector('svg');
       if (svg) {
-        svg.style.maxWidth = '240px';
+        svg.style.maxWidth = '260px';
         svg.style.width = '100%';
         svg.style.height = 'auto';
         svg.style.display = 'block';
+        // Force pure black on white for maximum scan contrast — overrides
+        // whatever the library decided. qrcode-generator paints cells as
+        // <path> elements; set their fill to true black, and the SVG bg
+        // (the rect that's the QR's "light" area) to pure white.
+        svg.querySelectorAll('path').forEach(p => p.setAttribute('fill', '#000000'));
+        svg.querySelectorAll('rect').forEach(r => r.setAttribute('fill', '#ffffff'));
+        svg.style.background = '#ffffff';
       }
     } catch (err) {
       console.warn('QR render failed', err);
