@@ -672,7 +672,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-28-2245';
+const BUILD_VERSION = '0.4 · build 2026-04-28-2247';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2046,7 +2046,7 @@ function renderPassengers() {
   // segment-by-segment — the latter looked like a barber-pole / spiral and
   // read as visual noise. Blocks of ~5 segments per color give the trail a
   // calm rhythm that still encodes the pair identity.
-  const SEGMENTS_PER_COLOR_BLOCK = 5;
+  const SEGMENTS_PER_COLOR_BLOCK = 1;
   for (const [passengerId, p] of PASSENGERS) {
     if (!p.trail || p.trail.length < 2) continue;
     const [colorA, colorB] = colorsForPassenger(passengerId);
