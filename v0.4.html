@@ -169,14 +169,16 @@
 
   /* pins */
   .pin-group { cursor: pointer; }
-  /* The radius circle is purely decorative — never intercept touches.
-     If it did, dragging the map (or pinch-zooming) inside a pin's radius
-     would be eaten by the SVG instead of going to Mapbox. */
+  /* The radius circle is normally hidden — it appears only when the pin is
+     "armed" (the passenger is approaching it and the trigger is about to fire).
+     This makes the circle MEAN something: if you see it, something is happening.
+     pointer-events: none always — the circle is purely decorative. */
   .pin-radius {
     fill: var(--pin-ring);
     stroke: var(--mark); stroke-width: 1; stroke-dasharray: 4 3;
-    opacity: 0.55;
+    opacity: 0;
     pointer-events: none;
+    transition: opacity 0.3s ease-out;
   }
   .pin-group.armed .pin-radius {
     fill: rgba(199, 148, 40, 0.25);
@@ -191,7 +193,6 @@
   }
   .pin-group.visited .pin-marker { fill: var(--paper-2); stroke: var(--rule); }
   .pin-group.visited .pin-label { fill: var(--rule); }
-  .pin-group.visited .pin-radius { opacity: 0.2; }
   .pin-label {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px; font-weight: 700;
@@ -460,8 +461,8 @@
 
       <svg class="overlay-svg" id="overlay">
         <g id="pins-layer"></g>
-        <g id="passengers-layer"></g>
         <g id="you-layer"></g>
+        <g id="passengers-layer"></g>
       </svg>
 
       <div class="map-hud">
@@ -588,8 +589,12 @@
 
 <script>
 // ╭──────────────────────────────────────────────────────╮
-// │  v0.3 — SESSIONS & OFFLINE-FIRST FOUNDATION          │
+// │  v0.4 — LIVE GUIDE VIEW                              │
 // ╰──────────────────────────────────────────────────────╯
+
+// Build version. Bumped every time a new file is shipped — visible in the
+// About panel so you can confirm you're running the latest deploy.
+const BUILD_VERSION = '0.4 · build 2026-04-28-2137';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -1578,6 +1583,7 @@ function applyTourMetadata() {
       ? `<button id="debug-new-session" style="font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">start new session</button>`
       : '';
     debug.innerHTML = `
+      <div style="opacity:0.5; font-size:10px; margin-bottom:6px;">Build: <code>${BUILD_VERSION}</code></div>
       ${guideLine}<br>
       ${roleSwitchLine ? roleSwitchLine + '<br>' : ''}
       ${sessionLine}<br>
@@ -2292,11 +2298,16 @@ function renderPins() {
     g.setAttribute('transform', `translate(${x}, ${y})`);
 
     // Trigger radius — visual representation of the pin's reach.
-    // We cap the rendered circle at a max screen size so it doesn't fill
-    // the screen when zoomed in close. The actual trigger logic still uses
-    // pin.radius in real meters; this is purely how it LOOKS to the user.
-    const VISUAL_RADIUS_MAX_PX = 28;     // never draw a circle bigger than this
-    const VISUAL_RADIUS_MIN_PX = 14;     // never smaller, so it stays visible
+    // We softly clamp the rendered circle so it doesn't get absurdly huge
+    // when zoomed in close or absurdly small when zoomed out. In between,
+    // the circle scales with the map at the pin's real meter size, which
+    // matches what the user expects.
+    //
+    // The clamp range is wide on purpose — only the extremes get trimmed.
+    // The actual trigger logic always uses pin.radius in real meters; this
+    // is purely how it LOOKS to the user.
+    const VISUAL_RADIUS_MIN_PX = 8;
+    const VISUAL_RADIUS_MAX_PX = 60;
     const realPx = pin.radius * ppm;
     const visualPx = Math.max(VISUAL_RADIUS_MIN_PX, Math.min(VISUAL_RADIUS_MAX_PX, realPx));
     const r = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
