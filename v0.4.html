@@ -238,10 +238,9 @@
   }
   .passenger-halo { /* fill + opacity set inline */ }
   .passenger-trail {
-    stroke-width: 2.5;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    opacity: 0.7;
+    /* All visual attrs (stroke, stroke-width, opacity) are set inline per
+       passenger so selection state can drive them. Don't add CSS overrides
+       here — they'd win over the inline attributes for SVG presentation. */
     fill: none;
   }
 
@@ -673,7 +672,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-28-2259';
+const BUILD_VERSION = '0.4 · build 2026-04-28-2302';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
