@@ -11,6 +11,8 @@
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/idb@8/build/umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 <style>
   :root {
     --ink: #1a1d1a;
@@ -531,6 +533,23 @@
         <div class="sub">a walk from Gautland 21</div>
       </div>
       <div class="menu-list">
+        <button class="menu-item" data-action="share-invite" id="menu-share-invite" style="display:none;">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/>
+              <rect x="14" y="3" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/>
+              <line x1="14" y1="14" x2="14" y2="17"/>
+              <line x1="17" y1="14" x2="21" y2="14"/>
+              <line x1="14" y1="20" x2="14" y2="21"/>
+              <line x1="17" y1="17" x2="17" y2="21"/>
+              <line x1="20" y1="17" x2="21" y2="17"/>
+              <line x1="20" y1="20" x2="21" y2="20"/>
+            </svg>
+          </div>
+          <div class="menu-label">Share invite</div>
+          <span class="menu-chevron">›</span>
+        </button>
         <button class="menu-item" data-action="reset">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -553,6 +572,36 @@
           <span class="menu-chevron">›</span>
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- SHARE INVITE -->
+  <div class="screen" id="screen-share">
+    <div class="status-bar"></div>
+    <div class="screen-header">
+      <button class="back-btn" data-close-screen>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </button>
+      <div class="screen-title">Share invite</div>
+    </div>
+    <div class="screen-body">
+      <div style="text-align:center; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); line-height:1.5; margin-bottom:20px;">
+        Scan with another phone's camera, or copy the link.
+      </div>
+      <div id="share-qr-wrap" style="display:flex; justify-content:center; padding:24px; background:var(--paper); border:1px solid var(--rule); border-radius:12px; margin-bottom:18px;">
+        <!-- QR canvas inserted at runtime by qrcode lib -->
+        <canvas id="share-qr"></canvas>
+      </div>
+      <div id="share-url" style="padding:12px 14px; background:var(--paper-2); border:1px solid var(--rule); border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:11px; word-break:break-all; user-select:all; line-height:1.5; margin-bottom:14px;"></div>
+      <button
+        id="share-copy-btn"
+        style="width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+      >
+        Copy link
+      </button>
     </div>
   </div>
 
@@ -585,6 +634,35 @@
     </div>
   </div>
 
+  <!-- SHARE (guide only — invite link + QR code) -->
+  <div class="screen" id="screen-share">
+    <div class="status-bar"></div>
+    <div class="screen-header">
+      <button class="back-btn" data-close-screen>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </button>
+      <div class="screen-title">Share invite</div>
+    </div>
+    <div class="screen-body">
+      <div style="text-align:center; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); line-height:1.6; margin-bottom:18px;">
+        Have passengers scan this code, or copy the link below.
+      </div>
+      <div id="share-qr" style="display:flex; justify-content:center; align-items:center; padding:18px; background:var(--paper-2); border:1px solid var(--rule); border-radius:10px; margin-bottom:16px; min-height:240px;">
+        <!-- QR svg injected at runtime -->
+      </div>
+      <div id="share-url" style="padding:10px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:10px; word-break:break-all; user-select:all; text-align:center; margin-bottom:14px;"></div>
+      <button
+        id="share-copy-btn"
+        style="width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+      >
+        Copy link
+      </button>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -594,7 +672,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-28-2143';
+const BUILD_VERSION = '0.4 · build 2026-04-28-2204';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2626,9 +2704,19 @@ function closeScreen() {
 }
 document.querySelectorAll('[data-close-screen]').forEach(b => b.addEventListener('click', closeScreen));
 
-document.getElementById('burger-btn').addEventListener('click', () => openScreen('screen-menu'));
+document.getElementById('burger-btn').addEventListener('click', () => {
+  // Reveal the "share invite" menu item whenever we're in an active session,
+  // regardless of role — passengers may want to invite a friend, guides may
+  // want to share with new arrivals. Hidden in legacy ?tour mode (no session).
+  const shareItem = document.getElementById('menu-share-invite');
+  if (shareItem) {
+    shareItem.style.display = SESSION ? '' : 'none';
+  }
+  openScreen('screen-menu');
+});
+
 document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
-  item.addEventListener('click', () => {
+  item.addEventListener('click', async () => {
     const action = item.dataset.action;
     if (action === 'reset') {
       state.firedPinIds.clear();
@@ -2638,9 +2726,72 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
       while (screenStack.length) closeScreen();
     } else if (action === 'about') {
       openScreen('screen-about');
+    } else if (action === 'share-invite') {
+      openShareScreen();
     }
   });
 });
+
+// Build the Share screen contents (QR + URL + copy button) and open it.
+// Re-renders the QR each time it's opened, in case the session ever changes
+// (it doesn't currently, but cheap insurance).
+function openShareScreen() {
+  if (!SESSION) return;
+  const url = `${window.location.origin}${window.location.pathname}?session=${SESSION.id}`;
+
+  // Render URL text.
+  const urlEl = document.getElementById('share-url');
+  if (urlEl) urlEl.textContent = url;
+
+  // Render QR using the qrcode lib's canvas mode. width=240px gives us a
+  // chunky, easily-scannable code on phone screens. Margin is 1 module
+  // (the lib's smallest valid value); the parent div already adds visual padding.
+  const qrEl = document.getElementById('share-qr');
+  if (qrEl && typeof QRCode !== 'undefined') {
+    QRCode.toCanvas(qrEl, url, {
+      width: 240,
+      margin: 1,
+      color: { dark: '#1a1a1a', light: '#f4ecd8' },  // ink on paper, matches the app
+    }, (err) => {
+      if (err) {
+        console.warn('QR render failed', err);
+        qrEl.outerHTML = '<div style="font-family:\'JetBrains Mono\',monospace; font-size:11px; color:var(--mark);">QR could not be generated.</div>';
+      }
+    });
+  }
+
+  // Wire up the copy button (idempotent — re-binding is fine on re-open).
+  const btn = document.getElementById('share-copy-btn');
+  if (btn) {
+    btn.onclick = async () => {
+      const original = btn.textContent;
+      const flash = (msg) => {
+        btn.textContent = msg;
+        btn.disabled = true;
+        setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 1400);
+      };
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(url);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = url;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        flash('Copied');
+      } catch {
+        flash('Copy failed');
+      }
+    };
+  }
+
+  openScreen('screen-share');
+}
 </script>
 </body>
 </html>
