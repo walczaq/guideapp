@@ -1182,11 +1182,14 @@ async function boot() {
     // Path 2: legacy direct-tour mode (v0.2 behavior). Useful for testing
     // a tour without going through the session flow.
     await loadTourDirectly(tourSlug);
-  } else {
-    // Path 3: no URL params — show the create-session form.
-    // Anonymous create is still allowed in chunk A; full guide-only enforcement
-    // lands later in v0.4 once we have session ownership wired up.
+  } else if (GUIDE) {
+    // Path 3a: logged-in guide visiting bare URL → show create-session form.
     showCreateSessionForm();
+  } else {
+    // Path 3b: nobody's logged in and there's no session/tour to join.
+    // Bare URL is meaningless to a passenger — they need a session link.
+    // Send them to the invite form (it's the only thing they can do).
+    showInviteCodeForm();
   }
 }
 
@@ -1443,9 +1446,17 @@ async function createSession(tourSlug, guideName) {
   const id = nanoid8();
   const label = makeSessionLabel(tourSlug, guideName);
 
+  // owner_guide_id will be set once the sessions table has that column
+  // (alter-table migration pending — see briefing's v0.4 schema). Until then
+  // sessions are created without ownership tracked. The auto role-promote
+  // logic in boot() handles guide-vs-passenger view selection regardless.
+  const insertPayload = {
+    id, label, tour_slug: tourSlug, guide_name: guideName,
+  };
+
   const { data, error } = await supabaseClient
     .from('sessions')
-    .insert({ id, label, tour_slug: tourSlug, guide_name: guideName })
+    .insert(insertPayload)
     .select()
     .single();
 
@@ -1454,9 +1465,11 @@ async function createSession(tourSlug, guideName) {
     return;
   }
 
-  // Redirect to the new session URL. This causes a fresh boot() call
-  // which will then take the ?session=<id> path.
-  const newUrl = `${window.location.pathname}?session=${id}`;
+  // Redirect to the new session URL. We pass role=guide explicitly so the
+  // creator lands in guide view immediately — no ambiguity, no relying on
+  // auto-promote logic, even survives if the user isn't logged in (which
+  // shouldn't happen but belt-and-suspenders).
+  const newUrl = `${window.location.pathname}?session=${id}&role=guide`;
   window.location.replace(newUrl);
 }
 
