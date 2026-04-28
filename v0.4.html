@@ -672,7 +672,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-28-2305';
+const BUILD_VERSION = '0.4 · build 2026-04-28-2312';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2048,36 +2048,51 @@ function renderPassengers() {
   if (PASSENGERS.size === 0) return;
 
   // Pass 1: trails (so they render below dots).
-  // Single solid line in the passenger's primary color.
-  // Selection-aware: when a passenger is selected, their trail stays full
-  // opacity; all other trails fade to near-ghost. Width stays a modest 3px
-  // either way — fattening the selected trail to e.g. 6px makes the trail
-  // visually consume the dot at its head, so the passenger's current
-  // position looks like just another segment of the line.
+  // Each trail rendered as a sequence of dashed line segments. The dashed
+  // stroke is the visual style; the per-segment rendering is so we can fade
+  // older segments (lower opacity) toward the start of the trail.
+  //
+  // Selection-aware: when a passenger is selected, their trail keeps the
+  // age-based fade but at higher overall opacity; other trails ghost.
   for (const [passengerId, p] of PASSENGERS) {
     if (!p.trail || p.trail.length < 2) continue;
     const [colorA] = colorsForPassenger(passengerId);
     const isSelected = SELECTED_PASSENGER === passengerId;
     const noneSelected = SELECTED_PASSENGER === null;
-    let opacity;
-    if (noneSelected) opacity = 0.8;
-    else if (isSelected) opacity = 1.0;
-    else opacity = 0.08;       // ghost when something else is selected
-    const points = p.trail.map(t => {
-      const { x, y } = project(t.lng, t.lat);
-      return `${x},${y}`;
-    }).join(' ');
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-    line.setAttribute('class', 'passenger-trail');
-    line.setAttribute('data-passenger-id', passengerId);
-    line.setAttribute('points', points);
-    line.setAttribute('stroke', colorA);
-    line.setAttribute('stroke-width', '3');
-    line.setAttribute('stroke-linecap', 'round');
-    line.setAttribute('stroke-linejoin', 'round');
-    line.setAttribute('fill', 'none');
-    line.setAttribute('opacity', String(opacity));
-    passengersLayer.appendChild(line);
+    // Selection multiplier on top of per-segment age-opacity. Selected = 1.0,
+    // default = 0.85 (matches old solid-line look), unselected-when-other-
+    // selected = 0.08 (ghost).
+    let selMul;
+    if (noneSelected) selMul = 0.85;
+    else if (isSelected) selMul = 1.0;
+    else selMul = 0.08;
+
+    const projected = p.trail.map(t => project(t.lng, t.lat));
+    const N = projected.length;
+    for (let i = 0; i < N - 1; i++) {
+      // Age fade: oldest segment ~0.25 opacity multiplier, newest 1.0.
+      // Linear ramp from old → new. Combined with selection multiplier.
+      const ageT = N <= 2 ? 1 : i / (N - 2);          // 0 = oldest, 1 = newest
+      const ageOpacity = 0.25 + 0.75 * ageT;
+      const segOpacity = ageOpacity * selMul;
+
+      const a = projected[i];
+      const b = projected[i + 1];
+      const seg = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      seg.setAttribute('class', 'passenger-trail');
+      seg.setAttribute('data-passenger-id', passengerId);
+      seg.setAttribute('x1', a.x);
+      seg.setAttribute('y1', a.y);
+      seg.setAttribute('x2', b.x);
+      seg.setAttribute('y2', b.y);
+      seg.setAttribute('stroke', colorA);
+      seg.setAttribute('stroke-width', '3');
+      seg.setAttribute('stroke-linecap', 'round');
+      // Dashed pattern: 2px dash, 4px gap. Reads as dotted at typical zoom.
+      seg.setAttribute('stroke-dasharray', '2 4');
+      seg.setAttribute('opacity', String(segOpacity));
+      passengersLayer.appendChild(seg);
+    }
   }
 
   // Pass 2: dots (drawn after trails so they sit visually on top).
