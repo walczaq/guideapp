@@ -199,6 +199,22 @@
   .you-dot { fill: var(--you); stroke: var(--paper); stroke-width: 2.5; }
   .you-halo { fill: var(--ink); opacity: 0.12; }
 
+  /* Guide dot — beacon blue. Used both in the guide's own view and (later,
+     once chunk F lands) in passenger views when guide visibility is on. */
+  .you-dot.guide {
+    fill: #2563eb;          /* clear, authoritative blue */
+    stroke: var(--paper);
+    stroke-width: 2.5;
+  }
+  .you-accuracy.guide {
+    fill: rgba(37, 99, 235, 0.12);
+    stroke: rgba(37, 99, 235, 0.4);
+  }
+  .you-halo.guide {
+    fill: #2563eb;
+    opacity: 0.18;
+  }
+
   /* generic screen header */
   .screen-header {
     display: flex; align-items: center;
@@ -344,6 +360,58 @@
     margin-bottom: 4px;
   }
 
+  /* Guide bottom sheet — appears in role=guide view only.
+     Three drag-snap states managed in JS via .style.height directly. */
+  .guide-sheet {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    background: var(--paper);
+    border-top: 1px solid var(--ink);
+    box-shadow: 0 -8px 24px rgba(0,0,0,0.15);
+    display: flex; flex-direction: column;
+    z-index: 30;
+    transition: height 0.25s cubic-bezier(0.3, 0.8, 0.3, 1);
+    overflow: hidden;
+    touch-action: none;  /* prevent page scroll while dragging the handle */
+  }
+  .guide-sheet-handle {
+    flex-shrink: 0;
+    height: 60px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: grab;
+    user-select: none;
+    background: var(--paper);
+    border-bottom: 1px solid var(--rule);
+    touch-action: none;
+  }
+  .guide-sheet-handle:active { cursor: grabbing; }
+  .guide-sheet-grip {
+    width: 36px; height: 4px;
+    background: var(--rule);
+    border-radius: 2px;
+    margin-bottom: 8px;
+  }
+  .guide-sheet-title {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--ink);
+  }
+  .guide-sheet-title-count {
+    background: var(--ink); color: var(--paper);
+    padding: 2px 8px; border-radius: 10px;
+    font-size: 10px;
+  }
+  .guide-sheet-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 20px 24px;
+  }
+  .guide-sheet-empty {
+    text-align: center;
+    padding: 16px 0;
+  }
+
   /* about screen text */
   .about-block {
     font-size: 15px; line-height: 1.55; color: #2a2e2a;
@@ -478,7 +546,7 @@
         Guides log in with an invite code, create sessions, and (eventually) see passenger dots updating on a map in real time.
       </div>
       <div class="about-block muted">
-        Chunk A done: invite-code auth. Open <code>?role=guide</code> and you'll be asked for a code. Future chunks: catch-up query, realtime subscription, color states, guide-visibility toggle, passenger names.
+        Chunk A done: invite-code auth (with recovery via name + code). Chunk B done: guide view shell — bottom sheet, hidden passenger UI. Future chunks: catch-up query, realtime subscription, color states, guide-visibility toggle, passenger names.
       </div>
       <div class="about-block muted">
         v0.3 still works: GPS fixes captured locally, queued in IndexedDB, synced to Supabase when network is available.
@@ -959,6 +1027,13 @@ let TOUR = null;
 // Stays null when running in legacy ?tour=<slug> mode (no session).
 let SESSION = null;
 
+// ── 1c. ROLE ──
+// Set during boot from the URL ?role= param. Two values for v0.4:
+//   'passenger' (default) — broadcasts location, follows triggers, sees own dot
+//   'guide'              — observes passengers, no triggers, no self-tracking
+//                          (yet — guide visibility toggle comes in chunk F)
+let ROLE = 'passenger';
+
 // ── 2. STATE ──
 // Everything that changes while the app is running.
 const state = {
@@ -1061,6 +1136,10 @@ async function boot() {
     showInviteCodeForm();
     return;
   }
+
+  // Lock in the role for the rest of the page-load. Default is passenger.
+  // Only ?role=guide promotes us — and only if auth passed above.
+  ROLE = (role === 'guide' && GUIDE) ? 'guide' : 'passenger';
 
   if (sessionId) {
     // Path 1: join an existing session.
@@ -1504,7 +1583,15 @@ function initMap(token) {
 
   map.on('load', () => {
     renderAll();
+    // GPS runs for everyone — guides need to see their own location too.
+    // What differs by role is what gets *broadcast* (queued + synced):
+    //   passenger → always queues their fixes
+    //   guide     → only queues when "Visible to passengers" is on (chunk F)
+    // For now (chunks B–E), guide queueing is suppressed in onGpsSuccess.
     startGeolocation();
+    if (ROLE === 'guide') {
+      startGuideShell();
+    }
   });
   map.on('move', renderAll);
   map.on('zoom', renderAll);
@@ -1522,6 +1609,134 @@ function initMap(token) {
 // Using watchPosition for continuous tracking. Accuracy and update frequency
 // are at the browser's discretion — we ask for high accuracy but don't get a guarantee.
 let geoWatchId = null;
+
+// ── 6b. GUIDE SHELL ──
+// Counterpart to startGeolocation, called instead when ROLE === 'guide'.
+// Mounts the bottom-sheet UI and hides passenger-only HUD elements.
+// No GPS, no triggers, no walker dot.
+//
+// Chunk B scope: layout only. Passenger list shows "Passengers (0)" with a
+// share-link card. Live data lands in chunk C (catch-up query) and chunk D
+// (realtime subscription).
+function startGuideShell() {
+  // Hide the follow-me button — it's about auto-centering on your own dot,
+  // which is more confusing than helpful when the guide is observing
+  // multiple passengers. Signal pill stays visible: the guide still wants
+  // to know whether their own GPS is healthy (will matter when they go
+  // visible-to-passengers in chunk F).
+  const recenter = document.getElementById('recenter');
+  if (recenter) recenter.style.display = 'none';
+
+  mountGuideBottomSheet();
+}
+
+// Bottom-sheet snap states (in px, except `full` which is a fraction of phone height).
+const SHEET_STATES = {
+  collapsed: 60,
+  half: 240,
+  full: 0.85,
+};
+let _sheetState = 'half';
+let _sheetEl = null;
+let _sheetDrag = null;
+
+function mountGuideBottomSheet() {
+  if (document.getElementById('guide-sheet')) return;
+  const phone = document.getElementById('phone');
+  const sheet = document.createElement('div');
+  sheet.id = 'guide-sheet';
+  sheet.className = 'guide-sheet';
+  sheet.innerHTML = `
+    <div class="guide-sheet-handle" id="guide-sheet-handle">
+      <div class="guide-sheet-grip"></div>
+      <div class="guide-sheet-title">
+        <span class="guide-sheet-title-main">Passengers</span>
+        <span class="guide-sheet-title-count" id="guide-sheet-count">0</span>
+      </div>
+    </div>
+    <div class="guide-sheet-body" id="guide-sheet-body">
+      <div class="guide-sheet-empty" id="guide-sheet-empty">
+        <div style="font-family:'Fraunces',serif; font-style:italic; font-size:18px; color:var(--ink); margin-bottom:8px;">
+          No passengers yet.
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); line-height:1.5;">
+          Share this link to start:
+        </div>
+        <div id="guide-share-link" style="margin-top:10px; padding:10px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:10px; word-break:break-all; user-select:all;">
+          ${SESSION ? `${window.location.origin}${window.location.pathname}?session=${SESSION.id}` : '—'}
+        </div>
+      </div>
+      <div class="guide-sheet-list" id="guide-sheet-list" style="display:none;">
+        <!-- passenger rows populate here in chunk C onward -->
+      </div>
+    </div>
+  `;
+  phone.appendChild(sheet);
+  _sheetEl = sheet;
+  applySheetState();
+  bindSheetDrag();
+}
+
+function applySheetState() {
+  if (!_sheetEl) return;
+  const phone = document.getElementById('phone');
+  const phoneHeight = phone.clientHeight;
+  let h;
+  if (_sheetState === 'collapsed') h = SHEET_STATES.collapsed;
+  else if (_sheetState === 'half') h = SHEET_STATES.half;
+  else h = Math.round(phoneHeight * SHEET_STATES.full);
+  _sheetEl.style.height = h + 'px';
+}
+
+function bindSheetDrag() {
+  const handle = document.getElementById('guide-sheet-handle');
+  if (!handle) return;
+  handle.addEventListener('pointerdown', e => {
+    _sheetDrag = {
+      startY: e.clientY,
+      startHeight: _sheetEl.offsetHeight,
+      moved: false,
+    };
+    handle.setPointerCapture(e.pointerId);
+    _sheetEl.style.transition = 'none';
+  });
+  handle.addEventListener('pointermove', e => {
+    if (!_sheetDrag) return;
+    const dy = e.clientY - _sheetDrag.startY;
+    if (Math.abs(dy) > 4) _sheetDrag.moved = true;
+    const phoneHeight = document.getElementById('phone').clientHeight;
+    let h = _sheetDrag.startHeight - dy;
+    h = Math.max(SHEET_STATES.collapsed, Math.min(phoneHeight * SHEET_STATES.full, h));
+    _sheetEl.style.height = h + 'px';
+  });
+  handle.addEventListener('pointerup', () => {
+    if (!_sheetDrag) return;
+    _sheetEl.style.transition = '';
+    if (_sheetDrag.moved) {
+      const h = _sheetEl.offsetHeight;
+      const phoneHeight = document.getElementById('phone').clientHeight;
+      const fullH = phoneHeight * SHEET_STATES.full;
+      const halfMid = (SHEET_STATES.collapsed + SHEET_STATES.half) / 2;
+      const fullMid = (SHEET_STATES.half + fullH) / 2;
+      if (h < halfMid) _sheetState = 'collapsed';
+      else if (h < fullMid) _sheetState = 'half';
+      else _sheetState = 'full';
+    } else {
+      // Tap (no drag): cycle states.
+      if (_sheetState === 'collapsed') _sheetState = 'half';
+      else if (_sheetState === 'half') _sheetState = 'full';
+      else _sheetState = 'collapsed';
+    }
+    _sheetDrag = null;
+    applySheetState();
+  });
+  handle.addEventListener('pointercancel', () => {
+    _sheetDrag = null;
+    _sheetEl.style.transition = '';
+    applySheetState();
+  });
+  window.addEventListener('resize', applySheetState);
+}
 
 function startGeolocation() {
   if (!('geolocation' in navigator)) {
@@ -1561,12 +1776,19 @@ function onGpsSuccess(pos) {
   state.heading = pos.coords.heading;  // null if not moving
 
   updateSignal();
-  checkTriggers();
 
-  // Persist to local queue, throttled. Only queues when we're inside a session.
-  // Errors are caught and logged so a queue write failure never breaks GPS UI.
+  // Triggers (chime + popup) are passenger-only — guides don't get pinged
+  // by their own tour pins. They're observers, not participants.
+  if (ROLE === 'passenger') {
+    checkTriggers();
+  }
+
+  // Persist to local queue, throttled. Only queues when:
+  //  - we're inside a session, AND
+  //  - we're a passenger (guide queueing is gated by the visibility toggle,
+  //    which lands in chunk F; until then guide GPS stays local-only)
   const now = Date.now();
-  if (SESSION && now - _lastQueuedAt >= QUEUE_INTERVAL_MS) {
+  if (SESSION && ROLE === 'passenger' && now - _lastQueuedAt >= QUEUE_INTERVAL_MS) {
     _lastQueuedAt = now;
     queueLocation({
       lng: state.youLng,
@@ -1706,6 +1928,13 @@ function renderYou() {
   const { x, y } = project(state.youLng, state.youLat);
   const ppm = pxPerMeter();
 
+  // When we're the guide, the dot styles itself in beacon blue rather than
+  // the passenger's green. Same dot, same logic; just a class modifier.
+  // This is also what passengers will eventually see (chunk F) when guide
+  // visibility is on — same blue treatment for visual consistency.
+  const isGuide = ROLE === 'guide';
+  const cls = (base) => isGuide ? `${base} guide` : base;
+
   const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   g.setAttribute('class', 'you-group');
   g.setAttribute('transform', `translate(${x}, ${y})`);
@@ -1715,13 +1944,13 @@ function renderYou() {
   // doesn't blot out the entire map.
   if (state.gpsMode === 'real' && state.accuracy && state.accuracy < 200) {
     const acc = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    acc.setAttribute('class', 'you-accuracy');
+    acc.setAttribute('class', cls('you-accuracy'));
     acc.setAttribute('r', state.accuracy * ppm);
     g.appendChild(acc);
   }
 
   const halo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-  halo.setAttribute('class', 'you-halo');
+  halo.setAttribute('class', cls('you-halo'));
   halo.setAttribute('r', 18);
   g.appendChild(halo);
 
@@ -1729,15 +1958,13 @@ function renderYou() {
   if (state.heading != null && !isNaN(state.heading)) {
     const heading = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
     heading.setAttribute('points', '12,0 5,-4 5,4');
-    heading.setAttribute('fill', 'var(--ink)');
-    // GPS heading is degrees clockwise from north; SVG rotate is clockwise from positive-x (east).
-    // Convert: svgRotation = headingFromNorth - 90
+    heading.setAttribute('fill', isGuide ? '#2563eb' : 'var(--ink)');
     heading.setAttribute('transform', `rotate(${state.heading - 90})`);
     g.appendChild(heading);
   }
 
   const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-  dot.setAttribute('class', 'you-dot');
+  dot.setAttribute('class', cls('you-dot'));
   dot.setAttribute('r', 9);
   g.appendChild(dot);
 
