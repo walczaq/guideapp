@@ -109,6 +109,7 @@
     overflow: visible;
   }
   .overlay-svg .pin-group { pointer-events: auto; }
+  .overlay-svg .passenger-group { pointer-events: auto; }
 
   /* HUD */
   .map-hud {
@@ -672,7 +673,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-28-2250';
+const BUILD_VERSION = '0.4 · build 2026-04-28-2256';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -1890,6 +1891,7 @@ function startGuideShell() {
   if (recenter) recenter.style.display = 'none';
 
   mountGuideBottomSheet();
+  bindMapDeselectHandler();
 
   // Catch-up first, then subscribe. Order matters: if we subscribed first,
   // any rows arriving during the catch-up query would be racing with our
@@ -1910,6 +1912,11 @@ function startGuideShell() {
 // }
 // Drives the dot rendering, trail rendering, and the bottom-sheet count.
 const PASSENGERS = new Map();
+
+// ID of the currently selected passenger (or null). Tap a passenger dot to
+// select them: their trail goes full-strength + thicker, all other trails
+// dim. Tap the same dot again, or tap empty map, to deselect.
+let SELECTED_PASSENGER = null;
 
 // Curated color palette for passenger dots and trails.
 // Picked to be:
@@ -2042,15 +2049,26 @@ function renderPassengers() {
   if (PASSENGERS.size === 0) return;
 
   // Pass 1: trails (so they render below dots).
-  // Single solid line in the passenger's primary color. Earlier iterations
-  // tried alternating colors per segment to encode pair-identity in the trail
-  // too — but at 5s GPS intervals each segment is only a few pixels at
-  // typical zoom, so alternation read as visual noise rather than rhythm.
-  // Pair-identity is already carried by the half-half dot; the trail just
-  // needs to be a legible path that ties to the passenger.
+  // Single solid line in the passenger's primary color.
+  // Selection-aware: when a passenger is selected, their trail goes
+  // full-opacity + thicker; all other trails dim. When nothing is selected,
+  // every trail uses the default styling.
   for (const [passengerId, p] of PASSENGERS) {
     if (!p.trail || p.trail.length < 2) continue;
     const [colorA] = colorsForPassenger(passengerId);
+    const isSelected = SELECTED_PASSENGER === passengerId;
+    const noneSelected = SELECTED_PASSENGER === null;
+    let strokeWidth, opacity;
+    if (noneSelected) {
+      strokeWidth = 3;
+      opacity = 0.8;
+    } else if (isSelected) {
+      strokeWidth = 4;
+      opacity = 1.0;
+    } else {
+      strokeWidth = 2;
+      opacity = 0.15;
+    }
     const points = p.trail.map(t => {
       const { x, y } = project(t.lng, t.lat);
       return `${x},${y}`;
@@ -2060,27 +2078,51 @@ function renderPassengers() {
     line.setAttribute('data-passenger-id', passengerId);
     line.setAttribute('points', points);
     line.setAttribute('stroke', colorA);
-    line.setAttribute('stroke-width', '3');
+    line.setAttribute('stroke-width', String(strokeWidth));
     line.setAttribute('stroke-linecap', 'round');
     line.setAttribute('stroke-linejoin', 'round');
     line.setAttribute('fill', 'none');
-    line.setAttribute('opacity', '0.8');
+    line.setAttribute('opacity', String(opacity));
     passengersLayer.appendChild(line);
   }
 
   // Pass 2: dots (drawn after trails so they sit visually on top).
   // Half-half rendering: two semicircles, one for each color, with a thin
   // hairline between them so the split is visible at small sizes.
+  // Tappable: tap to select-and-highlight, tap again to deselect.
   const DOT_R = 8;     // bumped up from 6 — half-half needs more room to read
   const HALO_R = 13;
   for (const [passengerId, p] of PASSENGERS) {
     const { x, y } = project(p.lng, p.lat);
     const [colorA, colorB] = colorsForPassenger(passengerId);
+    const isSelected = SELECTED_PASSENGER === passengerId;
 
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    g.setAttribute('class', 'passenger-group');
+    g.setAttribute('class', 'passenger-group' + (isSelected ? ' selected' : ''));
     g.setAttribute('data-passenger-id', passengerId);
     g.setAttribute('transform', `translate(${x}, ${y})`);
+    g.style.cursor = 'pointer';
+
+    // Make the group tappable. SVG groups need pointer-events: visiblePainted
+    // (the default for elements with fills) — pointer-events on the parent
+    // <g> applies to its children. Click on any child = click on the group.
+    g.addEventListener('click', (e) => {
+      e.stopPropagation();
+      togglePassengerSelection(passengerId);
+    });
+
+    // Selection ring — drawn outside the regular ring when this passenger is
+    // selected. Strong, full-opacity, in the primary color, so the selection
+    // reads instantly.
+    if (isSelected) {
+      const selRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      selRing.setAttribute('r', DOT_R + 5);
+      selRing.setAttribute('fill', 'none');
+      selRing.setAttribute('stroke', colorA);
+      selRing.setAttribute('stroke-width', '2.5');
+      selRing.setAttribute('opacity', '0.85');
+      g.appendChild(selRing);
+    }
 
     // Halo — soft outer glow in colorA. Single color is fine; halo is meant
     // to be a presence indicator, not part of the identity signal.
@@ -2091,22 +2133,19 @@ function renderPassengers() {
     halo.setAttribute('opacity', '0.18');
     g.appendChild(halo);
 
-    // Left half — a path that draws a semicircle on the LEFT of (0,0).
-    // SVG path: M 0 -r  A r r 0 0 0  0 r  Z
-    //   move to top, arc clockwise=0 to bottom, close back to top.
+    // Left half — semicircle on the LEFT.
     const halfL = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     halfL.setAttribute('d', `M 0 ${-DOT_R} A ${DOT_R} ${DOT_R} 0 0 0 0 ${DOT_R} Z`);
     halfL.setAttribute('fill', colorA);
     g.appendChild(halfL);
 
-    // Right half — same arc but clockwise=1 puts it on the right.
+    // Right half — semicircle on the RIGHT.
     const halfR = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     halfR.setAttribute('d', `M 0 ${-DOT_R} A ${DOT_R} ${DOT_R} 0 0 1 0 ${DOT_R} Z`);
     halfR.setAttribute('fill', colorB);
     g.appendChild(halfR);
 
     // Hairline between halves so the split reads clearly even at small sizes.
-    // Thin, paper-colored — looks like the dot has a vertical highlight.
     const split = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     split.setAttribute('x1', 0); split.setAttribute('y1', -DOT_R);
     split.setAttribute('x2', 0); split.setAttribute('y2', DOT_R);
@@ -2126,6 +2165,30 @@ function renderPassengers() {
 
     passengersLayer.appendChild(g);
   }
+}
+
+// Toggle selection: if this passenger is already selected, deselect; otherwise
+// select them. Re-render to apply visual state.
+function togglePassengerSelection(passengerId) {
+  if (SELECTED_PASSENGER === passengerId) {
+    SELECTED_PASSENGER = null;
+  } else {
+    SELECTED_PASSENGER = passengerId;
+  }
+  renderPassengers();
+}
+
+// Tap empty map = deselect. Wire up on map init.
+function bindMapDeselectHandler() {
+  if (!map) return;
+  map.on('click', () => {
+    // Mapbox fires this for clicks that didn't hit any layer. SVG dot taps
+    // call e.stopPropagation() so they don't bubble to here.
+    if (SELECTED_PASSENGER !== null) {
+      SELECTED_PASSENGER = null;
+      renderPassengers();
+    }
+  });
 }
 
 // Sync the bottom-sheet header count + toggle empty state.
