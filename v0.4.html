@@ -574,7 +574,7 @@
         Guides log in with an invite code, create sessions, and (eventually) see passenger dots updating on a map in real time.
       </div>
       <div class="about-block muted">
-        Chunks A–C done: invite-code auth (with recovery), guide view shell with bottom sheet, catch-up query renders passenger dots + permanent breadcrumb trails (one stable color per passenger). Future chunks: realtime subscription, color states, guide-visibility toggle, passenger names.
+        Chunks A–D done: invite-code auth, guide view shell with bottom sheet, catch-up query renders passenger dots + permanent breadcrumb trails, realtime subscription pushes new fixes live as they arrive. Future chunks: color states, guide-visibility toggle, passenger names.
       </div>
       <div class="about-block muted">
         v0.3 still works: GPS fixes captured locally, queued in IndexedDB, synced to Supabase when network is available.
@@ -594,7 +594,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-28-2137';
+const BUILD_VERSION = '0.4 · build 2026-04-28-2143';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -1673,7 +1673,11 @@ function updateDebugSyncStats() {
     : 'no syncs yet';
   const total = `${_syncStats.totalSynced} synced this load`;
   const err = _syncStats.lastError ? ` · err: ${_syncStats.lastError}` : '';
-  el.textContent = `Sync: ${online} · ${last} · ${total}${err}`;
+  // Subscription state is only meaningful in guide view; in passenger view
+  // it stays "idle" forever. Show it always — its absence in passenger mode
+  // tells you something too.
+  const sub = _subscriptionStatus !== 'idle' ? ` · sub: ${_subscriptionStatus}` : '';
+  el.textContent = `Sync: ${online} · ${last} · ${total}${sub}${err}`;
 }
 
 // Update the queue-size readout in the About panel. Called on initial load,
@@ -1809,10 +1813,15 @@ function startGuideShell() {
 
   mountGuideBottomSheet();
 
-  // Catch-up: pull the most recent location per passenger, render once.
-  // Live subscription comes in chunk D.
-  catchUpPassengers().catch(err => {
-    console.warn('Catch-up query failed', err);
+  // Catch-up first, then subscribe. Order matters: if we subscribed first,
+  // any rows arriving during the catch-up query would be racing with our
+  // initial dataset. Doing catch-up first means the in-memory state is
+  // populated before we start receiving live events.
+  (async () => {
+    await catchUpPassengers();
+    startPassengerLocationsSubscription();
+  })().catch(err => {
+    console.warn('Guide shell startup failed', err);
   });
 }
 
@@ -1862,7 +1871,7 @@ function colorForPassenger(passengerId) {
 // Why oldest-first for chunk C: the trail is the chronological path, so we
 // process rows in order. The "current position" naturally ends up being the
 // last row we see for each passenger (which is the most recent).
-async function catchUpPassengers() {
+async function catchUpPassengers({ merge = false } = {}) {
   if (!SESSION) return;
 
   // Pull all rows in this session, oldest first. Generous limit; if a session
@@ -1882,8 +1891,14 @@ async function catchUpPassengers() {
   if (!data) return;
 
   // Walk through rows in chronological order, building each passenger's trail
-  // and overwriting their "current" with the latest fix.
-  PASSENGERS.clear();
+  // and overwriting their "current" with the latest fix. Track each row's
+  // timestamp so the subscription handler can dedupe rows that arrive both
+  // via catch-up and via realtime push.
+  //
+  // merge=false (default for first call): wipe state and rebuild from query.
+  // merge=true (used on reconnect-reconcile): keep existing state, only add
+  //   rows we haven't seen. Live data + reconciled gap, no double-count.
+  if (!merge) PASSENGERS.clear();
   for (const row of data) {
     let p = PASSENGERS.get(row.passenger_id);
     if (!p) {
@@ -1893,14 +1908,19 @@ async function catchUpPassengers() {
         accuracy: row.accuracy,
         lastUpdate: row.client_recorded_at,
         trail: [],
+        _seenTimestamps: new Set(),
       };
       PASSENGERS.set(row.passenger_id, p);
     }
+    if (p._seenTimestamps.has(row.client_recorded_at)) continue;
+    p._seenTimestamps.add(row.client_recorded_at);
     p.trail.push({ lng: row.lng, lat: row.lat });
-    p.lng = row.lng;
-    p.lat = row.lat;
-    p.accuracy = row.accuracy;
-    p.lastUpdate = row.client_recorded_at;
+    if (!p.lastUpdate || row.client_recorded_at > p.lastUpdate) {
+      p.lng = row.lng;
+      p.lat = row.lat;
+      p.accuracy = row.accuracy;
+      p.lastUpdate = row.client_recorded_at;
+    }
   }
   renderPassengers();
   updatePassengerCount();
@@ -1981,6 +2001,126 @@ function updatePassengerCount() {
   const listEl = document.getElementById('guide-sheet-list');
   if (emptyEl) emptyEl.style.display = count === 0 ? '' : 'none';
   if (listEl) listEl.style.display = count === 0 ? 'none' : '';
+}
+
+// ── REALTIME SUBSCRIPTION ──
+// Push-based updates from Supabase: every time a row is inserted into
+// passenger_locations for our session, the handler runs.
+//
+// Lifecycle concerns:
+//  - Subscribe ONCE per page load. Set up a guard flag so re-running
+//    startGuideShell (shouldn't happen but) doesn't double-subscribe.
+//  - Auto-reconnect: Supabase handles this transparently. But during a
+//    disconnect, we may miss events. On reconnect we re-run catch-up to
+//    fill any gap, then continue receiving live.
+//  - Dedupe on (passenger_id, client_recorded_at): if the same row arrives
+//    via both subscription and a reconcile-catch-up, we only keep one.
+//  - Cleanup on page unload to release the channel cleanly.
+let _channel = null;
+let _subscribeStarted = false;
+let _subscriptionStatus = 'idle';   // 'idle' | 'subscribing' | 'subscribed' | 'error' | 'reconnecting'
+
+function startPassengerLocationsSubscription() {
+  if (_subscribeStarted) return;        // guard against double-start
+  if (!SESSION) return;
+  _subscribeStarted = true;
+  _subscriptionStatus = 'subscribing';
+  updateDebugSyncStats();
+
+  // Channel name is per-session so concurrent guide views (in different tabs
+  // or different devices) don't collide on each other's channels.
+  _channel = supabaseClient
+    .channel(`passenger_locations:${SESSION.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'passenger_locations',
+        filter: `session_id=eq.${SESSION.id}`,
+      },
+      (payload) => {
+        // payload.new is the inserted row.
+        applyIncomingLocationRow(payload.new);
+      }
+    )
+    .subscribe((status) => {
+      // Status callbacks: 'SUBSCRIBED', 'CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'
+      if (status === 'SUBSCRIBED') {
+        // First time we land here, the catch-up already ran. On RE-subscribe
+        // (i.e. we reconnected after a drop), re-run catch-up to fill any gap.
+        const wasReconnecting = _subscriptionStatus === 'reconnecting';
+        _subscriptionStatus = 'subscribed';
+        if (wasReconnecting) {
+          // Reconciliation pass: fetch any rows we may have missed during
+          // the disconnect. Use merge mode so we don't wipe the live state
+          // we already have — we only add rows whose timestamps we haven't seen.
+          catchUpPassengers({ merge: true }).catch(err => {
+            console.warn('Reconcile catch-up failed', err);
+          });
+        }
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        _subscriptionStatus = 'reconnecting';
+      } else if (status === 'CLOSED') {
+        _subscriptionStatus = 'idle';
+      }
+      updateDebugSyncStats();
+    });
+
+  // Release the channel on page unload so Supabase isn't holding ghost subscriptions.
+  window.addEventListener('beforeunload', () => {
+    if (_channel) {
+      try { supabaseClient.removeChannel(_channel); } catch {}
+    }
+  });
+}
+
+// Apply one incoming row (from subscription OR reconcile catch-up) to the
+// in-memory PASSENGERS state. Idempotent: if we already have this exact
+// (passenger_id, client_recorded_at) pair, we skip rather than dup.
+function applyIncomingLocationRow(row) {
+  if (!row || !row.passenger_id) return;
+
+  let p = PASSENGERS.get(row.passenger_id);
+  if (!p) {
+    p = {
+      lng: row.lng,
+      lat: row.lat,
+      accuracy: row.accuracy,
+      lastUpdate: row.client_recorded_at,
+      trail: [],
+      _seenTimestamps: new Set(),
+    };
+    PASSENGERS.set(row.passenger_id, p);
+  }
+  // Lazy migration: passengers that came in via catch-up (before this fn
+  // existed) won't have a _seenTimestamps set yet.
+  if (!p._seenTimestamps) {
+    p._seenTimestamps = new Set();
+    // Backfill from existing trail. No timestamps stored on trail points
+    // (they're just lng/lat for render efficiency) so we treat catch-up
+    // points as "seen by position+order" — close enough; live updates
+    // won't collide with them.
+  }
+
+  // Dedupe: same passenger + same recorded time = skip.
+  const ts = row.client_recorded_at;
+  if (p._seenTimestamps.has(ts)) return;
+  p._seenTimestamps.add(ts);
+
+  p.trail.push({ lng: row.lng, lat: row.lat });
+
+  // Update "current" only if this row is newer than what we have. Out-of-order
+  // events (rare but possible during reconnection) shouldn't move the dot back.
+  if (!p.lastUpdate || ts > p.lastUpdate) {
+    p.lng = row.lng;
+    p.lat = row.lat;
+    p.accuracy = row.accuracy;
+    p.lastUpdate = ts;
+  }
+
+  renderPassengers();
+  updatePassengerCount();
 }
 
 // Bottom-sheet snap states (in px, except `full` which is a fraction of phone height).
