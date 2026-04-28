@@ -672,7 +672,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-28-2247';
+const BUILD_VERSION = '0.4 · build 2026-04-28-2250';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2042,31 +2042,30 @@ function renderPassengers() {
   if (PASSENGERS.size === 0) return;
 
   // Pass 1: trails (so they render below dots).
-  // Each trail alternates between the two passenger colors in BLOCKS, not
-  // segment-by-segment — the latter looked like a barber-pole / spiral and
-  // read as visual noise. Blocks of ~5 segments per color give the trail a
-  // calm rhythm that still encodes the pair identity.
-  const SEGMENTS_PER_COLOR_BLOCK = 1;
+  // Single solid line in the passenger's primary color. Earlier iterations
+  // tried alternating colors per segment to encode pair-identity in the trail
+  // too — but at 5s GPS intervals each segment is only a few pixels at
+  // typical zoom, so alternation read as visual noise rather than rhythm.
+  // Pair-identity is already carried by the half-half dot; the trail just
+  // needs to be a legible path that ties to the passenger.
   for (const [passengerId, p] of PASSENGERS) {
     if (!p.trail || p.trail.length < 2) continue;
-    const [colorA, colorB] = colorsForPassenger(passengerId);
-    const projected = p.trail.map(t => project(t.lng, t.lat));
-    for (let i = 0; i < projected.length - 1; i++) {
-      const a = projected[i];
-      const b = projected[i + 1];
-      // Block index toggles every SEGMENTS_PER_COLOR_BLOCK segments.
-      const useA = Math.floor(i / SEGMENTS_PER_COLOR_BLOCK) % 2 === 0;
-      const seg = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      seg.setAttribute('x1', a.x);
-      seg.setAttribute('y1', a.y);
-      seg.setAttribute('x2', b.x);
-      seg.setAttribute('y2', b.y);
-      seg.setAttribute('stroke', useA ? colorA : colorB);
-      seg.setAttribute('stroke-width', '3');
-      seg.setAttribute('stroke-linecap', 'round');
-      seg.setAttribute('opacity', '0.8');
-      passengersLayer.appendChild(seg);
-    }
+    const [colorA] = colorsForPassenger(passengerId);
+    const points = p.trail.map(t => {
+      const { x, y } = project(t.lng, t.lat);
+      return `${x},${y}`;
+    }).join(' ');
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    line.setAttribute('class', 'passenger-trail');
+    line.setAttribute('data-passenger-id', passengerId);
+    line.setAttribute('points', points);
+    line.setAttribute('stroke', colorA);
+    line.setAttribute('stroke-width', '3');
+    line.setAttribute('stroke-linecap', 'round');
+    line.setAttribute('stroke-linejoin', 'round');
+    line.setAttribute('fill', 'none');
+    line.setAttribute('opacity', '0.8');
+    passengersLayer.appendChild(line);
   }
 
   // Pass 2: dots (drawn after trails so they sit visually on top).
