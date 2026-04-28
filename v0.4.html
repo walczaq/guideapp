@@ -215,6 +215,18 @@
     opacity: 0.18;
   }
 
+  /* Passenger dots — visible only in guide view (chunk C onwards).
+     Single color for now; chunk E adds the green/dimmed/orange/grey/red states. */
+  .passenger-dot {
+    fill: #4ea36c;          /* fresh-green default until chunk E */
+    stroke: var(--paper);
+    stroke-width: 2;
+  }
+  .passenger-halo {
+    fill: #4ea36c;
+    opacity: 0.18;
+  }
+
   /* generic screen header */
   .screen-header {
     display: flex; align-items: center;
@@ -434,6 +446,7 @@
 
       <svg class="overlay-svg" id="overlay">
         <g id="pins-layer"></g>
+        <g id="passengers-layer"></g>
         <g id="you-layer"></g>
       </svg>
 
@@ -546,7 +559,7 @@
         Guides log in with an invite code, create sessions, and (eventually) see passenger dots updating on a map in real time.
       </div>
       <div class="about-block muted">
-        Chunk A done: invite-code auth (with recovery via name + code). Chunk B done: guide view shell — bottom sheet, hidden passenger UI. Future chunks: catch-up query, realtime subscription, color states, guide-visibility toggle, passenger names.
+        Chunks A–C done: invite-code auth (with recovery), guide view shell with bottom sheet, catch-up query renders passenger dots on first load. Future chunks: realtime subscription, color states, guide-visibility toggle, passenger names.
       </div>
       <div class="about-block muted">
         v0.3 still works: GPS fixes captured locally, queued in IndexedDB, synced to Supabase when network is available.
@@ -1055,6 +1068,7 @@ const state = {
 // ── 3. DOM REFERENCES ──
 const overlay = document.getElementById('overlay');
 const pinsLayer = document.getElementById('pins-layer');
+const passengersLayer = document.getElementById('passengers-layer');
 const youLayer = document.getElementById('you-layer');
 const popup = document.getElementById('popup');
 const popupTitle = document.getElementById('popup-title');
@@ -1628,6 +1642,105 @@ function startGuideShell() {
   if (recenter) recenter.style.display = 'none';
 
   mountGuideBottomSheet();
+
+  // Catch-up: pull the most recent location per passenger, render once.
+  // Live subscription comes in chunk D.
+  catchUpPassengers().catch(err => {
+    console.warn('Catch-up query failed', err);
+  });
+}
+
+// ── PASSENGERS (guide view) ──
+// In-memory map of passenger_id → { lng, lat, accuracy, lastUpdate }.
+// Drives the dot rendering and the bottom-sheet count.
+const PASSENGERS = new Map();
+
+// Catch-up query: ask Supabase for the most recent row per passenger in
+// this session. We can't do "distinct on" directly via PostgREST, so we
+// fetch all rows for the session ordered by recorded_at desc, then dedupe
+// client-side, taking the first occurrence of each passenger_id.
+//
+// For chunk C this runs once on guide-shell startup. For chunk D, the
+// realtime subscription will keep the in-memory map fresh going forward.
+async function catchUpPassengers() {
+  if (!SESSION) return;
+
+  // Limit is generous but bounded. With 5s broadcast interval and ~10
+  // passengers, an hour of tour is ~7,200 rows. Most tours run an hour or two.
+  // If we ever exceed 10k, we'd need a smarter "most recent per passenger"
+  // server-side function — bridge that when we get there.
+  const { data, error } = await supabaseClient
+    .from('passenger_locations')
+    .select('passenger_id, lng, lat, accuracy, client_recorded_at')
+    .eq('session_id', SESSION.id)
+    .order('client_recorded_at', { ascending: false })
+    .limit(10000);
+
+  if (error) {
+    console.warn('passenger_locations catch-up failed', error);
+    return;
+  }
+  if (!data) return;
+
+  // Dedupe: first row per passenger_id wins (already ordered desc by time).
+  const seen = new Set();
+  for (const row of data) {
+    if (seen.has(row.passenger_id)) continue;
+    seen.add(row.passenger_id);
+    PASSENGERS.set(row.passenger_id, {
+      lng: row.lng,
+      lat: row.lat,
+      accuracy: row.accuracy,
+      lastUpdate: row.client_recorded_at,
+    });
+  }
+  renderPassengers();
+  updatePassengerCount();
+}
+
+// Render the in-memory PASSENGERS map as SVG dots.
+// Called after the catch-up query, after every realtime event (chunk D),
+// and on every map move/zoom (so dots track the map projection).
+function renderPassengers() {
+  if (!passengersLayer) return;
+  passengersLayer.innerHTML = '';
+  if (PASSENGERS.size === 0) return;
+
+  for (const [passengerId, p] of PASSENGERS) {
+    const { x, y } = project(p.lng, p.lat);
+
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', 'passenger-group');
+    g.setAttribute('data-passenger-id', passengerId);
+    g.setAttribute('transform', `translate(${x}, ${y})`);
+
+    const halo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    halo.setAttribute('class', 'passenger-halo');
+    halo.setAttribute('r', 14);
+    g.appendChild(halo);
+
+    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    dot.setAttribute('class', 'passenger-dot');
+    dot.setAttribute('r', 7);
+    g.appendChild(dot);
+
+    passengersLayer.appendChild(g);
+  }
+}
+
+// Sync the bottom-sheet header count + toggle empty state.
+function updatePassengerCount() {
+  const count = PASSENGERS.size;
+  const countEl = document.getElementById('guide-sheet-count');
+  if (countEl) countEl.textContent = String(count);
+
+  // Show empty state (share link) only when no passengers; otherwise show list.
+  // Chunk C's list is still empty (rows render in chunk G with names) — for now
+  // we just hide the empty state when count > 0 to avoid visual confusion.
+  const emptyEl = document.getElementById('guide-sheet-empty');
+  const listEl = document.getElementById('guide-sheet-list');
+  if (emptyEl) emptyEl.style.display = count === 0 ? '' : 'none';
+  if (listEl) listEl.style.display = count === 0 ? 'none' : '';
 }
 
 // Bottom-sheet snap states (in px, except `full` which is a fraction of phone height).
@@ -1665,6 +1778,10 @@ function mountGuideBottomSheet() {
         <div id="guide-share-link" style="margin-top:10px; padding:10px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:10px; word-break:break-all; user-select:all;">
           ${SESSION ? `${window.location.origin}${window.location.pathname}?session=${SESSION.id}` : '—'}
         </div>
+        <button
+          id="guide-share-copy"
+          style="margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:10px 18px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+        >Copy link</button>
       </div>
       <div class="guide-sheet-list" id="guide-sheet-list" style="display:none;">
         <!-- passenger rows populate here in chunk C onward -->
@@ -1675,6 +1792,45 @@ function mountGuideBottomSheet() {
   _sheetEl = sheet;
   applySheetState();
   bindSheetDrag();
+
+  // Copy-link button. Uses the modern Clipboard API where available,
+  // falls back to a hidden textarea for older browsers / non-HTTPS.
+  const copyBtn = document.getElementById('guide-share-copy');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      const link = document.getElementById('guide-share-link');
+      if (!link) return;
+      const text = link.textContent.trim();
+      const flash = (msg) => {
+        const original = copyBtn.textContent;
+        copyBtn.textContent = msg;
+        copyBtn.disabled = true;
+        setTimeout(() => {
+          copyBtn.textContent = original;
+          copyBtn.disabled = false;
+        }, 1400);
+      };
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          // Fallback for non-HTTPS contexts. Creates a temporary textarea,
+          // selects its content, asks the browser to copy. Older approach.
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        flash('Copied');
+      } catch {
+        flash('Copy failed');
+      }
+    });
+  }
 }
 
 function applySheetState() {
@@ -1878,6 +2034,7 @@ function pxPerMeter() {
 
 function renderAll() {
   renderPins();
+  renderPassengers();
   renderYou();
 }
 
