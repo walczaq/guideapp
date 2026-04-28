@@ -215,16 +215,22 @@
     opacity: 0.18;
   }
 
-  /* Passenger dots — visible only in guide view (chunk C onwards).
-     Single color for now; chunk E adds the green/dimmed/orange/grey/red states. */
+  /* Passenger dots and trails — visible only in guide view (chunk C onwards).
+     Color is set per-element in JS (deterministic from passenger_id) so each
+     passenger has a stable, distinct color across sessions/devices.
+     Chunk E will overlay state colors (green/dimmed/orange/grey/red) on top
+     of this base — the per-passenger color stays as the trail identity. */
   .passenger-dot {
-    fill: #4ea36c;          /* fresh-green default until chunk E */
     stroke: var(--paper);
     stroke-width: 2;
   }
-  .passenger-halo {
-    fill: #4ea36c;
-    opacity: 0.18;
+  .passenger-halo { /* fill + opacity set inline */ }
+  .passenger-trail {
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.7;
+    fill: none;
   }
 
   /* generic screen header */
@@ -559,7 +565,7 @@
         Guides log in with an invite code, create sessions, and (eventually) see passenger dots updating on a map in real time.
       </div>
       <div class="about-block muted">
-        Chunks A–C done: invite-code auth (with recovery), guide view shell with bottom sheet, catch-up query renders passenger dots on first load. Future chunks: realtime subscription, color states, guide-visibility toggle, passenger names.
+        Chunks A–C done: invite-code auth (with recovery), guide view shell with bottom sheet, catch-up query renders passenger dots + permanent breadcrumb trails (one stable color per passenger). Future chunks: realtime subscription, color states, guide-visibility toggle, passenger names.
       </div>
       <div class="about-block muted">
         v0.3 still works: GPS fixes captured locally, queued in IndexedDB, synced to Supabase when network is available.
@@ -1152,8 +1158,22 @@ async function boot() {
   }
 
   // Lock in the role for the rest of the page-load. Default is passenger.
-  // Only ?role=guide promotes us — and only if auth passed above.
-  ROLE = (role === 'guide' && GUIDE) ? 'guide' : 'passenger';
+  // Three ways the role gets set:
+  //   ?role=passenger     — explicit override, forces passenger view (escape hatch)
+  //   ?role=guide         — explicit, requires auth (gated above)
+  //   (no ?role param)    — implicit: if logged in as a guide, default to guide view
+  //                         on session URLs. This removes the friction of typing
+  //                         &role=guide manually on phone keyboards every time.
+  if (role === 'passenger') {
+    ROLE = 'passenger';
+  } else if (role === 'guide' && GUIDE) {
+    ROLE = 'guide';
+  } else if (!role && GUIDE && sessionId) {
+    // Authenticated guide opening a session without specifying role → guide.
+    ROLE = 'guide';
+  } else {
+    ROLE = 'passenger';
+  }
 
   if (sessionId) {
     // Path 1: join an existing session.
@@ -1459,8 +1479,14 @@ function applyTourMetadata() {
     const guideLine = GUIDE
       ? `Logged-in guide: <code>${GUIDE.name}</code> <button id="debug-logout" style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:3px 7px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">log out</button>`
       : `Not logged in as a guide`;
+    // Show a role-switch link only when the toggle would actually change something
+    // (i.e. you're a logged-in guide, on a session URL).
+    const roleSwitchLine = (GUIDE && SESSION)
+      ? `Role: <code>${ROLE}</code> <button id="debug-role-switch" style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:3px 7px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">view as ${ROLE === 'guide' ? 'passenger' : 'guide'}</button>`
+      : '';
     debug.innerHTML = `
       ${guideLine}<br>
+      ${roleSwitchLine ? roleSwitchLine + '<br>' : ''}
       ${sessionLine}<br>
       Passenger: <code>${PASSENGER_ID.slice(0, 8)}…</code><br>
       Queue: <code id="debug-queue-count">…</code>
@@ -1474,6 +1500,15 @@ function applyTourMetadata() {
       if (logoutBtn) logoutBtn.addEventListener('click', () => {
         clearGuideToken();
         window.location.reload();
+      });
+    }
+    if (GUIDE && SESSION) {
+      const switchBtn = document.getElementById('debug-role-switch');
+      if (switchBtn) switchBtn.addEventListener('click', () => {
+        // Reload with explicit ?role= param so the change sticks for this view.
+        const url = new URL(window.location.href);
+        url.searchParams.set('role', ROLE === 'guide' ? 'passenger' : 'guide');
+        window.location.href = url.toString();
       });
     }
     document.getElementById('debug-clear-queue').addEventListener('click', async () => {
@@ -1651,30 +1686,63 @@ function startGuideShell() {
 }
 
 // ── PASSENGERS (guide view) ──
-// In-memory map of passenger_id → { lng, lat, accuracy, lastUpdate }.
-// Drives the dot rendering and the bottom-sheet count.
+// In-memory map of passenger_id → {
+//   lng, lat, accuracy, lastUpdate,    // most recent position (drives the dot)
+//   trail: [{lng,lat}, ...]            // every position seen for this passenger
+// }
+// Drives the dot rendering, trail rendering, and the bottom-sheet count.
 const PASSENGERS = new Map();
 
-// Catch-up query: ask Supabase for the most recent row per passenger in
-// this session. We can't do "distinct on" directly via PostgREST, so we
-// fetch all rows for the session ordered by recorded_at desc, then dedupe
-// client-side, taking the first occurrence of each passenger_id.
+// Curated color palette for passenger dots and trails.
+// Picked to be visually distinct from each other AND from reserved utility colors:
+//   green/dimmed-green/orange/red/grey (chunk E state colors)
+//   blue (the guide)
+// Twelve entries — collisions only happen at >12 simultaneous passengers in a session.
+const PASSENGER_PALETTE = [
+  '#d946ef',  // fuchsia
+  '#06b6d4',  // cyan
+  '#f59e0b',  // amber
+  '#a855f7',  // purple
+  '#14b8a6',  // teal
+  '#ec4899',  // pink
+  '#84cc16',  // lime (different enough from state-green)
+  '#8b5cf6',  // violet
+  '#f97316',  // orange-deep (different from state-orange)
+  '#22d3ee',  // sky
+  '#e11d48',  // rose (different from state-red)
+  '#7c3aed',  // indigo-violet
+];
+
+// Map passenger_id → palette color, deterministically.
+// Same passenger always gets the same color across reloads / devices.
+// Simple FNV-1a-like hash over the id string, mod palette length.
+function colorForPassenger(passengerId) {
+  let hash = 2166136261;  // FNV offset basis
+  for (let i = 0; i < passengerId.length; i++) {
+    hash ^= passengerId.charCodeAt(i);
+    hash = (hash * 16777619) >>> 0;  // FNV prime, keep 32-bit unsigned
+  }
+  return PASSENGER_PALETTE[hash % PASSENGER_PALETTE.length];
+}
+
+// Catch-up query: ask Supabase for all rows in this session, ordered oldest
+// first. Build per-passenger state including the full trail.
 //
-// For chunk C this runs once on guide-shell startup. For chunk D, the
-// realtime subscription will keep the in-memory map fresh going forward.
+// Why oldest-first for chunk C: the trail is the chronological path, so we
+// process rows in order. The "current position" naturally ends up being the
+// last row we see for each passenger (which is the most recent).
 async function catchUpPassengers() {
   if (!SESSION) return;
 
-  // Limit is generous but bounded. With 5s broadcast interval and ~10
-  // passengers, an hour of tour is ~7,200 rows. Most tours run an hour or two.
-  // If we ever exceed 10k, we'd need a smarter "most recent per passenger"
-  // server-side function — bridge that when we get there.
+  // Pull all rows in this session, oldest first. Generous limit; if a session
+  // ever exceeds 50k rows we'll need pagination, but at 5s intervals that's
+  // ~70 hours of one passenger's tracking — well past reality.
   const { data, error } = await supabaseClient
     .from('passenger_locations')
     .select('passenger_id, lng, lat, accuracy, client_recorded_at')
     .eq('session_id', SESSION.id)
-    .order('client_recorded_at', { ascending: false })
-    .limit(10000);
+    .order('client_recorded_at', { ascending: true })
+    .limit(50000);
 
   if (error) {
     console.warn('passenger_locations catch-up failed', error);
@@ -1682,32 +1750,66 @@ async function catchUpPassengers() {
   }
   if (!data) return;
 
-  // Dedupe: first row per passenger_id wins (already ordered desc by time).
-  const seen = new Set();
+  // Walk through rows in chronological order, building each passenger's trail
+  // and overwriting their "current" with the latest fix.
+  PASSENGERS.clear();
   for (const row of data) {
-    if (seen.has(row.passenger_id)) continue;
-    seen.add(row.passenger_id);
-    PASSENGERS.set(row.passenger_id, {
-      lng: row.lng,
-      lat: row.lat,
-      accuracy: row.accuracy,
-      lastUpdate: row.client_recorded_at,
-    });
+    let p = PASSENGERS.get(row.passenger_id);
+    if (!p) {
+      p = {
+        lng: row.lng,
+        lat: row.lat,
+        accuracy: row.accuracy,
+        lastUpdate: row.client_recorded_at,
+        trail: [],
+      };
+      PASSENGERS.set(row.passenger_id, p);
+    }
+    p.trail.push({ lng: row.lng, lat: row.lat });
+    p.lng = row.lng;
+    p.lat = row.lat;
+    p.accuracy = row.accuracy;
+    p.lastUpdate = row.client_recorded_at;
   }
   renderPassengers();
   updatePassengerCount();
 }
 
-// Render the in-memory PASSENGERS map as SVG dots.
+// Render the in-memory PASSENGERS map as SVG dots + trails.
+// Two SVG layers: the trails go behind the dots (so dot stays visually on top).
+//
+// Trails: one <polyline> per passenger holding all their positions. Browsers
+// handle thousand-point polylines comfortably; this is far cheaper than
+// drawing one segment-element per pair of points.
+//
 // Called after the catch-up query, after every realtime event (chunk D),
-// and on every map move/zoom (so dots track the map projection).
+// and on every map move/zoom (so dots/trails track the map projection).
 function renderPassengers() {
   if (!passengersLayer) return;
   passengersLayer.innerHTML = '';
   if (PASSENGERS.size === 0) return;
 
+  // Pass 1: trails (so they render below dots).
+  for (const [passengerId, p] of PASSENGERS) {
+    if (!p.trail || p.trail.length < 2) continue;  // need ≥2 points for a line
+    const color = colorForPassenger(passengerId);
+    const points = p.trail.map(t => {
+      const { x, y } = project(t.lng, t.lat);
+      return `${x},${y}`;
+    }).join(' ');
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    line.setAttribute('class', 'passenger-trail');
+    line.setAttribute('data-passenger-id', passengerId);
+    line.setAttribute('points', points);
+    line.setAttribute('stroke', color);
+    line.setAttribute('fill', 'none');
+    passengersLayer.appendChild(line);
+  }
+
+  // Pass 2: dots (drawn after trails so they sit visually on top).
   for (const [passengerId, p] of PASSENGERS) {
     const { x, y } = project(p.lng, p.lat);
+    const color = colorForPassenger(passengerId);
 
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('class', 'passenger-group');
@@ -1717,11 +1819,14 @@ function renderPassengers() {
     const halo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     halo.setAttribute('class', 'passenger-halo');
     halo.setAttribute('r', 14);
+    halo.setAttribute('fill', color);
+    halo.setAttribute('opacity', '0.18');
     g.appendChild(halo);
 
     const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     dot.setAttribute('class', 'passenger-dot');
     dot.setAttribute('r', 7);
+    dot.setAttribute('fill', color);
     g.appendChild(dot);
 
     passengersLayer.appendChild(g);
