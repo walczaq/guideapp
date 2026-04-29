@@ -771,7 +771,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-29-1313';
+const BUILD_VERSION = '0.4 · build 2026-04-29-1337';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2014,6 +2014,11 @@ function startGuideShell() {
   _stateTickHandle = setInterval(() => {
     if (PASSENGERS.size > 0) renderPassengers();
   }, 5000);
+
+  // Backgrounded-tab handler — see notes on bindVisibilityCatchUp. Fires
+  // catch-up when we become visible again so the guide isn't looking at
+  // stale passenger data after switching apps / tabs.
+  bindVisibilityCatchUp();
 }
 
 let _stateTickHandle = null;
@@ -2424,10 +2429,29 @@ async function toggleShareLocation() {
   SHARE_LOCATION = !SHARE_LOCATION;
   updateBroadcastBanner();
   updateVisibilityControlUI();
-  // Turning OFF: insert a sentinel row so passenger views know to hide the
-  // guide dot. Use the most recent known position. If no fix yet, use 0,0
-  // (passenger ignores the row anyway because is_off=true).
+
+  if (!wasOn && SHARE_LOCATION) {
+    // Turning ON: don't wait for the next GPS callback — insert one row right
+    // now using the last known position. Without this, the first row only
+    // arrives whenever watchPosition decides to fire next, which can be 5–30s
+    // depending on the browser. That delay made it look like the toggle didn't
+    // work; passenger views saw nothing until the next natural fix.
+    if (SESSION && state.youLng != null && state.youLat != null) {
+      _lastGuideBroadcastAt = Date.now();
+      const { error } = await supabaseClient.from('guide_locations').insert({
+        session_id: SESSION.id,
+        source: 'phone',
+        lng: state.youLng,
+        lat: state.youLat,
+      });
+      if (error) console.warn('immediate phone insert failed', error);
+    }
+  }
+
   if (wasOn && !SHARE_LOCATION) {
+    // Turning OFF: insert a sentinel row so passenger views know to hide the
+    // guide dot. Use the most recent known position. If no fix yet, use 0,0
+    // (passenger ignores the row anyway because is_off=true).
     await insertGuideOffSentinel('phone', state.youLng, state.youLat);
   }
 }
@@ -2893,7 +2917,33 @@ function startPassengerGuideListening() {
     await catchUpGuideLocations();
     startGuideLocationsSubscription();
     startGuideFreshnessTick();
+    bindVisibilityCatchUp();
   })().catch(err => console.warn('Guide-listening startup failed', err));
+}
+
+// When the browser tab is backgrounded (alt-tab away, screen sleep, app switch
+// on mobile), browsers throttle JS and WebSocket message delivery. Realtime
+// events may sit unprocessed until the tab regains focus. Force a fresh
+// catch-up the moment we become visible again so the UI reflects current
+// state, not stale state from before backgrounding.
+//
+// Affects both guide_locations (this view) and passenger_locations (when in
+// guide view). One handler covers both cases.
+let _visibilityCatchUpBound = false;
+function bindVisibilityCatchUp() {
+  if (_visibilityCatchUpBound) return;
+  _visibilityCatchUpBound = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    // Re-fetch latest state. Each catch-up is idempotent thanks to the dedupe
+    // logic — running it on top of live data costs at most one round-trip.
+    if (ROLE === 'guide' && typeof catchUpPassengers === 'function') {
+      catchUpPassengers({ merge: true }).catch(err => console.warn('visibility-catchup passengers failed', err));
+    }
+    if (typeof catchUpGuideLocations === 'function') {
+      catchUpGuideLocations().catch(err => console.warn('visibility-catchup guide failed', err));
+    }
+  });
 }
 const SHEET_STATES = {
   collapsed: 60,
