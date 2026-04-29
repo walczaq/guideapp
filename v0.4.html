@@ -649,6 +649,16 @@
           <div class="menu-label">Share invite</div>
           <span class="menu-chevron">›</span>
         </button>
+        <button class="menu-item" data-action="edit-name" id="menu-edit-name" style="display:none;">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <div class="menu-label" id="menu-edit-name-label">Your name</div>
+          <span class="menu-chevron">›</span>
+        </button>
         <button class="menu-item" data-action="reset">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -771,7 +781,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-29-1353';
+const BUILD_VERSION = '0.4 · build 2026-04-29-1434';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -1493,11 +1503,224 @@ async function loadSessionAndTour(sessionId) {
 
   applyTourMetadata();
   hideLoading();
+
+  // Chunk G: before showing the map to a passenger, make sure they've
+  // registered a name with this session. Guides skip this — they identified
+  // themselves by typing a name when creating the session, and pulled their
+  // GUIDE row earlier via the auth flow.
+  if (ROLE === 'passenger') {
+    const named = await ensurePassengerNameRegistered();
+    if (!named) return;   // gate is on screen, will reload page on submit
+  }
+
   initMap(MAPBOX_TOKEN);
 
   // Now that we have a session, start the sync worker. It will pick up any
   // leftover rows from a previous page-load and stream new fixes to Supabase.
   startSyncWorker();
+}
+
+// ── PASSENGER NAMES (chunk G) ──
+// Each passenger registers a name via session_passengers when they first
+// join. The row's primary key is (session_id, passenger_id) so each passenger
+// owns one row per session.
+//
+// MY_NAME caches our own current name across the session — used to prefill
+// the edit form, used by the burger-menu label, and as the source of truth
+// for "have I registered yet."
+let MY_NAME = null;
+
+// Check whether the current passenger has a session_passengers row for this
+// session. If yes, populate MY_NAME and return true. If no, show the name
+// gate (full-screen prompt) and return false. The gate's submit handler
+// reloads the page on success, taking us back through this same path with
+// a freshly inserted row.
+async function ensurePassengerNameRegistered() {
+  if (!SESSION) return true;   // no session, no name needed (shouldn't happen)
+
+  const { data, error } = await supabaseClient
+    .from('session_passengers')
+    .select('name')
+    .eq('session_id', SESSION.id)
+    .eq('passenger_id', PASSENGER_ID)
+    .maybeSingle();
+
+  if (error) {
+    // Network or RLS error. Don't block the user forever — let them through
+    // with no name; chunk G's read side gracefully handles missing names.
+    console.warn('session_passengers lookup failed', error);
+    return true;
+  }
+  if (data && data.name) {
+    MY_NAME = data.name;
+    return true;
+  }
+  // No row yet — show the gate.
+  showNameEntryGate();
+  return false;
+}
+
+// Full-screen name-entry prompt. Blocks the map until the passenger types a
+// name. On submit, inserts the row and reloads (boot picks up the saved name
+// via ensurePassengerNameRegistered → MY_NAME, lets initMap proceed).
+function showNameEntryGate() {
+  hideLoading();
+  let el = document.getElementById('name-gate-screen');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'name-gate-screen';
+  el.style.cssText =
+    'position:absolute; inset:0; z-index:90; background:var(--paper);' +
+    'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+    'gap:18px; padding:40px; text-align:center;';
+  const guideName = (SESSION && SESSION.guide_name) ? SESSION.guide_name : 'your guide';
+  el.innerHTML = `
+    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
+      Joining tour
+    </div>
+    <div style="font-family:'Fraunces',serif; font-style:italic; font-size:24px; color:var(--ink); max-width:280px; line-height:1.3;">
+      What's your name?
+    </div>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:280px; line-height:1.5;">
+      So ${guideName} can recognize you on the map.
+    </div>
+    <input
+      id="name-gate-input"
+      type="text"
+      placeholder="your name"
+      maxlength="40"
+      autocomplete="given-name"
+      style="font-family:'JetBrains Mono',monospace; font-size:14px; padding:14px 16px; border:1px solid var(--rule); background:var(--paper-2); width:260px; border-radius:6px; text-align:center;"
+    />
+    <button
+      id="name-gate-submit"
+      style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+    >
+      Join tour
+    </button>
+    <div id="name-gate-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
+  `;
+  document.getElementById('phone').appendChild(el);
+
+  const input = document.getElementById('name-gate-input');
+  const errorEl = document.getElementById('name-gate-error');
+  const btn = document.getElementById('name-gate-submit');
+
+  async function trySubmit() {
+    const name = (input.value || '').trim();
+    errorEl.textContent = '';
+    if (!name) { input.focus(); errorEl.textContent = 'Enter a name to continue.'; return; }
+    if (name.length > 40) { errorEl.textContent = 'Name is too long.'; return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Joining…';
+    try {
+      const { error } = await supabaseClient
+        .from('session_passengers')
+        .insert({
+          session_id: SESSION.id,
+          passenger_id: PASSENGER_ID,
+          name,
+        });
+      if (error) throw new Error(error.message || 'Could not register name.');
+      // Reload — boot path picks up the saved name and shows the map.
+      window.location.reload();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      btn.disabled = false;
+      btn.textContent = 'Join tour';
+    }
+  }
+  btn.addEventListener('click', trySubmit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') trySubmit();
+  });
+  input.focus();
+}
+
+// Edit-name form, accessible from burger menu. Same shape as the gate but
+// pre-fills with current name and updates rather than inserts. No reload —
+// just updates MY_NAME locally and closes the screen.
+function showEditNameForm() {
+  let el = document.getElementById('edit-name-screen');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'edit-name-screen';
+  el.className = 'screen';
+  // Same modal-screen pattern as About / Share — pushes onto screenStack.
+  el.style.cssText =
+    'position:absolute; inset:0; z-index:60; background:var(--paper);' +
+    'display:flex; flex-direction:column;';
+  el.innerHTML = `
+    <div class="status-bar"></div>
+    <div class="screen-header">
+      <button class="back-btn" id="edit-name-back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </button>
+      <div class="screen-title">Your name</div>
+    </div>
+    <div class="screen-body" style="display:flex; flex-direction:column; gap:14px; padding:20px;">
+      <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); line-height:1.5;">
+        This is how your guide sees you on the map.
+      </div>
+      <input
+        id="edit-name-input"
+        type="text"
+        placeholder="your name"
+        maxlength="40"
+        value="${(MY_NAME || '').replace(/"/g, '&quot;')}"
+        style="font-family:'JetBrains Mono',monospace; font-size:14px; padding:12px 14px; border:1px solid var(--rule); background:var(--paper-2); border-radius:6px;"
+      />
+      <button
+        id="edit-name-save"
+        style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+      >Save</button>
+      <div id="edit-name-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
+    </div>
+  `;
+  document.getElementById('phone').appendChild(el);
+
+  const input = document.getElementById('edit-name-input');
+  const errorEl = document.getElementById('edit-name-error');
+  const btn = document.getElementById('edit-name-save');
+  const back = document.getElementById('edit-name-back');
+
+  back.addEventListener('click', () => el.remove());
+
+  async function trySave() {
+    const name = (input.value || '').trim();
+    errorEl.textContent = '';
+    if (!name) { input.focus(); errorEl.textContent = 'Name cannot be empty.'; return; }
+    if (name.length > 40) { errorEl.textContent = 'Name is too long.'; return; }
+    if (name === MY_NAME) { el.remove(); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      const { error } = await supabaseClient
+        .from('session_passengers')
+        .update({ name })
+        .eq('session_id', SESSION.id)
+        .eq('passenger_id', PASSENGER_ID);
+      if (error) throw new Error(error.message || 'Could not save name.');
+      MY_NAME = name;
+      el.remove();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      btn.disabled = false;
+      btn.textContent = 'Save';
+    }
+  }
+  btn.addEventListener('click', trySave);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') trySave();
+  });
+  input.focus();
+  // Move cursor to end of pre-filled value
+  input.setSelectionRange(input.value.length, input.value.length);
 }
 
 // Legacy v0.2 path — load a tour directly without a session.
@@ -2865,25 +3088,26 @@ function startGuideLocationsSubscription() {
   });
 }
 
-// Build a plain-text floating label with a paper-colored "halo" around the
-// text (text-shadow trick) so it's legible against any map color without
-// a pill background. Sized small to keep the map uncluttered at low zoom.
+// Build a plain-text floating label with a pure-white "halo" around pure
+// black text (text-shadow trick) so it's legible against any map color.
+// White-on-black contrast is the strongest possible — works even where the
+// paper-cream halo would be too low-contrast (e.g. over light grass tiles).
 function buildFloatingLabel(text) {
   const el = document.createElement('div');
   el.style.cssText =
     'font-family:JetBrains Mono,monospace; font-size:10px; font-weight:700;' +
-    'color:var(--ink); white-space:nowrap; pointer-events:none;' +
+    'color:#000000; white-space:nowrap; pointer-events:none;' +
     'letter-spacing:0.04em; margin-bottom:3px;' +
-    // Paper-colored 8-direction halo — readable on any map background.
+    // Pure-white 8-direction halo — readable on any map background.
     'text-shadow:' +
-      '-1px -1px 0 var(--paper),' +
-      ' 1px -1px 0 var(--paper),' +
-      '-1px  1px 0 var(--paper),' +
-      ' 1px  1px 0 var(--paper),' +
-      ' 0px -1px 0 var(--paper),' +
-      ' 0px  1px 0 var(--paper),' +
-      '-1px  0px 0 var(--paper),' +
-      ' 1px  0px 0 var(--paper);';
+      '-1px -1px 0 #ffffff,' +
+      ' 1px -1px 0 #ffffff,' +
+      '-1px  1px 0 #ffffff,' +
+      ' 1px  1px 0 #ffffff,' +
+      ' 0px -1px 0 #ffffff,' +
+      ' 0px  1px 0 #ffffff,' +
+      '-1px  0px 0 #ffffff,' +
+      ' 1px  0px 0 #ffffff;';
   el.textContent = text;
   return el;
 }
@@ -3509,6 +3733,14 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   if (shareItem) {
     shareItem.style.display = SESSION ? '' : 'none';
   }
+  // "Your name" — passenger-only, only when in a session. Show current name
+  // as a subtitle so they know what's stored without opening the form.
+  const editNameItem = document.getElementById('menu-edit-name');
+  if (editNameItem) {
+    editNameItem.style.display = (SESSION && ROLE === 'passenger') ? '' : 'none';
+    const labelEl = document.getElementById('menu-edit-name-label');
+    if (labelEl) labelEl.textContent = MY_NAME ? `Your name · ${MY_NAME}` : 'Your name';
+  }
   openScreen('screen-menu');
 });
 
@@ -3525,6 +3757,10 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
       openScreen('screen-about');
     } else if (action === 'share-invite') {
       openShareScreen();
+    } else if (action === 'edit-name') {
+      // Close the menu, then show the edit form.
+      while (screenStack.length) closeScreen();
+      showEditNameForm();
     }
   });
 });
