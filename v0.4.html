@@ -752,7 +752,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-29-2040';
+const BUILD_VERSION = '0.4 · build 2026-04-29-2046';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2492,9 +2492,6 @@ function renderPassengers() {
   const HALO_R = 16;
   const now = Date.now();
   for (const [passengerId, p] of PASSENGERS) {
-    // Name-only pre-seeded entries have no position yet — they show in the
-    // bottom-sheet list but are NOT drawn on the map until their first fix.
-    if (p.lng == null || p.lat == null) continue;
     const { x, y } = project(p.lng, p.lat);
     const [colorA, colorB] = colorsForPassenger(passengerId);
     const isSelected = SELECTED_PASSENGER === passengerId;
@@ -3004,7 +3001,7 @@ function renderPassengerList() {
   const now = Date.now();
   listEl.innerHTML = '';
   for (const [passengerId, p] of entries) {
-    const [colorA] = colorsForPassenger(passengerId);
+    const [colorA, colorB] = colorsForPassenger(passengerId);
     const isSelected = SELECTED_PASSENGER === passengerId;
     const state = p.lng != null ? evaluatePassengerState(p, now) : null;
     const hasLocation = p.lng != null;
@@ -3017,12 +3014,15 @@ function renderPassengerList() {
       'border-bottom:1px solid var(--rule); cursor:pointer;' +
       (isSelected ? 'background:rgba(0,0,0,0.04);' : '');
 
-    // Color dot — primary identity color, dimmed if no location yet.
+    // Color dot — half-half split mirroring the on-map identity. Hard-stop
+    // gradient at 50% gives a clean vertical seam between the two colors.
+    // Dimmed if no location yet; grey ring overlay if disconnected.
     const dot = document.createElement('div');
     dot.style.cssText =
-      `width:14px; height:14px; border-radius:50%; background:${colorA};` +
+      `width:14px; height:14px; border-radius:50%;` +
+      `background:linear-gradient(to right, ${colorA} 50%, ${colorB} 50%);` +
       `flex-shrink:0; ${hasLocation ? '' : 'opacity:0.35;'}` +
-      (state === 'disconnected' ? ' border:2px solid #888888;' : '');
+      (state === 'disconnected' ? ' box-shadow:0 0 0 2px #888888;' : '');
     row.appendChild(dot);
 
     // Name.
