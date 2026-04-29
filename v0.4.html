@@ -752,7 +752,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-29-2037';
+const BUILD_VERSION = '0.4 · build 2026-04-29-2040';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2492,6 +2492,9 @@ function renderPassengers() {
   const HALO_R = 16;
   const now = Date.now();
   for (const [passengerId, p] of PASSENGERS) {
+    // Name-only pre-seeded entries have no position yet — they show in the
+    // bottom-sheet list but are NOT drawn on the map until their first fix.
+    if (p.lng == null || p.lat == null) continue;
     const { x, y } = project(p.lng, p.lat);
     const [colorA, colorB] = colorsForPassenger(passengerId);
     const isSelected = SELECTED_PASSENGER === passengerId;
