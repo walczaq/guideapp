@@ -237,6 +237,16 @@
     stroke-width: 2;
   }
   .passenger-halo { /* fill + opacity set inline */ }
+  /* Pulsing halo — used when a passenger is in a trouble state
+     (chunk E: stationary or disconnected). Inline opacity is 0.18; the
+     animation lifts it to 0.5 and back, drawing the eye to the dot. */
+  .passenger-halo.pulse {
+    animation: passengerHaloPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes passengerHaloPulse {
+    0%, 100% { opacity: 0.18; }
+    50%      { opacity: 0.5; }
+  }
   .passenger-trail {
     /* All visual attrs (stroke, stroke-width, opacity) are set inline per
        passenger so selection state can drive them. Don't add CSS overrides
@@ -672,7 +682,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-28-2312';
+const BUILD_VERSION = '0.4 · build 2026-04-29-1012';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -1902,7 +1912,18 @@ function startGuideShell() {
   })().catch(err => {
     console.warn('Guide shell startup failed', err);
   });
+
+  // State tick — re-evaluate passenger states every 5s, even with no new
+  // GPS data. State transitions like "disconnected" happen by absence
+  // (no fix in 60s), not by event, so timer is necessary. Cheap: just
+  // re-runs renderPassengers which is already idempotent.
+  if (_stateTickHandle) clearInterval(_stateTickHandle);
+  _stateTickHandle = setInterval(() => {
+    if (PASSENGERS.size > 0) renderPassengers();
+  }, 5000);
 }
+
+let _stateTickHandle = null;
 
 // ── PASSENGERS (guide view) ──
 // In-memory map of passenger_id → {
@@ -1916,6 +1937,80 @@ const PASSENGERS = new Map();
 // select them: their trail goes full-strength + thicker, all other trails
 // dim. Tap the same dot again, or tap empty map, to deselect.
 let SELECTED_PASSENGER = null;
+
+// ── PASSENGER STATE (chunk E) ──
+// Two automatic states evaluated against each passenger's recent activity:
+//   'stationary' — connection looks fine but they haven't moved in 15+ min
+//   'disconnected' — no updates received for 60+ seconds (probably offline/lost)
+// Default state is "connected, recent updates" — represented as null (no state).
+//
+// Hierarchy: disconnected beats stationary. So a passenger who disconnected
+// while sitting at a coffee shop shows as disconnected (grey), not stationary
+// (orange) — the connection problem is the more actionable signal.
+//
+// State drives:
+//   - Outer ring color (paper / orange / grey)
+//   - Halo pulse animation (off / orange-pulse / grey-pulse)
+// Identity (the half-half pair) stays unchanged regardless of state.
+
+const STATE_DISCONNECTED_MS = 60 * 1000;        // no fix in 60s = disconnected
+const STATE_STATIONARY_MS = 15 * 60 * 1000;     // no movement in 15 min = stationary
+const STATE_STATIONARY_MAX_DRIFT_M = 10;        // movement under 10m doesn't count
+
+const STATE_RING_COLORS = {
+  disconnected: '#888888',   // mid-grey, reads against paper and against passenger colors
+  stationary:   '#e08e2a',   // warm orange, distinct from any passenger palette entry
+};
+const STATE_HALO_COLORS = STATE_RING_COLORS;
+
+// Compute distance in meters between two lng/lat points. Haversine.
+function metersBetweenLngLat(lng1, lat1, lng2, lat2) {
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const φ1 = toRad(lat1), φ2 = toRad(lat2);
+  const Δφ = toRad(lat2 - lat1);
+  const Δλ = toRad(lng2 - lng1);
+  const a = Math.sin(Δφ/2)**2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2)**2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Evaluate one passenger's current state. Returns null (default), 'stationary',
+// or 'disconnected'. Pure function of passenger record + current time.
+function evaluatePassengerState(p, now) {
+  if (!p.lastUpdate) return null;
+  const lastTs = Date.parse(p.lastUpdate);
+  if (isNaN(lastTs)) return null;
+
+  // Disconnected check FIRST — it wins the hierarchy. If we haven't heard
+  // from them in 60s, we don't know if they're stationary or moved out
+  // of range, just that we're not getting updates.
+  if (now - lastTs > STATE_DISCONNECTED_MS) return 'disconnected';
+
+  // Stationary check: walk back through the trail looking for the oldest
+  // point still within STATE_STATIONARY_MAX_DRIFT_M of current position.
+  // If that oldest-near-point is more than STATE_STATIONARY_MS ago, they've
+  // been near here for long enough.
+  if (!p.trail || p.trail.length < 2) return null;
+  const cur = p.trail[p.trail.length - 1];
+  // Walk backward from the most recent. The trail array stores positions
+  // but not their timestamps directly — chunk D's _seenTimestamps Set has
+  // them, but unordered. Approximation: assume trail points are spaced ~5s
+  // apart (the broadcast interval). If we have N points within drift radius,
+  // they cover roughly N*5 seconds.
+  let nearbyCount = 1;
+  for (let i = p.trail.length - 2; i >= 0; i--) {
+    const t = p.trail[i];
+    const d = metersBetweenLngLat(cur.lng, cur.lat, t.lng, t.lat);
+    if (d > STATE_STATIONARY_MAX_DRIFT_M) break;
+    nearbyCount++;
+  }
+  // 5s × N samples = approximate stationary duration. STATE_STATIONARY_MS
+  // is 900,000ms = 15 min = 180 samples at 5s cadence.
+  const stationaryDurationMs = nearbyCount * 5000;
+  if (stationaryDurationMs >= STATE_STATIONARY_MS) return 'stationary';
+
+  return null;
+}
 
 // Curated color palette for passenger dots and trails.
 // Picked to be:
@@ -2101,8 +2196,13 @@ function renderPassengers() {
   // Tappable: tap to select-and-highlight, tap again to deselect.
   // Selection-aware: when a passenger is selected, all OTHER passenger dots
   // dim to 0.4 opacity so the selected one visually wins.
-  const DOT_R = 10;    // larger so the dot stays visually distinct from the trail
+  // State-aware (chunk E): the outer ring + halo color reflect connection state.
+  //   default — paper-colored ring, static halo in primary identity color
+  //   stationary — orange ring, halo pulses orange
+  //   disconnected — grey ring, halo pulses grey
+  const DOT_R = 10;
   const HALO_R = 16;
+  const now = Date.now();
   for (const [passengerId, p] of PASSENGERS) {
     const { x, y } = project(p.lng, p.lat);
     const [colorA, colorB] = colorsForPassenger(passengerId);
@@ -2110,24 +2210,25 @@ function renderPassengers() {
     const noneSelected = SELECTED_PASSENGER === null;
     const dotOpacity = (noneSelected || isSelected) ? 1.0 : 0.4;
 
+    // State eval — drives ring color and halo behavior.
+    const state = evaluatePassengerState(p, now);
+    const ringColor = state ? STATE_RING_COLORS[state] : 'var(--paper)';
+    const haloColor = state ? STATE_HALO_COLORS[state] : colorA;
+    const haloPulses = state !== null;
+
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('class', 'passenger-group' + (isSelected ? ' selected' : ''));
     g.setAttribute('data-passenger-id', passengerId);
+    g.setAttribute('data-state', state || 'default');
     g.setAttribute('transform', `translate(${x}, ${y})`);
     g.setAttribute('opacity', String(dotOpacity));
     g.style.cursor = 'pointer';
 
-    // Make the group tappable. SVG groups need pointer-events: visiblePainted
-    // (the default for elements with fills) — pointer-events on the parent
-    // <g> applies to its children. Click on any child = click on the group.
     g.addEventListener('click', (e) => {
       e.stopPropagation();
       togglePassengerSelection(passengerId);
     });
 
-    // Selection ring — drawn outside the regular ring when this passenger is
-    // selected. Strong, full-opacity, in the primary color, so the selection
-    // reads instantly.
     if (isSelected) {
       const selRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       selRing.setAttribute('r', DOT_R + 5);
@@ -2138,13 +2239,16 @@ function renderPassengers() {
       g.appendChild(selRing);
     }
 
-    // Halo — soft outer glow in colorA. Single color is fine; halo is meant
-    // to be a presence indicator, not part of the identity signal.
+    // Halo — pulses when state ≠ default to draw attention. When default,
+    // it's a static soft glow in the passenger's primary identity color.
+    // When pulsing, opacity is driven by CSS animation; we must NOT set it
+    // inline (inline SVG attrs beat CSS animations the same way they beat
+    // CSS rules).
     const halo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    halo.setAttribute('class', 'passenger-halo');
+    halo.setAttribute('class', 'passenger-halo' + (haloPulses ? ' pulse' : ''));
     halo.setAttribute('r', HALO_R);
-    halo.setAttribute('fill', colorA);
-    halo.setAttribute('opacity', '0.18');
+    halo.setAttribute('fill', haloColor);
+    if (!haloPulses) halo.setAttribute('opacity', '0.18');
     g.appendChild(halo);
 
     // Left half — semicircle on the LEFT.
@@ -2159,7 +2263,7 @@ function renderPassengers() {
     halfR.setAttribute('fill', colorB);
     g.appendChild(halfR);
 
-    // Hairline between halves so the split reads clearly even at small sizes.
+    // Hairline between halves.
     const split = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     split.setAttribute('x1', 0); split.setAttribute('y1', -DOT_R);
     split.setAttribute('x2', 0); split.setAttribute('y2', DOT_R);
@@ -2167,14 +2271,15 @@ function renderPassengers() {
     split.setAttribute('stroke-width', '1');
     g.appendChild(split);
 
-    // Outer ring — paper-colored, so the dot reads as a clean disc against
-    // any underlying map color.
+    // Outer ring — color reflects state (paper / orange / grey).
     const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     ring.setAttribute('class', 'passenger-dot');
     ring.setAttribute('r', DOT_R);
     ring.setAttribute('fill', 'none');
-    ring.setAttribute('stroke', 'var(--paper)');
-    ring.setAttribute('stroke-width', '2');
+    ring.setAttribute('stroke', ringColor);
+    // Bump ring stroke when state ≠ default so it reads as a deliberate
+    // signal, not a default render artifact.
+    ring.setAttribute('stroke-width', state ? '3' : '2');
     g.appendChild(ring);
 
     passengersLayer.appendChild(g);
