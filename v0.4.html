@@ -771,7 +771,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-29-1305';
+const BUILD_VERSION = '0.4 · build 2026-04-29-1313';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -1952,6 +1952,10 @@ function initMap(token) {
     startGeolocation();
     if (ROLE === 'guide') {
       startGuideShell();
+    } else {
+      // Passengers listen for the guide's broadcasts (chunk F pass 2).
+      // Guide self-rendering is local; only passengers need this.
+      startPassengerGuideListening();
     }
   });
   map.on('move', renderAll);
@@ -2396,25 +2400,45 @@ function bindMapDeselectHandler() {
   });
 }
 
+// Insert an is_off=true sentinel row into guide_locations. Used when the guide
+// turns off either signal (share-location or bus-pin), so the passenger-side
+// reader can detect "this source is no longer live" and stop rendering it.
+// Position fields are required by the schema; we use the last known position
+// (it's the last "valid" location they had — passengers won't render anyway
+// since is_off=true, but keeping the position avoids null-handling churn).
+async function insertGuideOffSentinel(source, lng, lat) {
+  if (!SESSION) return;
+  const { error } = await supabaseClient.from('guide_locations').insert({
+    session_id: SESSION.id,
+    source,
+    lng: lng ?? 0,
+    lat: lat ?? 0,
+    is_off: true,
+  });
+  if (error) console.warn('guide off-sentinel insert failed', error);
+}
+
 // Toggle the "Share my location" pill. Independent of bus-pin state.
 async function toggleShareLocation() {
+  const wasOn = SHARE_LOCATION;
   SHARE_LOCATION = !SHARE_LOCATION;
   updateBroadcastBanner();
   updateVisibilityControlUI();
-  // No DB cleanup on turn-off: existing rows in guide_locations remain (they
-  // become history). Passenger view's "current guide location" logic looks at
-  // the most recent row by source — once we stop inserting 'phone' rows, the
-  // passenger view will eventually fall back to (or stay on) the bus pin or
-  // nothing. Pass 2 will codify this read logic.
+  // Turning OFF: insert a sentinel row so passenger views know to hide the
+  // guide dot. Use the most recent known position. If no fix yet, use 0,0
+  // (passenger ignores the row anyway because is_off=true).
+  if (wasOn && !SHARE_LOCATION) {
+    await insertGuideOffSentinel('phone', state.youLng, state.youLat);
+  }
 }
 
-// Toggle the bus pin pill. Three transitions:
-//   off → on (no pin yet): enter placement mode, wait for map tap
-//   off → on (pin already placed earlier this session): re-enable existing pin
-//   on  → off: remove the pin entirely
 async function toggleBusPin() {
   if (BUS_PIN_ON) {
-    // Turning OFF: clear pin and any open popup.
+    // Turning OFF: insert sentinel BEFORE clearing BUS_PIN so the position
+    // we send is the last known one (helpful for any debug or analytics view).
+    if (BUS_PIN) {
+      await insertGuideOffSentinel('bus_pin', BUS_PIN.lng, BUS_PIN.lat);
+    }
     BUS_PIN_ON = false;
     BUS_PIN_PLACING = false;
     BUS_PIN = null;
@@ -2427,13 +2451,8 @@ async function toggleBusPin() {
   // Turning ON.
   BUS_PIN_ON = true;
   if (!BUS_PIN) {
-    // No prior position — go to placement mode, await map tap.
     BUS_PIN_PLACING = true;
   } else {
-    // Re-enabling a pin that was placed earlier this session — already have
-    // BUS_PIN, just turn it back on. Need to insert a fresh row so realtime
-    // pushes it to passengers (we may have toggled off and on while they
-    // weren't watching).
     placeBusPin(BUS_PIN.lng, BUS_PIN.lat);
   }
   updateBroadcastBanner();
@@ -2445,8 +2464,8 @@ async function toggleBusPin() {
 // passengers see the new position instantly via realtime.
 async function placeBusPin(lng, lat) {
   BUS_PIN = { lng, lat };
-  updateVisibilityControlUI();    // refresh the "Bus is here" status text
-  // Render the bus pin on the guide's own map so they see where it is.
+  updateVisibilityControlUI();
+  updateBroadcastBanner();      // banner copy depends on whether pin is placed
   renderBusPinOnGuideMap();
 
   if (!SESSION) return;
@@ -2736,7 +2755,146 @@ function applyIncomingLocationRow(row) {
   updatePassengerCount();
 }
 
-// Bottom-sheet snap states (in px, except `full` which is a fraction of phone height).
+// ── PASSENGER VIEW: GUIDE MARKERS (chunk F pass 2) ──
+// Reads guide_locations to render the guide's live position (when sharing is on)
+// and/or the bus pin (when the guide has placed one), in the passenger's view.
+//
+// State model:
+//   GUIDE_VIEW.phone — current guide-phone position (or null if hidden/off)
+//   GUIDE_VIEW.bus   — current bus-pin position (or null if hidden/off)
+//
+// "Latest row per source" wins. If the latest row for a source has is_off=true,
+// that source is hidden (set to null).
+//
+// Phone-source has a 30s freshness timeout: if no fresh row in 30s, hide it.
+// Catches the case where a guide's network drops without a clean off-toggle.
+// Bus-pin has no timeout — manual pin, expected to stay until guide moves it.
+const GUIDE_VIEW = { phone: null, bus: null };
+const GUIDE_PHONE_FRESHNESS_MS = 30 * 1000;
+
+let _guideMarkerPhone = null;
+let _guideMarkerBus = null;
+let _guideChannel = null;
+let _guideSubscribeStarted = false;
+let _guideFreshnessTickHandle = null;
+
+async function catchUpGuideLocations() {
+  if (!SESSION) return;
+  const { data, error } = await supabaseClient
+    .from('guide_locations')
+    .select('source, lng, lat, set_at, is_off')
+    .eq('session_id', SESSION.id)
+    .order('set_at', { ascending: false })
+    .limit(200);
+  if (error) {
+    console.warn('guide_locations catch-up failed', error);
+    return;
+  }
+  if (!data) return;
+  const seen = new Set();
+  const now = Date.now();
+  for (const row of data) {
+    if (seen.has(row.source)) continue;
+    seen.add(row.source);
+    applyGuideRowToState(row, now);
+  }
+  renderGuideMarkers();
+}
+
+function applyGuideRowToState(row, now) {
+  const ts = Date.parse(row.set_at);
+  if (row.is_off) {
+    if (row.source === 'phone') GUIDE_VIEW.phone = null;
+    else if (row.source === 'bus_pin') GUIDE_VIEW.bus = null;
+    return;
+  }
+  if (row.source === 'phone' && (now - ts) > GUIDE_PHONE_FRESHNESS_MS) {
+    GUIDE_VIEW.phone = null;
+    return;
+  }
+  if (row.source === 'phone') {
+    GUIDE_VIEW.phone = { lng: row.lng, lat: row.lat, ts };
+  } else if (row.source === 'bus_pin') {
+    GUIDE_VIEW.bus = { lng: row.lng, lat: row.lat, ts };
+  }
+}
+
+function startGuideLocationsSubscription() {
+  if (_guideSubscribeStarted) return;
+  if (!SESSION) return;
+  _guideSubscribeStarted = true;
+  _guideChannel = supabaseClient
+    .channel(`guide_locations:${SESSION.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'guide_locations',
+        filter: `session_id=eq.${SESSION.id}`,
+      },
+      (payload) => {
+        applyGuideRowToState(payload.new, Date.now());
+        renderGuideMarkers();
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        catchUpGuideLocations().catch(err => console.warn('guide reconcile failed', err));
+      }
+    });
+  window.addEventListener('beforeunload', () => {
+    if (_guideChannel) {
+      try { supabaseClient.removeChannel(_guideChannel); } catch {}
+    }
+  });
+}
+
+function renderGuideMarkers() {
+  if (_guideMarkerPhone) { _guideMarkerPhone.remove(); _guideMarkerPhone = null; }
+  if (GUIDE_VIEW.phone) {
+    const el = document.createElement('div');
+    el.style.cssText =
+      'width:22px; height:22px; background:#2563eb; border:3px solid var(--paper);' +
+      'border-radius:50%; box-shadow:0 0 0 4px rgba(37,99,235,0.18), 0 2px 6px rgba(0,0,0,0.25);';
+    _guideMarkerPhone = new mapboxgl.Marker({ element: el })
+      .setLngLat([GUIDE_VIEW.phone.lng, GUIDE_VIEW.phone.lat])
+      .addTo(map);
+  }
+
+  if (_guideMarkerBus) { _guideMarkerBus.remove(); _guideMarkerBus = null; }
+  if (GUIDE_VIEW.bus) {
+    const el = document.createElement('div');
+    el.style.cssText =
+      'width:24px; height:24px; background:#2563eb; border:2px solid var(--paper);' +
+      'border-radius:4px; box-shadow:0 2px 6px rgba(0,0,0,0.25);' +
+      'display:flex; align-items:center; justify-content:center; color:white;' +
+      'font-family:JetBrains Mono,monospace; font-size:9px; font-weight:700;';
+    el.textContent = 'BUS';
+    _guideMarkerBus = new mapboxgl.Marker({ element: el })
+      .setLngLat([GUIDE_VIEW.bus.lng, GUIDE_VIEW.bus.lat])
+      .addTo(map);
+  }
+}
+
+function startGuideFreshnessTick() {
+  if (_guideFreshnessTickHandle) clearInterval(_guideFreshnessTickHandle);
+  _guideFreshnessTickHandle = setInterval(() => {
+    if (!GUIDE_VIEW.phone) return;
+    if (Date.now() - GUIDE_VIEW.phone.ts > GUIDE_PHONE_FRESHNESS_MS) {
+      GUIDE_VIEW.phone = null;
+      renderGuideMarkers();
+    }
+  }, 5000);
+}
+
+function startPassengerGuideListening() {
+  (async () => {
+    await catchUpGuideLocations();
+    startGuideLocationsSubscription();
+    startGuideFreshnessTick();
+  })().catch(err => console.warn('Guide-listening startup failed', err));
+}
 const SHEET_STATES = {
   collapsed: 60,
   half: 240,
