@@ -771,7 +771,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-29-1258';
+const BUILD_VERSION = '0.4 · build 2026-04-29-1305';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2565,13 +2565,13 @@ function updateBroadcastBanner() {
   // Banner text reflects what passengers actually see:
   let txt;
   if (SHARE_LOCATION && BUS_PIN_ON && BUS_PIN) {
-    txt = 'Sharing your location · bus pinned';
+    txt = 'Guide location live · Bus location live';
   } else if (SHARE_LOCATION && BUS_PIN_ON && !BUS_PIN) {
-    txt = 'Sharing your location · tap map to place bus';
+    txt = 'Guide location live · tap map to place bus';
   } else if (SHARE_LOCATION) {
-    txt = 'Sharing your location';
-  } else if (BUS_PIN && BUS_PIN_ON) {
-    txt = 'Bus pin live';
+    txt = 'Guide location live';
+  } else if (BUS_PIN_ON && BUS_PIN) {
+    txt = 'Bus location live';
   } else {
     // BUS_PIN_ON true but no position yet — placement pending.
     txt = 'Tap the map to place the bus';
