@@ -486,8 +486,9 @@
     padding: 16px 0;
   }
 
-  /* Visibility control (chunk F). Three-segment control showing the guide's
-     current broadcast mode. Active segment is highlighted. */
+  /* Visibility control (chunk F). Two independent pill toggles. Each pill
+     stays distinct (own border, own active state) — they're not a segmented
+     control. Tap to flip on/off. */
   .visibility-section {
     padding: 0 0 16px;
     margin-bottom: 16px;
@@ -497,31 +498,28 @@
     font-family: 'JetBrains Mono', monospace;
     font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
     color: var(--rule);
-    margin-bottom: 8px;
+    margin-bottom: 10px;
   }
   .visibility-control {
     display: flex;
-    gap: 4px;
-    background: var(--paper-2);
-    border: 1px solid var(--rule);
-    border-radius: 8px;
-    padding: 3px;
+    gap: 8px;
   }
   .vis-btn {
     flex: 1;
-    padding: 9px 6px;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
+    padding: 10px 6px;
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 999px;        /* pill */
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
     color: var(--ink);
     cursor: pointer;
-    transition: background 0.15s;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
   }
-  .vis-btn:active { background: var(--paper); }
+  .vis-btn:active { transform: scale(0.97); }
   .vis-btn.active {
     background: #2563eb;
+    border-color: #2563eb;
     color: var(--paper);
     font-weight: 600;
   }
@@ -773,7 +771,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-29-1219';
+const BUILD_VERSION = '0.4 · build 2026-04-29-1247';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2030,25 +2028,31 @@ const PASSENGERS = new Map();
 let SELECTED_PASSENGER = null;
 
 // ── GUIDE VISIBILITY (chunk F) ──
-// Three mutually exclusive modes governing whether passengers can see the
-// guide on the map, and what they see:
-//   'off'      — nothing broadcast. Default. Passengers see no guide.
-//   'phone'    — guide's GPS fixes inserted into guide_locations every 5s,
-//                source='phone'. Passengers see a beacon-blue dot at the
-//                guide's live position.
-//   'bus_pin'  — a single manual pin placed on the map. The pin position
-//                is whatever the guide last tapped while in this mode.
-//                Passengers see a beacon-blue square at the pin location.
+// Two independent flags governing what passengers see of the guide.
+// They can be on/off in any combination.
+//
+//   SHARE_LOCATION    — when true, guide's GPS fixes inserted into
+//                       guide_locations every 5s, source='phone'. Passengers
+//                       see a beacon-blue dot at the guide's live position.
+//
+//   BUS_PIN_ON        — when true, the manually-placed bus pin is "live" and
+//                       visible to passengers as a beacon-blue square. Pin
+//                       position is in BUS_PIN.
+//                       BUS_PIN_PLACING flag indicates "next map tap places
+//                       the pin" — this auto-exits after one placement so
+//                       subsequent map taps don't accidentally move the pin.
+//                       Toggling the bus-pin pill OFF removes the pin entirely.
 //
 // State drives:
-//   - The bottom-sheet visibility control
-//   - Whether onGpsSuccess queues a broadcast row
-//   - The top "broadcasting" banner
-//   - Whether map taps move the bus pin
-let VISIBILITY = 'off';
+//   - The two pills in the bottom-sheet header
+//   - Whether onGpsSuccess broadcasts a phone fix
+//   - Whether map taps place the bus pin
+//   - The top "broadcasting" banner (shown if either flag is on)
+let SHARE_LOCATION = false;
+let BUS_PIN_ON = false;
+let BUS_PIN_PLACING = false;     // true between "user tapped pill" and "user tapped map"
 
-// Where the bus pin currently is (when VISIBILITY === 'bus_pin').
-// Null when no pin has been placed yet during this session.
+// Where the bus pin currently is (when BUS_PIN_ON). Null if not placed yet.
 let BUS_PIN = null;  // shape: { lng, lat }
 
 // Throttle for guide-phone broadcasts (mirrors the passenger queue throttle).
@@ -2376,14 +2380,15 @@ function togglePassengerSelection(passengerId) {
 function bindMapDeselectHandler() {
   if (!map) return;
   map.on('click', (e) => {
-    // Bus-pin mode: every map tap moves the pin to the tapped location.
-    // Same insert + render path that the initial pin placement uses.
-    if (VISIBILITY === 'bus_pin' && ROLE === 'guide' && SESSION) {
+    // Bus-pin placement: triggered by tapping the pill, then this single
+    // map tap places it. Auto-exits placing mode so subsequent map taps
+    // don't move it accidentally — moving requires re-tapping the pill.
+    if (BUS_PIN_PLACING && ROLE === 'guide' && SESSION) {
+      BUS_PIN_PLACING = false;
       placeBusPin(e.lngLat.lng, e.lngLat.lat);
       return;
     }
     // Otherwise: clicking empty map = deselect any selected passenger.
-    // (SVG dot taps call e.stopPropagation() so they don't bubble here.)
     if (SELECTED_PASSENGER !== null) {
       SELECTED_PASSENGER = null;
       renderPassengers();
@@ -2391,24 +2396,51 @@ function bindMapDeselectHandler() {
   });
 }
 
-// Set the visibility mode. Single source of truth — UI bindings call this
-// rather than mutating VISIBILITY directly. Updates the broadcasting banner
-// and the bottom-sheet visibility control. Confirmation dialogs are handled
-// by the caller, not here, so this stays a clean state-flip function.
-async function setVisibility(next) {
-  if (next === VISIBILITY) return;
-  // No-op if we don't have what we need to broadcast.
-  if (next !== 'off' && (!SESSION || ROLE !== 'guide')) return;
+// Toggle the "Share my location" pill. Independent of bus-pin state.
+async function toggleShareLocation() {
+  SHARE_LOCATION = !SHARE_LOCATION;
+  updateBroadcastBanner();
+  updateVisibilityControlUI();
+  // No DB cleanup on turn-off: existing rows in guide_locations remain (they
+  // become history). Passenger view's "current guide location" logic looks at
+  // the most recent row by source — once we stop inserting 'phone' rows, the
+  // passenger view will eventually fall back to (or stay on) the bus pin or
+  // nothing. Pass 2 will codify this read logic.
+}
 
-  VISIBILITY = next;
-
-  // When entering bus-pin mode for the first time in this session, BUS_PIN
-  // may be null. The first map tap places it. While null + bus_pin mode,
-  // we don't insert anything — there's no position yet.
-  if (next === 'phone') {
+// Toggle the bus pin pill. Three transitions:
+//   off → on (no pin yet): enter placement mode, wait for map tap
+//   off → on (pin already placed earlier this session): re-enable existing pin
+//   on  → off: remove the pin entirely
+async function toggleBusPin() {
+  if (BUS_PIN_ON) {
+    // Turning OFF: clear pin and broadcast removal.
+    BUS_PIN_ON = false;
+    BUS_PIN_PLACING = false;
     BUS_PIN = null;
+    renderBusPinOnGuideMap();
+    updateBroadcastBanner();
+    updateVisibilityControlUI();
+    // No "remove" row in guide_locations — passenger-side derives "current"
+    // from latest row per source. We could insert a sentinel removal row,
+    // but a cleaner approach is for the passenger reader to time-out an
+    // older bus_pin if no recent updates AND the guide has explicitly
+    // turned it off. Pass 2 handles this — for now, turning off just stops
+    // future inserts, and the existing latest row stays in DB.
+    return;
   }
-
+  // Turning ON.
+  BUS_PIN_ON = true;
+  if (!BUS_PIN) {
+    // No prior position — go to placement mode, await map tap.
+    BUS_PIN_PLACING = true;
+  } else {
+    // Re-enabling a pin that was placed earlier this session — already have
+    // BUS_PIN, just turn it back on. Need to insert a fresh row so realtime
+    // pushes it to passengers (we may have toggled off and on while they
+    // weren't watching).
+    placeBusPin(BUS_PIN.lng, BUS_PIN.lat);
+  }
   updateBroadcastBanner();
   updateVisibilityControlUI();
 }
@@ -2456,43 +2488,49 @@ function renderBusPinOnGuideMap() {
     .addTo(map);
 }
 
-// Update the top "broadcasting" banner based on current VISIBILITY.
+// Update the top "broadcasting" banner. Shown whenever EITHER flag is on;
+// text varies depending on what's active.
 function updateBroadcastBanner() {
   const el = document.getElementById('broadcast-banner');
   if (!el) return;
-  if (VISIBILITY === 'phone') {
-    el.style.display = '';
-    el.classList.remove('bus');
-    document.getElementById('broadcast-banner-text').textContent = 'Broadcasting your location';
-  } else if (VISIBILITY === 'bus_pin') {
-    el.style.display = '';
-    el.classList.add('bus');
-    const txt = BUS_PIN
-      ? 'Broadcasting bus location'
-      : 'Tap the map to place the bus';
-    document.getElementById('broadcast-banner-text').textContent = txt;
-  } else {
+  const txtEl = document.getElementById('broadcast-banner-text');
+  if (!SHARE_LOCATION && !BUS_PIN_ON) {
     el.style.display = 'none';
+    return;
   }
+  el.style.display = '';
+  // Banner text reflects what passengers actually see:
+  let txt;
+  if (SHARE_LOCATION && BUS_PIN_ON && BUS_PIN) {
+    txt = 'Sharing your location · bus pinned';
+  } else if (SHARE_LOCATION && BUS_PIN_ON && !BUS_PIN) {
+    txt = 'Sharing your location · tap map to place bus';
+  } else if (SHARE_LOCATION) {
+    txt = 'Sharing your location';
+  } else if (BUS_PIN && BUS_PIN_ON) {
+    txt = 'Bus pin live';
+  } else {
+    // BUS_PIN_ON true but no position yet — placement pending.
+    txt = 'Tap the map to place the bus';
+  }
+  txtEl.textContent = txt;
+  // Bus class swaps to a slightly deeper blue when bus is the only signal.
+  el.classList.toggle('bus', !SHARE_LOCATION && BUS_PIN_ON);
 }
 
 // Update the visibility control in the bottom-sheet header.
-// Re-renders the three-state control to reflect current VISIBILITY.
+// Two independent pills: "Share my location" and "Bus pin". Each highlights
+// when its flag is on. Hint line below explains placement state.
 function updateVisibilityControlUI() {
-  const ctrl = document.getElementById('visibility-control');
-  if (!ctrl) return;
-  // Highlight the active mode.
-  ctrl.querySelectorAll('[data-vis-mode]').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.visMode === VISIBILITY);
-  });
-  // Hide the "Tap map to place bus" hint when not in bus_pin mode.
+  const shareBtn = document.querySelector('#visibility-control [data-vis-pill="share"]');
+  const busBtn = document.querySelector('#visibility-control [data-vis-pill="bus"]');
+  if (shareBtn) shareBtn.classList.toggle('active', SHARE_LOCATION);
+  if (busBtn) busBtn.classList.toggle('active', BUS_PIN_ON);
+
   const hint = document.getElementById('visibility-bus-hint');
   if (hint) {
-    if (VISIBILITY === 'bus_pin' && !BUS_PIN) {
+    if (BUS_PIN_PLACING) {
       hint.textContent = 'Tap the map to place the bus pin.';
-      hint.style.display = '';
-    } else if (VISIBILITY === 'bus_pin' && BUS_PIN) {
-      hint.textContent = 'Tap the map again to move the bus pin.';
       hint.style.display = '';
     } else {
       hint.style.display = 'none';
@@ -2660,13 +2698,12 @@ function mountGuideBottomSheet() {
       </div>
     </div>
     <div class="guide-sheet-body" id="guide-sheet-body">
-      <!-- Visibility control (chunk F) — three-state: hidden / phone / bus. -->
+      <!-- Visibility control (chunk F) — two independent pills. -->
       <div class="visibility-section" id="visibility-section">
         <div class="visibility-section-label">Visible to passengers</div>
         <div class="visibility-control" id="visibility-control">
-          <button class="vis-btn active" data-vis-mode="off">Hidden</button>
-          <button class="vis-btn" data-vis-mode="phone">My location</button>
-          <button class="vis-btn" data-vis-mode="bus_pin">Bus pin</button>
+          <button class="vis-btn" data-vis-pill="share">Share my location</button>
+          <button class="vis-btn" data-vis-pill="bus">Bus pin</button>
         </div>
         <div class="visibility-bus-hint" id="visibility-bus-hint" style="display:none;"></div>
       </div>
@@ -2734,26 +2771,18 @@ function mountGuideBottomSheet() {
     });
   }
 
-  // Visibility control buttons (chunk F).
-  // Hidden → instant. Phone → instant. Bus pin → confirmation dialog,
-  // because going to bus_pin while broadcasting phone means stopping the
-  // live phone broadcast and committing to a manual pin until turned off.
+  // Visibility pill handlers (chunk F). Two independent pills:
+  //   share — toggles SHARE_LOCATION on/off (no confirmation, instant)
+  //   bus   — toggles BUS_PIN_ON. On→Off removes pin entirely. Off→On enters
+  //           placement mode (next map tap places the pin).
   document.querySelectorAll('#visibility-control .vis-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const next = btn.dataset.visMode;
-      if (next === VISIBILITY) return;
-
-      // Confirm bus_pin transition. Per Q1: confirmation copy explicitly states
-      // "stop sharing your live location, place a bus pin instead, on until off."
-      if (next === 'bus_pin') {
-        const ok = window.confirm(
-          'You will now stop sharing your live location and place a bus pin '
-          + 'on the map instead. The pin will stay until you turn it off. Continue?'
-        );
-        if (!ok) return;
+      const pill = btn.dataset.visPill;
+      if (pill === 'share') {
+        await toggleShareLocation();
+      } else if (pill === 'bus') {
+        await toggleBusPin();
       }
-
-      await setVisibility(next);
     });
   });
 }
@@ -2889,13 +2918,12 @@ function onGpsSuccess(pos) {
     });
   }
 
-  // Guide-phone broadcast: when guide visibility is set to 'phone', insert
-  // a row into guide_locations with source='phone'. Throttled to ~5s, same
-  // cadence as passenger queue. Direct insert (no IndexedDB queue) — guide
-  // is assumed to be online when broadcasting; if a network hiccup drops a
-  // fix, the next one fills in seconds later. Realtime push handles delivery
-  // to passenger views.
-  if (SESSION && ROLE === 'guide' && VISIBILITY === 'phone'
+  // Guide-phone broadcast: when SHARE_LOCATION is on, insert a row into
+  // guide_locations with source='phone'. Throttled to ~5s, same cadence as
+  // passenger queue. Direct insert (no IndexedDB queue) — guide is assumed
+  // online when broadcasting; if a network hiccup drops a fix, the next one
+  // fills in seconds later.
+  if (SESSION && ROLE === 'guide' && SHARE_LOCATION
       && now - _lastGuideBroadcastAt >= GUIDE_BROADCAST_INTERVAL_MS) {
     _lastGuideBroadcastAt = now;
     supabaseClient.from('guide_locations').insert({
