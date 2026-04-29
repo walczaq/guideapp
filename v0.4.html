@@ -771,7 +771,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-29-1343';
+const BUILD_VERSION = '0.4 · build 2026-04-29-1353';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2514,11 +2514,12 @@ function renderBusPinOnGuideMap() {
   }
   if (!BUS_PIN || !map) return;
 
-  // Wrap square + label so they ride together. Tap the marker to open the
-  // Move / Remove popup.
+  // Same plain-text-above-marker treatment as the passenger view's renderGuideMarkers.
+  // Tap anywhere on the wrap to open the Move / Remove popup.
   const wrap = document.createElement('div');
   wrap.style.cssText =
-    'display:flex; flex-direction:column; align-items:center; cursor:pointer; transform:translateY(-50%);';
+    'display:flex; flex-direction:column; align-items:center; cursor:pointer;';
+  wrap.appendChild(buildFloatingLabel('Bus'));
   const square = document.createElement('div');
   square.style.cssText =
     'width:24px; height:24px; background:#2563eb; border:2px solid var(--paper);' +
@@ -2527,20 +2528,11 @@ function renderBusPinOnGuideMap() {
     'font-family:JetBrains Mono,monospace; font-size:9px; font-weight:700;';
   square.textContent = 'BUS';
   wrap.appendChild(square);
-  const label = document.createElement('div');
-  label.style.cssText =
-    'margin-top:5px; padding:2px 8px; background:var(--paper); color:var(--ink);' +
-    'border:1px solid var(--ink); border-radius:10px;' +
-    'font-family:JetBrains Mono,monospace; font-size:10px; font-weight:600;' +
-    'white-space:nowrap; box-shadow:0 1px 3px rgba(0,0,0,0.15);';
-  label.textContent = 'Bus';
-  wrap.appendChild(label);
-  // Tap anywhere on the wrap (square or label) to open popup.
   wrap.addEventListener('click', (ev) => {
     ev.stopPropagation();
     openBusPinPopup();
   });
-  _busPinMarker = new mapboxgl.Marker({ element: wrap, anchor: 'center' })
+  _busPinMarker = new mapboxgl.Marker({ element: wrap, anchor: 'bottom' })
     .setLngLat([BUS_PIN.lng, BUS_PIN.lat])
     .addTo(map);
 }
@@ -2793,24 +2785,18 @@ function applyIncomingLocationRow(row) {
 // Reads guide_locations to render the guide's live position (when sharing is on)
 // and/or the bus pin (when the guide has placed one), in the passenger's view.
 //
-// State model:
-//   GUIDE_VIEW.phone — current guide-phone position (or null if hidden/off)
-//   GUIDE_VIEW.bus   — current bus-pin position (or null if hidden/off)
-//
-// "Latest row per source" wins. If the latest row for a source has is_off=true,
-// that source is hidden (set to null).
-//
-// Phone-source has a 30s freshness timeout: if no fresh row in 30s, hide it.
-// Catches the case where a guide's network drops without a clean off-toggle.
-// Bus-pin has no timeout — manual pin, expected to stay until guide moves it.
+// "Latest row per source" wins. If the latest row has is_off=true, that source
+// is hidden. There's NO freshness timeout — once a source is "live", we keep
+// rendering at last known position until an explicit is_off sentinel arrives.
+// (We had a 30s timeout earlier — false-positived when the guide was stationary
+// and GPS slowed down. Better to keep a possibly-stale dot than to lie by
+// hiding it. Same convention as passenger dots.)
 const GUIDE_VIEW = { phone: null, bus: null };
-const GUIDE_PHONE_FRESHNESS_MS = 30 * 1000;
 
 let _guideMarkerPhone = null;
 let _guideMarkerBus = null;
 let _guideChannel = null;
 let _guideSubscribeStarted = false;
-let _guideFreshnessTickHandle = null;
 
 async function catchUpGuideLocations() {
   if (!SESSION) return;
@@ -2826,26 +2812,21 @@ async function catchUpGuideLocations() {
   }
   if (!data) return;
   const seen = new Set();
-  const now = Date.now();
   for (const row of data) {
     if (seen.has(row.source)) continue;
     seen.add(row.source);
-    applyGuideRowToState(row, now);
+    applyGuideRowToState(row);
   }
   renderGuideMarkers();
 }
 
-function applyGuideRowToState(row, now) {
-  const ts = Date.parse(row.set_at);
+function applyGuideRowToState(row) {
   if (row.is_off) {
     if (row.source === 'phone') GUIDE_VIEW.phone = null;
     else if (row.source === 'bus_pin') GUIDE_VIEW.bus = null;
     return;
   }
-  if (row.source === 'phone' && (now - ts) > GUIDE_PHONE_FRESHNESS_MS) {
-    GUIDE_VIEW.phone = null;
-    return;
-  }
+  const ts = Date.parse(row.set_at);
   if (row.source === 'phone') {
     GUIDE_VIEW.phone = { lng: row.lng, lat: row.lat, ts };
   } else if (row.source === 'bus_pin') {
@@ -2868,7 +2849,7 @@ function startGuideLocationsSubscription() {
         filter: `session_id=eq.${SESSION.id}`,
       },
       (payload) => {
-        applyGuideRowToState(payload.new, Date.now());
+        applyGuideRowToState(payload.new);
         renderGuideMarkers();
       }
     )
@@ -2884,29 +2865,44 @@ function startGuideLocationsSubscription() {
   });
 }
 
+// Build a plain-text floating label with a paper-colored "halo" around the
+// text (text-shadow trick) so it's legible against any map color without
+// a pill background. Sized small to keep the map uncluttered at low zoom.
+function buildFloatingLabel(text) {
+  const el = document.createElement('div');
+  el.style.cssText =
+    'font-family:JetBrains Mono,monospace; font-size:10px; font-weight:700;' +
+    'color:var(--ink); white-space:nowrap; pointer-events:none;' +
+    'letter-spacing:0.04em; margin-bottom:3px;' +
+    // Paper-colored 8-direction halo — readable on any map background.
+    'text-shadow:' +
+      '-1px -1px 0 var(--paper),' +
+      ' 1px -1px 0 var(--paper),' +
+      '-1px  1px 0 var(--paper),' +
+      ' 1px  1px 0 var(--paper),' +
+      ' 0px -1px 0 var(--paper),' +
+      ' 0px  1px 0 var(--paper),' +
+      '-1px  0px 0 var(--paper),' +
+      ' 1px  0px 0 var(--paper);';
+  el.textContent = text;
+  return el;
+}
+
 function renderGuideMarkers() {
   if (_guideMarkerPhone) { _guideMarkerPhone.remove(); _guideMarkerPhone = null; }
   if (GUIDE_VIEW.phone) {
-    // Wrap dot + name label in a single element so the marker positions both
-    // as one unit. Label sits below the dot, paper pill with ink text.
+    // Label above + dot below. Marker anchor is 'bottom' so the dot sits
+    // exactly on the lng/lat point; label floats above it.
     const wrap = document.createElement('div');
-    wrap.style.cssText =
-      'display:flex; flex-direction:column; align-items:center; transform:translateY(-50%);';
+    wrap.style.cssText = 'display:flex; flex-direction:column; align-items:center;';
+    const labelText = (SESSION && SESSION.guide_name) ? SESSION.guide_name : 'Guide';
+    wrap.appendChild(buildFloatingLabel(labelText));
     const dot = document.createElement('div');
     dot.style.cssText =
       'width:22px; height:22px; background:#2563eb; border:3px solid var(--paper);' +
       'border-radius:50%; box-shadow:0 0 0 4px rgba(37,99,235,0.18), 0 2px 6px rgba(0,0,0,0.25);';
     wrap.appendChild(dot);
-    // Guide name from the session row. Falls back to "Guide" if somehow missing.
-    const label = document.createElement('div');
-    label.style.cssText =
-      'margin-top:5px; padding:2px 8px; background:var(--paper); color:var(--ink);' +
-      'border:1px solid var(--ink); border-radius:10px;' +
-      'font-family:JetBrains Mono,monospace; font-size:10px; font-weight:600;' +
-      'white-space:nowrap; box-shadow:0 1px 3px rgba(0,0,0,0.15);';
-    label.textContent = (SESSION && SESSION.guide_name) ? SESSION.guide_name : 'Guide';
-    wrap.appendChild(label);
-    _guideMarkerPhone = new mapboxgl.Marker({ element: wrap, anchor: 'center' })
+    _guideMarkerPhone = new mapboxgl.Marker({ element: wrap, anchor: 'bottom' })
       .setLngLat([GUIDE_VIEW.phone.lng, GUIDE_VIEW.phone.lat])
       .addTo(map);
   }
@@ -2914,8 +2910,8 @@ function renderGuideMarkers() {
   if (_guideMarkerBus) { _guideMarkerBus.remove(); _guideMarkerBus = null; }
   if (GUIDE_VIEW.bus) {
     const wrap = document.createElement('div');
-    wrap.style.cssText =
-      'display:flex; flex-direction:column; align-items:center; transform:translateY(-50%);';
+    wrap.style.cssText = 'display:flex; flex-direction:column; align-items:center;';
+    wrap.appendChild(buildFloatingLabel('Bus'));
     const square = document.createElement('div');
     square.style.cssText =
       'width:24px; height:24px; background:#2563eb; border:2px solid var(--paper);' +
@@ -2924,36 +2920,16 @@ function renderGuideMarkers() {
       'font-family:JetBrains Mono,monospace; font-size:9px; font-weight:700;';
     square.textContent = 'BUS';
     wrap.appendChild(square);
-    const label = document.createElement('div');
-    label.style.cssText =
-      'margin-top:5px; padding:2px 8px; background:var(--paper); color:var(--ink);' +
-      'border:1px solid var(--ink); border-radius:10px;' +
-      'font-family:JetBrains Mono,monospace; font-size:10px; font-weight:600;' +
-      'white-space:nowrap; box-shadow:0 1px 3px rgba(0,0,0,0.15);';
-    label.textContent = 'Bus';
-    wrap.appendChild(label);
-    _guideMarkerBus = new mapboxgl.Marker({ element: wrap, anchor: 'center' })
+    _guideMarkerBus = new mapboxgl.Marker({ element: wrap, anchor: 'bottom' })
       .setLngLat([GUIDE_VIEW.bus.lng, GUIDE_VIEW.bus.lat])
       .addTo(map);
   }
-}
-
-function startGuideFreshnessTick() {
-  if (_guideFreshnessTickHandle) clearInterval(_guideFreshnessTickHandle);
-  _guideFreshnessTickHandle = setInterval(() => {
-    if (!GUIDE_VIEW.phone) return;
-    if (Date.now() - GUIDE_VIEW.phone.ts > GUIDE_PHONE_FRESHNESS_MS) {
-      GUIDE_VIEW.phone = null;
-      renderGuideMarkers();
-    }
-  }, 5000);
 }
 
 function startPassengerGuideListening() {
   (async () => {
     await catchUpGuideLocations();
     startGuideLocationsSubscription();
-    startGuideFreshnessTick();
     bindVisibilityCatchUp();
   })().catch(err => console.warn('Guide-listening startup failed', err));
 }
