@@ -752,7 +752,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-29-2022';
+const BUILD_VERSION = '0.4 · build 2026-04-29-2037';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2195,17 +2195,24 @@ function startGuideShell() {
   (async () => {
     await catchUpPassengers();
     startPassengerLocationsSubscription();
+    // Chunk G pass 2: names ride alongside locations. Catch up names then
+    // subscribe — independent table, independent realtime channel.
+    await catchUpPassengerNames();
+    startPassengerNamesSubscription();
   })().catch(err => {
     console.warn('Guide shell startup failed', err);
   });
 
   // State tick — re-evaluate passenger states every 5s, even with no new
   // GPS data. State transitions like "disconnected" happen by absence
-  // (no fix in 60s), not by event, so timer is necessary. Cheap: just
-  // re-runs renderPassengers which is already idempotent.
+  // (no fix in 60s), not by event, so timer is necessary. Also refreshes
+  // the passenger list rows so "no signal" status flips correctly.
   if (_stateTickHandle) clearInterval(_stateTickHandle);
   _stateTickHandle = setInterval(() => {
-    if (PASSENGERS.size > 0) renderPassengers();
+    if (PASSENGERS.size > 0) {
+      renderPassengers();
+      renderPassengerList();
+    }
   }, 5000);
 
   // Backgrounded-tab handler — see notes on bindVisibilityCatchUp. Fires
@@ -2563,6 +2570,30 @@ function renderPassengers() {
     ring.setAttribute('stroke-width', state ? '3' : '2');
     g.appendChild(ring);
 
+    // Name label above the dot (chunk G pass 2). Renders when NAMES_VISIBLE
+    // is on OR when this passenger is selected. Uses SVG <text> with
+    // paint-order=stroke + thick white stroke + black fill — this gives the
+    // same black-text-on-white-halo look as the guide/bus markers, but with
+    // pure SVG (no HTML markers needed).
+    const showLabel = NAMES_VISIBLE || isSelected;
+    if (showLabel) {
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', 0);
+      label.setAttribute('y', -(HALO_R + 6));     // sits above the halo
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('font-family', 'JetBrains Mono, monospace');
+      label.setAttribute('font-size', '10');
+      label.setAttribute('font-weight', '700');
+      label.setAttribute('letter-spacing', '0.04em');
+      label.setAttribute('fill', '#000000');
+      label.setAttribute('stroke', '#ffffff');
+      label.setAttribute('stroke-width', '3');
+      label.setAttribute('paint-order', 'stroke');   // halo behind glyph
+      label.setAttribute('pointer-events', 'none');  // never absorbs taps
+      label.textContent = passengerDisplayName(p, passengerId);
+      g.appendChild(label);
+    }
+
     passengersLayer.appendChild(g);
   }
 }
@@ -2846,12 +2877,180 @@ function updatePassengerCount() {
   if (countEl) countEl.textContent = String(count);
 
   // Show empty state (share link) only when no passengers; otherwise show list.
-  // Chunk C's list is still empty (rows render in chunk G with names) — for now
-  // we just hide the empty state when count > 0 to avoid visual confusion.
+  // Chunk G now populates the list with named rows; renderPassengerList() draws them.
   const emptyEl = document.getElementById('guide-sheet-empty');
   const listEl = document.getElementById('guide-sheet-list');
   if (emptyEl) emptyEl.style.display = count === 0 ? '' : 'none';
   if (listEl) listEl.style.display = count === 0 ? 'none' : '';
+  // Toggle row visibility: only show "Show names" toggle when there are passengers.
+  const namesToggle = document.getElementById('names-toggle-row');
+  if (namesToggle) namesToggle.style.display = count === 0 ? 'none' : '';
+  renderPassengerList();
+}
+
+// ── PASSENGER NAMES (chunk G pass 2) ──
+// Pulls names from session_passengers and merges into the PASSENGERS Map's
+// `name` field. Subscribes for live INSERT (new joiner) and UPDATE (rename).
+//
+// NAMES_VISIBLE controls whether name labels render above passenger dots:
+//   true  (default) — every dot shows its passenger's name above it
+//   false           — names show only above the currently-selected passenger,
+//                     so guides who want a clean map can dim names when
+//                     everyone's identified visually.
+let NAMES_VISIBLE = true;
+let _namesChannel = null;
+let _namesSubscribeStarted = false;
+
+async function catchUpPassengerNames() {
+  if (!SESSION) return;
+  const { data, error } = await supabaseClient
+    .from('session_passengers')
+    .select('passenger_id, name')
+    .eq('session_id', SESSION.id);
+  if (error) {
+    console.warn('session_passengers catch-up failed', error);
+    return;
+  }
+  if (!data) return;
+  for (const row of data) {
+    let p = PASSENGERS.get(row.passenger_id);
+    if (!p) {
+      // No location yet from this passenger — pre-seed a name-only record so
+      // the list shows them once they appear. We DON'T add them to the map
+      // (no lng/lat), but we cache the name so when their first location row
+      // arrives, the dot already has its label.
+      p = { name: row.name, _seenTimestamps: new Set(), trail: [] };
+      PASSENGERS.set(row.passenger_id, p);
+    } else {
+      p.name = row.name;
+    }
+  }
+  // Re-render dots (for labels) and the bottom-sheet list.
+  renderPassengers();
+  renderPassengerList();
+}
+
+function startPassengerNamesSubscription() {
+  if (_namesSubscribeStarted) return;
+  if (!SESSION) return;
+  _namesSubscribeStarted = true;
+
+  _namesChannel = supabaseClient
+    .channel(`session_passengers:${SESSION.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',                    // INSERT (new joiner) + UPDATE (rename)
+        schema: 'public',
+        table: 'session_passengers',
+        filter: `session_id=eq.${SESSION.id}`,
+      },
+      (payload) => {
+        const row = payload.new;
+        if (!row || !row.passenger_id) return;
+        let p = PASSENGERS.get(row.passenger_id);
+        if (!p) {
+          p = { name: row.name, _seenTimestamps: new Set(), trail: [] };
+          PASSENGERS.set(row.passenger_id, p);
+        } else {
+          p.name = row.name;
+        }
+        renderPassengers();
+        renderPassengerList();
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        catchUpPassengerNames().catch(err => console.warn('names reconcile failed', err));
+      }
+    });
+
+  window.addEventListener('beforeunload', () => {
+    if (_namesChannel) {
+      try { supabaseClient.removeChannel(_namesChannel); } catch {}
+    }
+  });
+}
+
+// Display name for a passenger, with fallback if name not yet known.
+// Used by both the map labels and the bottom-sheet list rows.
+function passengerDisplayName(p, passengerId) {
+  if (p && p.name) return p.name;
+  // Fallback to last 4 chars of passenger_id — better than blank.
+  return passengerId ? passengerId.slice(-4) : '?';
+}
+
+// Render the passenger list rows in the bottom sheet. Each row: color dot
+// (using primary identity color), name, and a small disconnected indicator
+// when applicable. Tapping a row selects the passenger (same as tapping
+// their dot on the map).
+function renderPassengerList() {
+  const listEl = document.getElementById('guide-sheet-list');
+  if (!listEl) return;
+  // Sort: passengers with an actual location first (active dots), then
+  // name-only records (joined but no fix yet). Within each group, alpha by name.
+  const entries = Array.from(PASSENGERS.entries()).sort((a, b) => {
+    const aHasLoc = (a[1].lng != null) ? 0 : 1;
+    const bHasLoc = (b[1].lng != null) ? 0 : 1;
+    if (aHasLoc !== bHasLoc) return aHasLoc - bHasLoc;
+    const an = (a[1].name || '').toLowerCase();
+    const bn = (b[1].name || '').toLowerCase();
+    return an.localeCompare(bn);
+  });
+
+  const now = Date.now();
+  listEl.innerHTML = '';
+  for (const [passengerId, p] of entries) {
+    const [colorA] = colorsForPassenger(passengerId);
+    const isSelected = SELECTED_PASSENGER === passengerId;
+    const state = p.lng != null ? evaluatePassengerState(p, now) : null;
+    const hasLocation = p.lng != null;
+
+    const row = document.createElement('div');
+    row.className = 'passenger-row' + (isSelected ? ' selected' : '');
+    row.dataset.passengerId = passengerId;
+    row.style.cssText =
+      'display:flex; align-items:center; gap:10px; padding:10px 4px;' +
+      'border-bottom:1px solid var(--rule); cursor:pointer;' +
+      (isSelected ? 'background:rgba(0,0,0,0.04);' : '');
+
+    // Color dot — primary identity color, dimmed if no location yet.
+    const dot = document.createElement('div');
+    dot.style.cssText =
+      `width:14px; height:14px; border-radius:50%; background:${colorA};` +
+      `flex-shrink:0; ${hasLocation ? '' : 'opacity:0.35;'}` +
+      (state === 'disconnected' ? ' border:2px solid #888888;' : '');
+    row.appendChild(dot);
+
+    // Name.
+    const nameEl = document.createElement('div');
+    nameEl.style.cssText =
+      'flex:1; font-family:JetBrains Mono,monospace; font-size:13px; color:var(--ink);' +
+      (hasLocation ? '' : ' opacity:0.55;');
+    nameEl.textContent = passengerDisplayName(p, passengerId);
+    row.appendChild(nameEl);
+
+    // Status text — small mono caption on the right.
+    const status = document.createElement('div');
+    status.style.cssText =
+      'font-family:JetBrains Mono,monospace; font-size:9px; letter-spacing:0.1em;' +
+      'text-transform:uppercase; color:var(--rule);';
+    if (!hasLocation) status.textContent = 'no fix yet';
+    else if (state === 'disconnected') status.textContent = 'no signal';
+    else status.textContent = 'live';
+    row.appendChild(status);
+
+    row.addEventListener('click', () => togglePassengerSelection(passengerId));
+    listEl.appendChild(row);
+  }
+}
+
+// Toggle map-name visibility. Re-renders dots so labels appear/disappear.
+function toggleNamesVisible() {
+  NAMES_VISIBLE = !NAMES_VISIBLE;
+  const btn = document.getElementById('names-toggle-btn');
+  if (btn) btn.classList.toggle('active', NAMES_VISIBLE);
+  renderPassengers();
 }
 
 // ── REALTIME SUBSCRIPTION ──
@@ -3185,6 +3384,15 @@ function mountGuideBottomSheet() {
         </div>
         <div class="visibility-bus-hint" id="visibility-bus-hint" style="display:none;"></div>
       </div>
+      <!-- Names visibility toggle (chunk G pass 2) — controls whether passenger
+           name labels appear above their dots on the map. Default ON. Visible
+           only when there's at least one passenger. -->
+      <div class="names-toggle-row" id="names-toggle-row" style="display:none; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--rule); margin-bottom:8px;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink);">
+          Names on map
+        </div>
+        <button id="names-toggle-btn" class="vis-btn active" style="flex:0 0 auto; padding:6px 14px;">On</button>
+      </div>
       <div class="guide-sheet-empty" id="guide-sheet-empty">
         <div style="font-family:'Fraunces',serif; font-style:italic; font-size:18px; color:var(--ink); margin-bottom:8px;">
           No passengers yet.
@@ -3263,6 +3471,16 @@ function mountGuideBottomSheet() {
       }
     });
   });
+
+  // Names-on-map toggle (chunk G pass 2). Flips NAMES_VISIBLE and re-renders.
+  // Button text mirrors the state so it's clear whether names are showing.
+  const namesBtn = document.getElementById('names-toggle-btn');
+  if (namesBtn) {
+    namesBtn.addEventListener('click', () => {
+      toggleNamesVisible();
+      namesBtn.textContent = NAMES_VISIBLE ? 'On' : 'Off';
+    });
+  }
 }
 
 function applySheetState() {
