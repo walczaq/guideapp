@@ -771,7 +771,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-29-1247';
+const BUILD_VERSION = '0.4 · build 2026-04-29-1258';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2414,19 +2414,14 @@ async function toggleShareLocation() {
 //   on  → off: remove the pin entirely
 async function toggleBusPin() {
   if (BUS_PIN_ON) {
-    // Turning OFF: clear pin and broadcast removal.
+    // Turning OFF: clear pin and any open popup.
     BUS_PIN_ON = false;
     BUS_PIN_PLACING = false;
     BUS_PIN = null;
+    closeBusPinPopup();
     renderBusPinOnGuideMap();
     updateBroadcastBanner();
     updateVisibilityControlUI();
-    // No "remove" row in guide_locations — passenger-side derives "current"
-    // from latest row per source. We could insert a sentinel removal row,
-    // but a cleaner approach is for the passenger reader to time-out an
-    // older bus_pin if no recent updates AND the guide has explicitly
-    // turned it off. Pass 2 handles this — for now, turning off just stops
-    // future inserts, and the existing latest row stays in DB.
     return;
   }
   // Turning ON.
@@ -2475,17 +2470,85 @@ function renderBusPinOnGuideMap() {
     _busPinMarker = null;
   }
   if (!BUS_PIN || !map) return;
-  // Use a Mapbox Marker — easier than rolling SVG layer logic for a single point.
+
+  // Use a Mapbox Marker — a single point doesn't need a full SVG layer.
+  // Tap the marker to open the Move / Remove popup.
   const el = document.createElement('div');
   el.style.cssText =
     'width:24px; height:24px; background:#2563eb; border:2px solid var(--paper);' +
     'border-radius:4px; box-shadow:0 2px 6px rgba(0,0,0,0.25);' +
     'display:flex; align-items:center; justify-content:center; color:white;' +
-    'font-family:JetBrains Mono,monospace; font-size:9px; font-weight:700;';
+    'font-family:JetBrains Mono,monospace; font-size:9px; font-weight:700;' +
+    'cursor:pointer;';
   el.textContent = 'BUS';
+  // Stop propagation so tapping the marker doesn't fall through to the map
+  // click handler (which would otherwise treat it as a deselect).
+  el.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    openBusPinPopup();
+  });
   _busPinMarker = new mapboxgl.Marker({ element: el })
     .setLngLat([BUS_PIN.lng, BUS_PIN.lat])
     .addTo(map);
+}
+
+// Show a small popup near the bus marker with Move / Remove actions.
+// Move: enters placement mode (next map tap moves the pin).
+// Remove: deletes pin AND turns off the bus-pin pill.
+function openBusPinPopup() {
+  // Remove any existing popup first.
+  closeBusPinPopup();
+  if (!BUS_PIN || !map) return;
+
+  const popup = new mapboxgl.Popup({
+    closeButton: false,
+    closeOnClick: true,
+    offset: 18,
+    className: 'bus-pin-popup',
+  });
+  const html = `
+    <div style="display:flex; flex-direction:column; gap:6px; padding:4px; min-width:120px;">
+      <button data-bus-action="move" style="font-family:'JetBrains Mono',monospace; font-size:11px; padding:8px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:6px; cursor:pointer; text-align:left;">Move pin</button>
+      <button data-bus-action="remove" style="font-family:'JetBrains Mono',monospace; font-size:11px; padding:8px 12px; background:var(--paper-2); border:1px solid var(--mark); color:var(--mark); border-radius:6px; cursor:pointer; text-align:left;">Remove pin</button>
+    </div>
+  `;
+  popup.setLngLat([BUS_PIN.lng, BUS_PIN.lat]).setHTML(html).addTo(map);
+  _busPinPopup = popup;
+
+  // Wire button handlers — popup HTML is a fresh DOM tree each time, so we
+  // re-bind every open. closeOnClick handles the dismiss-on-elsewhere case.
+  setTimeout(() => {
+    const root = popup.getElement();
+    if (!root) return;
+    root.querySelectorAll('[data-bus-action]').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const action = btn.dataset.busAction;
+        if (action === 'move') {
+          BUS_PIN_PLACING = true;
+          updateVisibilityControlUI();
+          updateBroadcastBanner();
+        } else if (action === 'remove') {
+          // Remove pin AND turn off the pill — same effect as toggling pill off.
+          BUS_PIN_ON = false;
+          BUS_PIN_PLACING = false;
+          BUS_PIN = null;
+          renderBusPinOnGuideMap();
+          updateBroadcastBanner();
+          updateVisibilityControlUI();
+        }
+        closeBusPinPopup();
+      });
+    });
+  }, 0);
+}
+
+let _busPinPopup = null;
+function closeBusPinPopup() {
+  if (_busPinPopup) {
+    _busPinPopup.remove();
+    _busPinPopup = null;
+  }
 }
 
 // Update the top "broadcasting" banner. Shown whenever EITHER flag is on;
