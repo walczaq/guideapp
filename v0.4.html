@@ -238,7 +238,7 @@
   }
   .passenger-halo { /* fill + opacity set inline */ }
   /* Pulsing halo — used when a passenger is in a trouble state
-     (chunk E: stationary or disconnected). Inline opacity is 0.18; the
+     (chunk E: disconnected). Inline opacity is 0.18; the
      animation lifts it to 0.5 and back, drawing the eye to the dot. */
   .passenger-halo.pulse {
     animation: passengerHaloPulse 1.6s ease-in-out infinite;
@@ -399,6 +399,41 @@
     margin-bottom: 4px;
   }
 
+  /* Broadcasting banner — slim notification at top of guide's view when
+     they're sharing their location with passengers (phone or bus_pin mode).
+     Hidden by default; updateBroadcastBanner() flips display + text. */
+  .broadcast-banner {
+    position: absolute; left: 16px; right: 16px;
+    top: calc(env(safe-area-inset-top, 0) + 76px);
+    background: #2563eb;       /* beacon blue — same family as guide identity */
+    color: var(--paper);
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    z-index: 8;
+  }
+  .broadcast-banner.bus {
+    background: #1d4ed8;       /* slightly deeper blue for bus mode */
+  }
+  .broadcast-banner::before {
+    content: '';
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--paper);
+    margin-right: 8px;
+    vertical-align: middle;
+    animation: broadcastPulse 1.5s ease-in-out infinite;
+  }
+  @keyframes broadcastPulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.3; }
+  }
+
   /* Guide bottom sheet — appears in role=guide view only.
      Three drag-snap states managed in JS via .style.height directly. */
   .guide-sheet {
@@ -451,6 +486,56 @@
     padding: 16px 0;
   }
 
+  /* Visibility control (chunk F). Three-segment control showing the guide's
+     current broadcast mode. Active segment is highlighted. */
+  .visibility-section {
+    padding: 0 0 16px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .visibility-section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule);
+    margin-bottom: 8px;
+  }
+  .visibility-control {
+    display: flex;
+    gap: 4px;
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 3px;
+  }
+  .vis-btn {
+    flex: 1;
+    padding: 9px 6px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .vis-btn:active { background: var(--paper); }
+  .vis-btn.active {
+    background: #2563eb;
+    color: var(--paper);
+    font-weight: 600;
+  }
+  .visibility-bus-hint {
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: rgba(37, 99, 235, 0.08);
+    border-left: 2px solid #2563eb;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink);
+    line-height: 1.4;
+  }
+
   /* about screen text */
   .about-block {
     font-size: 15px; line-height: 1.55; color: #2a2e2a;
@@ -495,6 +580,12 @@
       <div class="gps-banner" id="gps-banner">
         <b>Location unavailable</b>
         <span id="gps-banner-msg">Checking…</span>
+      </div>
+
+      <!-- Broadcasting banner (chunk F) — shown to guides when visibility ≠ off.
+           Sits below the map-hud, full-width, slim. Color shifts by mode. -->
+      <div class="broadcast-banner" id="broadcast-banner" style="display:none;">
+        <span id="broadcast-banner-text">Broadcasting your location</span>
       </div>
 
       <div class="zoom-controls">
@@ -682,7 +773,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-29-1012';
+const BUILD_VERSION = '0.4 · build 2026-04-29-1219';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -1938,77 +2029,62 @@ const PASSENGERS = new Map();
 // dim. Tap the same dot again, or tap empty map, to deselect.
 let SELECTED_PASSENGER = null;
 
-// ── PASSENGER STATE (chunk E) ──
-// Two automatic states evaluated against each passenger's recent activity:
-//   'stationary' — connection looks fine but they haven't moved in 15+ min
-//   'disconnected' — no updates received for 60+ seconds (probably offline/lost)
-// Default state is "connected, recent updates" — represented as null (no state).
-//
-// Hierarchy: disconnected beats stationary. So a passenger who disconnected
-// while sitting at a coffee shop shows as disconnected (grey), not stationary
-// (orange) — the connection problem is the more actionable signal.
+// ── GUIDE VISIBILITY (chunk F) ──
+// Three mutually exclusive modes governing whether passengers can see the
+// guide on the map, and what they see:
+//   'off'      — nothing broadcast. Default. Passengers see no guide.
+//   'phone'    — guide's GPS fixes inserted into guide_locations every 5s,
+//                source='phone'. Passengers see a beacon-blue dot at the
+//                guide's live position.
+//   'bus_pin'  — a single manual pin placed on the map. The pin position
+//                is whatever the guide last tapped while in this mode.
+//                Passengers see a beacon-blue square at the pin location.
 //
 // State drives:
-//   - Outer ring color (paper / orange / grey)
-//   - Halo pulse animation (off / orange-pulse / grey-pulse)
+//   - The bottom-sheet visibility control
+//   - Whether onGpsSuccess queues a broadcast row
+//   - The top "broadcasting" banner
+//   - Whether map taps move the bus pin
+let VISIBILITY = 'off';
+
+// Where the bus pin currently is (when VISIBILITY === 'bus_pin').
+// Null when no pin has been placed yet during this session.
+let BUS_PIN = null;  // shape: { lng, lat }
+
+// Throttle for guide-phone broadcasts (mirrors the passenger queue throttle).
+let _lastGuideBroadcastAt = 0;
+const GUIDE_BROADCAST_INTERVAL_MS = 5000;
+
+// ── PASSENGER STATE (chunk E) ──
+// One automatic state evaluated against each passenger's recent activity:
+//   'disconnected' — no updates received for 60+ seconds
+//
+// We initially designed in a 'stationary' state too (no movement in 15+ min),
+// but dropped it: passenger phones lock their screens during a tour, which
+// throttles GPS and looks identical to "stationary" in the data. Stationary
+// would fire constantly and stop being a useful signal. Disconnected fires
+// for the same reason but is honestly named — the guide just needs to know
+// "I've lost contact with this person," not why.
+//
+// State drives:
+//   - Outer ring color (paper / grey)
+//   - Halo pulse animation (off / grey-pulse)
 // Identity (the half-half pair) stays unchanged regardless of state.
 
 const STATE_DISCONNECTED_MS = 60 * 1000;        // no fix in 60s = disconnected
-const STATE_STATIONARY_MS = 15 * 60 * 1000;     // no movement in 15 min = stationary
-const STATE_STATIONARY_MAX_DRIFT_M = 10;        // movement under 10m doesn't count
 
 const STATE_RING_COLORS = {
   disconnected: '#888888',   // mid-grey, reads against paper and against passenger colors
-  stationary:   '#e08e2a',   // warm orange, distinct from any passenger palette entry
 };
 const STATE_HALO_COLORS = STATE_RING_COLORS;
 
-// Compute distance in meters between two lng/lat points. Haversine.
-function metersBetweenLngLat(lng1, lat1, lng2, lat2) {
-  const R = 6371000;
-  const toRad = d => d * Math.PI / 180;
-  const φ1 = toRad(lat1), φ2 = toRad(lat2);
-  const Δφ = toRad(lat2 - lat1);
-  const Δλ = toRad(lng2 - lng1);
-  const a = Math.sin(Δφ/2)**2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2)**2;
-  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-// Evaluate one passenger's current state. Returns null (default), 'stationary',
-// or 'disconnected'. Pure function of passenger record + current time.
+// Evaluate one passenger's current state. Returns null (default) or
+// 'disconnected'. Pure function of passenger record + current time.
 function evaluatePassengerState(p, now) {
   if (!p.lastUpdate) return null;
   const lastTs = Date.parse(p.lastUpdate);
   if (isNaN(lastTs)) return null;
-
-  // Disconnected check FIRST — it wins the hierarchy. If we haven't heard
-  // from them in 60s, we don't know if they're stationary or moved out
-  // of range, just that we're not getting updates.
   if (now - lastTs > STATE_DISCONNECTED_MS) return 'disconnected';
-
-  // Stationary check: walk back through the trail looking for the oldest
-  // point still within STATE_STATIONARY_MAX_DRIFT_M of current position.
-  // If that oldest-near-point is more than STATE_STATIONARY_MS ago, they've
-  // been near here for long enough.
-  if (!p.trail || p.trail.length < 2) return null;
-  const cur = p.trail[p.trail.length - 1];
-  // Walk backward from the most recent. The trail array stores positions
-  // but not their timestamps directly — chunk D's _seenTimestamps Set has
-  // them, but unordered. Approximation: assume trail points are spaced ~5s
-  // apart (the broadcast interval). If we have N points within drift radius,
-  // they cover roughly N*5 seconds.
-  let nearbyCount = 1;
-  for (let i = p.trail.length - 2; i >= 0; i--) {
-    const t = p.trail[i];
-    const d = metersBetweenLngLat(cur.lng, cur.lat, t.lng, t.lat);
-    if (d > STATE_STATIONARY_MAX_DRIFT_M) break;
-    nearbyCount++;
-  }
-  // 5s × N samples = approximate stationary duration. STATE_STATIONARY_MS
-  // is 900,000ms = 15 min = 180 samples at 5s cadence.
-  const stationaryDurationMs = nearbyCount * 5000;
-  if (stationaryDurationMs >= STATE_STATIONARY_MS) return 'stationary';
-
   return null;
 }
 
@@ -2198,7 +2274,6 @@ function renderPassengers() {
   // dim to 0.4 opacity so the selected one visually wins.
   // State-aware (chunk E): the outer ring + halo color reflect connection state.
   //   default — paper-colored ring, static halo in primary identity color
-  //   stationary — orange ring, halo pulses orange
   //   disconnected — grey ring, halo pulses grey
   const DOT_R = 10;
   const HALO_R = 16;
@@ -2300,14 +2375,129 @@ function togglePassengerSelection(passengerId) {
 // Tap empty map = deselect. Wire up on map init.
 function bindMapDeselectHandler() {
   if (!map) return;
-  map.on('click', () => {
-    // Mapbox fires this for clicks that didn't hit any layer. SVG dot taps
-    // call e.stopPropagation() so they don't bubble to here.
+  map.on('click', (e) => {
+    // Bus-pin mode: every map tap moves the pin to the tapped location.
+    // Same insert + render path that the initial pin placement uses.
+    if (VISIBILITY === 'bus_pin' && ROLE === 'guide' && SESSION) {
+      placeBusPin(e.lngLat.lng, e.lngLat.lat);
+      return;
+    }
+    // Otherwise: clicking empty map = deselect any selected passenger.
+    // (SVG dot taps call e.stopPropagation() so they don't bubble here.)
     if (SELECTED_PASSENGER !== null) {
       SELECTED_PASSENGER = null;
       renderPassengers();
     }
   });
+}
+
+// Set the visibility mode. Single source of truth — UI bindings call this
+// rather than mutating VISIBILITY directly. Updates the broadcasting banner
+// and the bottom-sheet visibility control. Confirmation dialogs are handled
+// by the caller, not here, so this stays a clean state-flip function.
+async function setVisibility(next) {
+  if (next === VISIBILITY) return;
+  // No-op if we don't have what we need to broadcast.
+  if (next !== 'off' && (!SESSION || ROLE !== 'guide')) return;
+
+  VISIBILITY = next;
+
+  // When entering bus-pin mode for the first time in this session, BUS_PIN
+  // may be null. The first map tap places it. While null + bus_pin mode,
+  // we don't insert anything — there's no position yet.
+  if (next === 'phone') {
+    BUS_PIN = null;
+  }
+
+  updateBroadcastBanner();
+  updateVisibilityControlUI();
+}
+
+// Place (or move) the bus pin. Called from the map-click handler when in
+// bus_pin mode. Inserts a new guide_locations row with source='bus_pin' so
+// passengers see the new position instantly via realtime.
+async function placeBusPin(lng, lat) {
+  BUS_PIN = { lng, lat };
+  updateVisibilityControlUI();    // refresh the "Bus is here" status text
+  // Render the bus pin on the guide's own map so they see where it is.
+  renderBusPinOnGuideMap();
+
+  if (!SESSION) return;
+  const { error } = await supabaseClient.from('guide_locations').insert({
+    session_id: SESSION.id,
+    source: 'bus_pin',
+    lng,
+    lat,
+  });
+  if (error) console.warn('bus_pin insert failed', error);
+}
+
+// Render the bus pin on the guide's own map (so they can see where they
+// dropped it). Lives in its own SVG layer so it's separate from passenger
+// dots and the guide's own YOU dot.
+let _busPinMarker = null;
+function renderBusPinOnGuideMap() {
+  // Remove any existing marker first; we re-render on every move.
+  if (_busPinMarker) {
+    _busPinMarker.remove();
+    _busPinMarker = null;
+  }
+  if (!BUS_PIN || !map) return;
+  // Use a Mapbox Marker — easier than rolling SVG layer logic for a single point.
+  const el = document.createElement('div');
+  el.style.cssText =
+    'width:24px; height:24px; background:#2563eb; border:2px solid var(--paper);' +
+    'border-radius:4px; box-shadow:0 2px 6px rgba(0,0,0,0.25);' +
+    'display:flex; align-items:center; justify-content:center; color:white;' +
+    'font-family:JetBrains Mono,monospace; font-size:9px; font-weight:700;';
+  el.textContent = 'BUS';
+  _busPinMarker = new mapboxgl.Marker({ element: el })
+    .setLngLat([BUS_PIN.lng, BUS_PIN.lat])
+    .addTo(map);
+}
+
+// Update the top "broadcasting" banner based on current VISIBILITY.
+function updateBroadcastBanner() {
+  const el = document.getElementById('broadcast-banner');
+  if (!el) return;
+  if (VISIBILITY === 'phone') {
+    el.style.display = '';
+    el.classList.remove('bus');
+    document.getElementById('broadcast-banner-text').textContent = 'Broadcasting your location';
+  } else if (VISIBILITY === 'bus_pin') {
+    el.style.display = '';
+    el.classList.add('bus');
+    const txt = BUS_PIN
+      ? 'Broadcasting bus location'
+      : 'Tap the map to place the bus';
+    document.getElementById('broadcast-banner-text').textContent = txt;
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// Update the visibility control in the bottom-sheet header.
+// Re-renders the three-state control to reflect current VISIBILITY.
+function updateVisibilityControlUI() {
+  const ctrl = document.getElementById('visibility-control');
+  if (!ctrl) return;
+  // Highlight the active mode.
+  ctrl.querySelectorAll('[data-vis-mode]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.visMode === VISIBILITY);
+  });
+  // Hide the "Tap map to place bus" hint when not in bus_pin mode.
+  const hint = document.getElementById('visibility-bus-hint');
+  if (hint) {
+    if (VISIBILITY === 'bus_pin' && !BUS_PIN) {
+      hint.textContent = 'Tap the map to place the bus pin.';
+      hint.style.display = '';
+    } else if (VISIBILITY === 'bus_pin' && BUS_PIN) {
+      hint.textContent = 'Tap the map again to move the bus pin.';
+      hint.style.display = '';
+    } else {
+      hint.style.display = 'none';
+    }
+  }
 }
 
 // Sync the bottom-sheet header count + toggle empty state.
@@ -2470,6 +2660,16 @@ function mountGuideBottomSheet() {
       </div>
     </div>
     <div class="guide-sheet-body" id="guide-sheet-body">
+      <!-- Visibility control (chunk F) — three-state: hidden / phone / bus. -->
+      <div class="visibility-section" id="visibility-section">
+        <div class="visibility-section-label">Visible to passengers</div>
+        <div class="visibility-control" id="visibility-control">
+          <button class="vis-btn active" data-vis-mode="off">Hidden</button>
+          <button class="vis-btn" data-vis-mode="phone">My location</button>
+          <button class="vis-btn" data-vis-mode="bus_pin">Bus pin</button>
+        </div>
+        <div class="visibility-bus-hint" id="visibility-bus-hint" style="display:none;"></div>
+      </div>
       <div class="guide-sheet-empty" id="guide-sheet-empty">
         <div style="font-family:'Fraunces',serif; font-style:italic; font-size:18px; color:var(--ink); margin-bottom:8px;">
           No passengers yet.
@@ -2533,6 +2733,29 @@ function mountGuideBottomSheet() {
       }
     });
   }
+
+  // Visibility control buttons (chunk F).
+  // Hidden → instant. Phone → instant. Bus pin → confirmation dialog,
+  // because going to bus_pin while broadcasting phone means stopping the
+  // live phone broadcast and committing to a manual pin until turned off.
+  document.querySelectorAll('#visibility-control .vis-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const next = btn.dataset.visMode;
+      if (next === VISIBILITY) return;
+
+      // Confirm bus_pin transition. Per Q1: confirmation copy explicitly states
+      // "stop sharing your live location, place a bus pin instead, on until off."
+      if (next === 'bus_pin') {
+        const ok = window.confirm(
+          'You will now stop sharing your live location and place a bus pin '
+          + 'on the map instead. The pin will stay until you turn it off. Continue?'
+        );
+        if (!ok) return;
+      }
+
+      await setVisibility(next);
+    });
+  });
 }
 
 function applySheetState() {
@@ -2650,8 +2873,7 @@ function onGpsSuccess(pos) {
 
   // Persist to local queue, throttled. Only queues when:
   //  - we're inside a session, AND
-  //  - we're a passenger (guide queueing is gated by the visibility toggle,
-  //    which lands in chunk F; until then guide GPS stays local-only)
+  //  - we're a passenger (passenger fixes always queue)
   const now = Date.now();
   if (SESSION && ROLE === 'passenger' && now - _lastQueuedAt >= QUEUE_INTERVAL_MS) {
     _lastQueuedAt = now;
@@ -2664,6 +2886,25 @@ function onGpsSuccess(pos) {
       updateDebugQueueCount();
     }).catch(err => {
       console.warn('queueLocation failed', err);
+    });
+  }
+
+  // Guide-phone broadcast: when guide visibility is set to 'phone', insert
+  // a row into guide_locations with source='phone'. Throttled to ~5s, same
+  // cadence as passenger queue. Direct insert (no IndexedDB queue) — guide
+  // is assumed to be online when broadcasting; if a network hiccup drops a
+  // fix, the next one fills in seconds later. Realtime push handles delivery
+  // to passenger views.
+  if (SESSION && ROLE === 'guide' && VISIBILITY === 'phone'
+      && now - _lastGuideBroadcastAt >= GUIDE_BROADCAST_INTERVAL_MS) {
+    _lastGuideBroadcastAt = now;
+    supabaseClient.from('guide_locations').insert({
+      session_id: SESSION.id,
+      source: 'phone',
+      lng: state.youLng,
+      lat: state.youLat,
+    }).then(({ error }) => {
+      if (error) console.warn('guide_locations insert failed', error);
     });
   }
 
