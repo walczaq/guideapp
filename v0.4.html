@@ -752,7 +752,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-05-05-2251';
+const BUILD_VERSION = '0.4 · build 2026-05-05-2254';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -1315,16 +1315,6 @@ async function boot() {
   const sessionId = params.get('session');
   const tourSlug = params.get('tour');
   const role = params.get('role');
-  const freeMode = params.get('free') === '1';
-
-  // Free-roam mode: bypasses everything (auth, sessions, tours, pins, sheet)
-  // and just shows a full-screen map centered on the user's GPS. Useful for
-  // testing how the map renders in different locations without hardcoded tour
-  // bias. URL: ?free=1
-  if (freeMode) {
-    await startFreeRoamMode();
-    return;
-  }
 
   // Verify any stored guide token. Cheap — one RPC call. Result populates
   // module-level GUIDE so downstream code knows whether we're a logged-in guide.
