@@ -752,7 +752,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-04-29-2046';
+const BUILD_VERSION = '0.4 · build 2026-05-05-2251';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -1315,6 +1315,16 @@ async function boot() {
   const sessionId = params.get('session');
   const tourSlug = params.get('tour');
   const role = params.get('role');
+  const freeMode = params.get('free') === '1';
+
+  // Free-roam mode: bypasses everything (auth, sessions, tours, pins, sheet)
+  // and just shows a full-screen map centered on the user's GPS. Useful for
+  // testing how the map renders in different locations without hardcoded tour
+  // bias. URL: ?free=1
+  if (freeMode) {
+    await startFreeRoamMode();
+    return;
+  }
 
   // Verify any stored guide token. Cheap — one RPC call. Result populates
   // module-level GUIDE so downstream code knows whether we're a logged-in guide.
@@ -2108,26 +2118,29 @@ boot();
 function initMap(token) {
   mapboxgl.accessToken = token;
 
-  // Compute the geographic bounds of this tour.
-  // We take all pins + the home point, find min/max lng/lat, add a margin
-  // so pins near the edge don't get clipped.
+  // Compute the geographic bounds of this tour for the INITIAL view only.
+  // The map opens fitted to the tour bounds (so pins are visible), but the
+  // user can freely pan and zoom anywhere afterward — no maxBounds, no
+  // minZoom/maxZoom locks. Real tours span huge geography (10-12hr drives,
+  // multiple stops); locking the map to the home area was a v0.1 leftover
+  // assumption that doesn't match reality.
   const allPoints = [TOUR.home, ...TOUR.pins];
   const lngs = allPoints.map(p => p.lng);
   const lats = allPoints.map(p => p.lat);
-  const PADDING_DEG = 0.002;  // ~200m padding around the tour
+  const PADDING_DEG = 0.002;
   const bounds = [
-    [Math.min(...lngs) - PADDING_DEG, Math.min(...lats) - PADDING_DEG],  // SW
-    [Math.max(...lngs) + PADDING_DEG, Math.max(...lats) + PADDING_DEG],  // NE
+    [Math.min(...lngs) - PADDING_DEG, Math.min(...lats) - PADDING_DEG],
+    [Math.max(...lngs) + PADDING_DEG, Math.max(...lats) + PADDING_DEG],
   ];
 
   map = new mapboxgl.Map({
     container: 'mapbox-map',
     style: 'mapbox://styles/mapbox/outdoors-v12',
-    bounds: bounds,             // open with the whole tour visible
+    bounds: bounds,                  // open with the whole tour visible
     fitBoundsOptions: { padding: 40 },
-    maxBounds: bounds,          // user can't pan outside this box
-    minZoom: 13,                // can't zoom out further than ~city scale
-    maxZoom: 19,                // can't zoom in past street level
+    // No maxBounds — user can pan anywhere on the globe.
+    // No minZoom/maxZoom — user can zoom from world view to street level freely.
+    // Mapbox's defaults (0–22) are fine.
     attributionControl: false,
     pitchWithRotate: false,
     dragRotate: false,

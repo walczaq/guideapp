@@ -2,13 +2,13 @@
 
 **Working codename:** Fieldnote *(final name TBD — dedicated naming session pending)*
 
-**Last updated:** 27 April 2026
+**Last updated:** 28 April 2026
 
 ---
 
 ## Honest project state
 
-- **v0.1 and v0.2 shipped.** Real GPS app deployed to Cloudflare Pages, real Mapbox tiles, tour data fetched live from Supabase. Tested on phone in the wild — pin-radius triggers fire correctly, chime plays, popup shows.
+- **v0.1 through v0.3 shipped, v0.4 partially built (chunks A–D of 7).** Real GPS app deployed to Cloudflare Pages, real Mapbox tiles, tour data + sessions + passenger locations all in Supabase. Guide can log in via invite code, create a session, see passengers' live dots and breadcrumb trails on a map updating in real time. Tested with two browsers in the same session.
 - **Builder is a complete beginner at coding**, building part-time (evenings/weekends).
 - **Building with AI tools** — switched to Claude (in chat + Cowork) earlier than briefing originally planned; Lovable not used.
 - **No deadline.** Each milestone is a learning project. Product emerges as the skill grows.
@@ -54,10 +54,11 @@ Not a self-guided tour app. Not a tour audio recorder. **A coordination tool for
 | GUI-23 | v0.1 — One hardcoded tour with GPS triggers | ✅ Shipped 26 Apr 2026 |
 | GUI-24 | v0.2 — Tour fetched from Supabase, URL-routed | ✅ Shipped 26 Apr 2026 |
 | GUI-25 | v0.3 — Offline-first location capture with sync | ✅ Shipped 27 Apr 2026 |
-| GUI-26 | v0.4 — Live guide view (consumes v0.3's data pipeline) | Designed 27 Apr 2026, not built — see "v0.4 design" below |
-| GUI-27 | v0.5 — Broadcast messages from guide to passengers | |
+| GUI-26 | v0.4 — Live guide view (consumes v0.3's data pipeline) | ✅ Shipped 29 Apr 2026 |
+| — | v0.4.5 — Visual polish pass (no new features) | Next |
+| GUI-27 | v0.5 — Broadcast messages, passenger alerts, WhatsApp link | |
 | GUI-29 | v0.5.5 — Offline app shell (Service Worker + PWA manifest) | |
-| GUI-28 | v0.6 — In-app tour authoring | |
+| GUI-28 | v0.6 — In-app tour authoring + library-wide zones + transit view | |
 
 After v0.6: run a real low-stakes tour, gather real feedback, decide v1. **v1 is expected to include native apps for both guide and passenger (two separate apps, not one).**
 
@@ -89,6 +90,63 @@ After v0.6: run a real low-stakes tour, gather real feedback, decide v1. **v1 is
 - Boot is now async: load `?tour=<slug>` from URL → fetch from Supabase → render
 - Loading and error screens
 - Two seed tours: `fossvogsdalur-001` (the original Fossvogsdalur walk) and `gautland-block` (a tiny 2-pin test loop south of home)
+
+### v0.3 (offline-first capture + sync)
+- `sessions` table; URL routing now `?session=<id>` for join, `?tour=<slug>` legacy still works
+- Persistent passenger ID (16-char nanoid in localStorage)
+- IndexedDB queue (`fieldnote.pending_locations`) — every GPS fix throttled to 5s, persisted locally first
+- Sync worker drains queue to Supabase: 10s tick + `online` event + opportunistic post-write nudge. Strict ordering (Supabase insert succeeds before local delete). Idempotent on retry.
+- Tested online/offline transitions on real phone — queue grows offline, drains on reconnect
+- Known gap: app shell still requires network on cold reload (Service Worker / PWA in v0.5.5)
+
+### v0.4 (live guide view) — SHIPPED 29 Apr 2026
+- **A** — Custom auth via `guides` + `invite_codes` tables, two security-definer RPCs (`redeem_invite_code`, `recover_guide_access`). Recovery is two-factor: name + original invite code. Device tokens (32-char nanoid) in localStorage.
+- **B** — Guide view shell: bottom sheet with three drag-snap states (collapsed/half/full), passenger-only HUD elements hidden, beacon-blue YOU dot for guide. Sticky last-session resume on bare-URL revisit. Friendly landing screen for unauthenticated bare-URL visitors.
+- **C** — Catch-up query pulls full session history, populates `PASSENGERS` map with current position + breadcrumb trail per passenger.
+- **D** — Realtime subscription on `passenger_locations` filtered by session_id. Catch-up runs first, then subscribe. Reconnection re-runs catch-up in merge mode (no state wipe). Dedupe on `(passenger_id, client_recorded_at)` against double-counting.
+- **E** — Disconnected-state indicator on passenger dots (no fix in 60s+ → grey ring + grey pulsing halo). 5-second state tick re-evaluates by absence. **Stationary detection deferred to v1** — phones lock screens during tours which throttles JS, making "stationary" indistinguishable from "screen off"; this needs native background GPS to work. Dropped from web prototype rather than ship a feature that's right ~30% of the time.
+- **F** — Guide visibility, two independent pills in bottom sheet:
+  - **Share my location** — phone GPS broadcasts to `guide_locations` every 5s with `source='phone'`. Toggle off inserts `is_off=true` sentinel row.
+  - **Bus pin** — tap pill → next map tap places pin (auto-exits placement mode so panning doesn't move it). Tap pin → popup with Move / Remove. Move re-enters placement mode for one tap. Remove kills pin AND turns off the pill.
+  - Both can be on simultaneously: passenger sees both blue dot + BUS square at distinct positions.
+  - Top "broadcasting" banner with status copy: "Guide location live", "Bus location live", "Guide location live · Bus location live", "Tap the map to place the bus" depending on combination state.
+  - Passenger-side: catch-up + subscription on `guide_locations`, latest row per source wins, `is_off=true` hides source. **No freshness timeout** — earlier we had 30s, but it false-positived for stationary guides; better to keep last-known position than to lie by hiding it.
+  - All map labels (guide name, "Bus") rendered as plain pure-black text with pure-white 8-direction text-shadow halo. No pill backgrounds — too heavy at low zoom.
+- **G** — Passenger names + `session_passengers` table:
+  - **First-join name gate** — passenger opens session URL → mandatory full-screen prompt "What's your name? So [guide] can recognize you on the map" → submit inserts row → reload → map appears.
+  - **Edit name** — burger menu shows "Your name · [name]" for passengers. Tap → independent overlay (NOT a `.screen` — that screen system uses persistent DOM with `.visible` toggle, conflicts with overlay-style modals) with back arrow header.
+  - **Map labels above passenger dots** — pure SVG `<text>` with `paint-order=stroke` + 3px white stroke + black fill. Same look as guide/bus labels in F, but native SVG inside the passenger group.
+  - **Names-on-map toggle** in bottom sheet, default ON. When OFF, name shows only above the currently-selected passenger.
+  - **Bottom-sheet passenger list** — rows with half-half identity dot (CSS `linear-gradient(to right, A 50%, B 50%)`), name, status text ("live" / "no signal" / "no fix yet"). Tap row → selects passenger, same as tapping their map dot. Sorted: located passengers first (alpha by name), name-only joiners after.
+  - Realtime subscription on `session_passengers` for both INSERT (new joiners) and UPDATE (renames). Names update live across all guide views.
+
+#### Significant decisions and lessons from the build
+- Build version constant in About is essential. Real-world test of "did this deploy land on the phone" is verifying `BUILD_VERSION` matches. Cloudflare edge cache had real lag (~1–2 min for new builds to show up).
+- Independent overlay vs `.screen` class — the existing screen-stack system uses persistent DOM elements that toggle a `.visible` class. Trying to inject new modals as `class="screen"` conflicts with this; cleaner to use independent overlay (z-index 90+) and `el.remove()` on close.
+- HTML duplicates trap — the file accumulated two `<div id="screen-share">` elements over iterations. Both got `.visible` class on openScreen; the second (later in DOM) drew on top with empty content, masking the populated first one. Caused the "empty Share invite" bug that took two diagnostic rounds to root-cause. Lesson: when iterating, search for duplicate IDs.
+- Inline SVG attribute opacity vs CSS animation — inline attrs beat CSS animations the same way they beat CSS rules. When pulsing a halo, must NOT set inline `opacity`; let CSS drive it.
+- "Stationary 15min" was a feature we *wanted* but couldn't deliver honestly in a web prototype. Documenting the reasoning matters; otherwise it'd come back in v0.5 planning.
+- Bus pin UX iteration: started with map-tap = move (annoying — accidental moves while panning) → locked pin in place but no move path → tap-on-marker popup with Move/Remove (Google Maps pattern). The right answer was the third one; iteration was fast because the changes were small.
+
+#### Schema additions in v0.4
+```sql
+-- Chunk A
+create table guides (id uuid pk, name text, device_token text unique, created_at);
+create table invite_codes (code text pk, note text, redeemed_by uuid, redeemed_at);
+
+-- Chunk F
+create table guide_locations (
+  id bigserial pk, session_id text fk→sessions, source text check(source in ('phone','bus_pin')),
+  lng float8, lat float8, set_at timestamptz default now(), is_off boolean default false
+);
+
+-- Chunk G
+create table session_passengers (
+  session_id text fk, passenger_id text, name text, joined_at timestamptz,
+  primary key (session_id, passenger_id)
+);
+```
+All v0.4 tables use v0.3-style permissive RLS (anon read/insert/update). Hardening pass deferred to chunk H or v0.5.
 
 ---
 
@@ -350,6 +408,175 @@ Drafting these properly is real work. Custom auth means we can't just use `auth.
 
 ---
 
+## v0.4.5 design (decided 29 Apr 2026) — visual polish pass
+
+**Milestone goal:** make what already exists in v0.4 look and feel better, before adding more features. No new functionality, no new schema, no new tables. A deliberate pause to clean up what shipped fast.
+
+**Why this comes between v0.4 and v0.5:** v0.4 was built feature-by-feature with real-device testing exposing rough edges along the way (the empty-share-screen bug, label sizes, banner copy iterations, bus-pin UX rounds, etc.). Polish work is hard to do alongside feature work — it gets compromised every time something else needs shipping. Carving out a dedicated milestone for it means the visual quality bar gets to be raised properly without anything competing for attention.
+
+**Areas likely to be touched** (specifics defined as we go, this list is illustrative):
+
+- **Typography rhythm.** Fraunces italic + JetBrains Mono is the locked pair, but spacing, weight, and size choices were ad-hoc. Pass through and tighten.
+- **Animation and transitions.** Bottom sheet drag, screen open/close, name gate entrance, broadcasting banner appearance, halo pulse rhythm. Most are abrupt right now.
+- **Empty states and loading states.** "No passengers yet" works but is bland. Loading screens are mostly utilitarian. The cream paper aesthetic earns more thoughtful treatment here.
+- **Error and edge-case states.** Bad invite code, expired session, GPS denied, network offline — present but visually generic.
+- **The bottom sheet at all three snap states.** Half is the most-used; full and collapsed need design love.
+- **Map dot rendering refinements.** Halo brightness, ring weights, label positioning at extreme zoom levels.
+- **Color palette tuning.** The 12-color passenger palette works; some pairs read better than others, would be worth auditing.
+- **Iconography pass.** Some icons (back arrow, burger, etc.) work, some are placeholder-ish.
+
+**Process for v0.4.5:**
+
+- No schema changes, no new tables, no new realtime channels.
+- Each polish change ships individually, build version bumps, real-device test.
+- Document the locked aesthetic decisions in this section as they get made — so future Filip and future AI assistant don't undo them.
+
+**What v0.4.5 does NOT include:**
+
+- New features (those are v0.5)
+- Performance optimization (separate concern, no current pain)
+- Accessibility audit (deferred — important but its own milestone)
+- Browser/device compatibility hardening beyond what already works
+
+---
+
+## v0.5 design (decided 29 Apr 2026)
+
+**Milestone goal:** small structured signals between guide and passengers, plus an external chat hand-off. v0.5 deliberately does NOT build an in-app chat — that's a fight Fieldnote can't win and shouldn't try (see the Skipped-features section). What it does build:
+
+### 1. Broadcast messages (guide → all passengers)
+
+Guide types a short message in the bottom sheet, all passengers in the session see it appear at the top of their map. Use cases: "Bus leaves in 5 minutes," "Storm coming, head back," "Photo opportunity at the next stop."
+
+- New table `broadcast_messages (id, session_id, body, sent_at)`. Realtime subscription on the passenger side filtered by `session_id`.
+- Messages are ephemeral in display: appear, stay 60s, auto-fade. Persist in DB for replay/debug, not displayed in feed-form.
+- Guide sees a small history pane in the bottom sheet so they remember what they've sent.
+
+### 2. Passenger alerts (passenger → guide only)
+
+A small set of pre-canned structured alerts a passenger can send. Reaches the guide only (not other passengers). Guide gets a notification on their map with the passenger's name attached.
+
+Initial alert set (start small, expand only with real-tour feedback):
+- "I need help"
+- "Running late, wait for me"
+- "Found you" (acknowledgment when guide previously sent a "where are you")
+
+Each alert is a single tap. Guide's bottom-sheet passenger row gets a colored badge until the guide explicitly acknowledges it.
+
+- New table `passenger_alerts (id, session_id, passenger_id, kind, sent_at, acknowledged_at)`.
+- Realtime subscription on guide side. Sound + visual indicator on new alert.
+- **Spam protection** is necessary even at v0.5 — limit one alert per passenger per kind per minute, server-side. Kids will press buttons.
+
+### 3. WhatsApp group chat link (external chat hand-off)
+
+Guides almost universally already use WhatsApp groups for tours. Fieldnote integrates with that, doesn't replace it.
+
+- New column `tours.chat_link text` — guide creates a WhatsApp group on their phone, copies the invite link, pastes it once per tour (not per session — link is sticky across all sessions of that tour).
+- Passengers see a "Join group chat" button in their bottom sheet (or burger menu) that opens the link. Mobile browsers open WhatsApp directly.
+- WhatsApp's API does NOT support programmatic group creation for our use case — guide-created-and-pasted is the only realistic path.
+
+### What v0.5 explicitly does NOT include
+- In-app chat (skipped, see Skipped-features section)
+- Photo / video sharing (skipped)
+- Per-passenger DMs from guide (would invert the safety-layer principle — guide shouldn't be in 1:1 conversations while leading)
+- Push notifications when app is closed (needs PWA + service worker; lands in v0.5.5 or v1)
+
+---
+
+## v0.6 design (decided 29 Apr 2026) — zones, transit, authoring
+
+**The big shift:** the tour data model changes meaningfully. v0.5 still uses v0.4's "tour = flat list of pins." v0.6 introduces **zones**, which is the right model for what real tours actually do.
+
+### Why zones (the real-tour reason)
+
+Real tours are 10-12 hours of: pickup → drive → attraction A → drive → attraction B → drive → attraction C → … → dropoff. Three hard problems with the v0.4 flat-pins model:
+
+1. **Same tour runs differently on different days.** Today's tour might do A → B → D, tomorrow's might do A → C → D depending on weather, traffic, group preference. Defining the *route* is wrong; defining the *zones* is right.
+2. **Different guides do the same stop differently.** The zone defines "we're at Geysir," not the guide's storytelling. Same zone, infinite delivery variations.
+3. **The "we're on the bus between stops" question.** When the guide is in no zone, what does the passenger see? With zones we can answer this cleanly: a transit view.
+
+### The model: library-wide zones
+
+Zones live in a library, not per-tour. Each zone is a reusable unit:
+
+```sql
+create table zones (
+  id            text primary key,            -- e.g. 'geysir'
+  name          text not null,
+  center_lng    float8 not null,
+  center_lat    float8 not null,
+  radius_m      int default 200,             -- circle for v0.6, polygon later
+  pins          jsonb,                       -- pin set scoped to this zone
+  description   text,                        -- optional: what's at this zone
+  created_at    timestamptz default now()
+);
+
+-- A tour declares which zones it CAN visit. Order is a default suggestion;
+-- actual order in a session can vary.
+create table tour_zones (
+  tour_id       uuid references tours(id),
+  zone_id       text references zones(id),
+  display_order int,
+  primary key (tour_id, zone_id)
+);
+
+-- Sessions track which zone is currently active. NULL = transit / between stops.
+alter table sessions add column active_zone_id text references zones(id);
+```
+
+The Geysir zone is one row. "South Coast Tour" includes Geysir. "Golden Circle Tour" also includes Geysir. Same zone row, two tours that both can visit it. Future tour we haven't built yet can also include Geysir without recreating it.
+
+### Migration path for existing tours
+
+v0.4's `tours.pins` jsonb stays. Tours can OPTIONALLY have zones. If a tour has no `tour_zones` rows, sessions of that tour use the legacy flat-pins model (same as v0.4). If a tour has zones, sessions use the zone model. No forced migration — old tours keep working.
+
+### Zone activation: manual first, semi-auto later
+
+**v0.6 (manual switching):**
+- Guide picks the active zone from a list/dropdown in the bottom sheet.
+- Updates `sessions.active_zone_id`.
+- Passenger view subscribes to session changes; when active_zone_id changes, fetches the zone's pins and re-renders the map.
+- Switching to NULL = transit view.
+
+**v0.7+ (semi-auto suggestions):**
+- Guide GPS detects they're inside (or near) a zone's radius.
+- Prompts the guide: "Start *Geysir*?" with Yes / Not now buttons.
+- Guide taps Yes → activates the zone.
+- Guide taps Not now → no activation, prompt doesn't re-fire for this zone for the next N minutes (so we don't nag).
+
+The semi-auto layer is purely a *write* to the same `active_zone_id`. It doesn't change the data model or passenger view — only changes who's making the decision (algorithm vs guide). Build manual first, real-tour test, then add detection on top.
+
+**Why not full auto:** we sometimes drive through a zone without stopping (passing by Þingvellir on the way to Geysir). Full auto would activate every drive-through. The prompt model lets the guide say "no, just passing through" without losing the convenience of suggestion.
+
+### Transit view (when active_zone_id is NULL)
+
+Passenger sees a deliberately quiet view between zones:
+
+- Map zoomed out to show the bus location (if the guide is sharing it) and the next planned zone (if known)
+- A small "On the road again" animation — cute, not noisy. Maybe a subtle pulsing route line.
+- No pins (since we're not at a stop)
+- The expected travel time / next zone name as a small caption, if available
+
+The animation is a small joy moment — passengers spend a lot of time on the bus, and a sleepy "we're moving" indicator beats a blank map.
+
+### In-app authoring (the original v0.6 scope)
+
+Authoring extends to zones, not just tours:
+- Guides can create new zones on the map (set name, drop center pin, draw radius)
+- Add pins inside the zone
+- Add the zone to one or more tours
+- Edit zone metadata across all tours that include it (so updating "Geysir parking moved to the south side" propagates to every tour)
+
+### What v0.6 explicitly does NOT include
+- Polygon zones (circles only — simpler math, good enough for parking-area definition)
+- Auto-zone-detection (deferred to v0.7+)
+- Cross-zone navigation hints ("Geysir → Gullfoss is 12 minutes")
+- Public zone library (every guide's zones are private to them for now)
+- Zone history / replay
+- Stop-level timing / "leave by X" countdowns
+
+---
+
 ## Tooling decisions
 
 - **Backend:** Supabase, Frankfurt region ✅ in use
@@ -483,17 +710,11 @@ Will come back to these after v0.5 ships and is tested:
 
 Specific feature ideas that came up during milestone design and were intentionally pushed to post-v0 polish or a later version. Captured here so they're not lost.
 
-### Passenger "I need help" button
+### Passenger "I need help" button — moved into v0.5 scope
 
-**What:** a button in the passenger UI that flips their dot red on the guide's overview map.
+**Status:** previously deferred, now part of v0.5 (decided 29 Apr 2026). See "v0.5 design" → "Passenger alerts" section above. Initial alert set is small ("I need help," "Running late," "Found you") and structured rather than free text. Spam protection (one alert per kind per minute) is part of the v0.5 build.
 
-**Why deferred:** v0.4 introduces the dot color states (green / dimmed green / orange / grey) where red represents "call for help." Red is a real state in the visual language, but without a trigger it's a placeholder. The button would make red real.
-
-**Why not now:** the help-button UX has details that matter — confirmation flow, cancel/undo, what the button text says, whether the guide gets a separate notification beyond a color change, what happens if the passenger just keeps walking after pressing it. These deserve dedicated design attention rather than being tacked onto v0.4.
-
-**For v0.4:** red exists as a dot state but no in-app way to enter it. The guide can manually flag a passenger as needing help (long-press a dot → "mark for follow-up"), which is the minimal interaction to validate the visual language.
-
-**For post-v0.6:** real help button on the passenger side, with a notification path on the guide's side (sound + persistent banner, not just a color change). Probably deserves its own milestone or sits inside a "safety layer polish" milestone.
+The visual-language question (red dot state vs persistent banner) is now resolved: alerts get a colored badge on the bottom-sheet passenger row + a sound, separate from the dot-state colors which remain reserved for connection state.
 
 ### Lost (auto-flagged) state
 
@@ -512,6 +733,44 @@ This breaks into two distinct features that should land in separate phases:
 **Phase 2 — Concurrent multi-session monitoring (post-v0.6, pre-v1):** a guide watches several active sessions *simultaneously*. Real product complexity — the guide's UI needs to either show multiple maps, aggregate passengers from N sessions onto one map (with session-color indicators), or provide a fast switcher. Plus alerting: a help-flag in session B should still reach the guide while they're looking at session A. This is its own UX problem and deserves dedicated focus after one real-tour test informs what guides actually need.
 
 **Why this sequencing:** designing concurrent multi-session monitoring before any real tours have been run is guessing about a use case that may not look the way we imagine. Phase 1 is small and safe; phase 2 benefits enormously from real-tour feedback first.
+
+### Multi-stop tour structure — designed as zones, lands in v0.6
+
+**Status:** moved from deferred to v0.6 design (decided 29 Apr 2026). See "v0.6 design — zones, transit, authoring" section above. The architecture answer is library-wide reusable zones with a session-level `active_zone_id` pointer, not nested stops inside tours. Manual zone activation in v0.6, semi-auto (GPS-suggests-guide-confirms) in v0.7+.
+
+### Stationary-passenger detection (true v1, not v0.x)
+
+**What:** flag a passenger orange when they haven't moved in 15+ minutes despite still being connected. Useful for "X is sitting at the cafe and we're about to leave."
+
+**Why deferred to v1:** doesn't work in a web prototype. Phone screens lock during tours, which throttles or kills JavaScript timers and `watchPosition`. From the data side, "screen locked" looks identical to "stationary" — we'd flag every passenger constantly and the signal would lose all meaning. This needs proper background-GPS support, which only a native app (v1) can provide. v0.4 chunk E ships **disconnected-only** — disconnected fires for the same screen-off reason but is honestly named: the guide just needs to know contact is lost, not the cause.
+
+---
+
+## Explicitly skipped (not deferred — not building, period)
+
+These are things that *seem* like they belong in Fieldnote but on examination shouldn't. Captured here so the reasoning doesn't get re-litigated every two weeks.
+
+### Native in-app chat (passenger-passenger or guide-passenger)
+
+**Why not:** three reasons compounding.
+
+1. **Cognitive load.** A core design principle of Fieldnote is that the guide shouldn't have to monitor a chat stream while leading a tour. Adding chat inverts that — every passenger message becomes something the guide feels pressure to read while walking, talking, navigating, counting heads.
+2. **Existing alternatives win.** Tour groups already use WhatsApp, Signal, or Telegram. Those tools are already on people's phones, already familiar, already battle-tested. Fieldnote isn't going to win that fight.
+3. **It dilutes what Fieldnote does well.** The live map is the value. Chat would shift Fieldnote from "glance at dots" to "read text," which is the wrong direction.
+
+**What we build instead:**
+- **Structured passenger alerts** in v0.5 (see above) — the legitimate "I need to tell my guide something" use case, but as a button-press not free text.
+- **External chat hand-off via WhatsApp link** in v0.5 — the legitimate group-chat use case, but as a link to WhatsApp not a built-in chat.
+
+### Native photo / video sharing
+
+**Why not:** different product, larger scope, weaker case.
+
+1. **Existing alternatives are dominant.** WhatsApp groups, iCloud Shared Albums, Google Photos shared albums — all free, all already on people's phones, all far more featureful than anything we'd build in v0.x.
+2. **Real implementation is huge.** Gallery UI, permissions model, storage costs, EXIF scrubbing for privacy, video transcoding, bandwidth on bad cellular, moderation (kids' photos, inappropriate content). Two-month feature, not two-week.
+3. **No tour-specific advantage.** Unlike the live map (which is fundamentally a tour problem), photo sharing isn't tour-specific. There's no insight or interaction we'd unlock that WhatsApp doesn't already deliver.
+
+**Possible narrow exception (kept on the table, not building yet):** *operational* photos — e.g. a "this is what the bus looks like" photo attached to a meeting-point pin so passengers can find it, or "this is what the entrance looks like" attached to an attraction pin. Guide-uploaded only, no gallery, no passenger uploads. Would land in v0.6 authoring at earliest, and only if real-tour testing shows guides actually want it. Most operational needs are probably solved by good pin descriptions.
 
 ---
 
