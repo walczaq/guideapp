@@ -1168,7 +1168,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · arrival modal resume-fix · build 2026-05-13-2134';
+const BUILD_VERSION = '0.5 · arrival v2 (guide auto-ack + diagnostics) · build 2026-05-13-2147';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2054,10 +2054,14 @@ async function loadSessionAndTour(sessionId) {
   }
 
   // Check for any already-active stop the user hasn't acked yet (e.g. they
-  // closed the browser before tapping "Got it"). Role-agnostic — guides get
-  // a useful recap when they refresh mid-tour, passengers get the announce
-  // they may have missed. Most recent unacked stop wins.
+  // closed the browser before tapping "Got it"). Role-agnostic — guides who
+  // activated already auto-acked in activateStop(), so they won't see a recap;
+  // other clients (passengers, second-device guides) get the modal they may
+  // have missed. Most recent unacked stop wins.
   maybeShowPendingStopAnnouncement();
+  // Defense in depth: retry 1.5s later in case a timing race blocked the
+  // first attempt. Idempotent via the _arrivalStop guard inside maybeShow.
+  setTimeout(() => { maybeShowPendingStopAnnouncement(); }, 1500);
 }
 
 // ── PASSENGER NAMES (chunk G) ──
@@ -2540,6 +2544,9 @@ function applyTourMetadata() {
       <span id="debug-passengers" style="opacity:0.7;">Passengers: idle</span><br>
       <span style="display:inline-block; margin-top:10px;">Simulator (joystick):</span>
       <button id="joystick-toggle-btn" style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Enable</button>
+      <br>
+      <button id="debug-force-arrival" style="margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Force arrival modal</button>
+      <button id="debug-clear-acks" style="margin-top:6px; margin-left:4px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Clear acks</button>
     `;
     if (GUIDE) {
       const logoutBtn = document.getElementById('debug-logout');
@@ -2579,6 +2586,31 @@ function applyTourMetadata() {
     updateDebugPassengers();
     // Joystick toggle button in the same debug block (dev simulator).
     wireJoystickToggle();
+
+    // Diagnostics for the arrival modal: force-show + clear-acks.
+    const forceBtn = document.getElementById('debug-force-arrival');
+    if (forceBtn) forceBtn.addEventListener('click', () => {
+      console.log('[debug] force arrival modal pressed');
+      if (!TOUR || TOUR.stops.length === 0) {
+        console.warn('[debug] no stops to show');
+        return;
+      }
+      let candidate = null;
+      for (const stop of TOUR.stops) {
+        if (!ACTIVE_STOP_IDS.has(stop.id)) continue;
+        if (!candidate || stop.ordinal > candidate.ordinal) candidate = stop;
+      }
+      if (!candidate) candidate = TOUR.stops[0];
+      _arrivalStop = null;
+      showStopArrivalModal(candidate);
+    });
+    const clearAcksBtn = document.getElementById('debug-clear-acks');
+    if (clearAcksBtn) clearAcksBtn.addEventListener('click', () => {
+      if (!SESSION) return;
+      try { localStorage.removeItem(ackKeyFor(SESSION.id)); } catch {}
+      console.log('[debug] acks cleared for session', SESSION.id);
+      maybeShowPendingStopAnnouncement();
+    });
   }
 }
 
@@ -4724,6 +4756,8 @@ async function catchUpStopActivations() {
     return;
   }
   for (const row of (data || [])) ACTIVE_STOP_IDS.add(row.stop_id);
+  console.log('[catch-up] stop_activations rows:', (data || []).length,
+    'active set now:', [...ACTIVE_STOP_IDS]);
 }
 
 // Geofence dwell check — called from onGpsSuccess on every fix when
@@ -4872,6 +4906,10 @@ async function activateStop(stop) {
     return { error: error.message || 'Could not activate stop.' };
   }
   ACTIVE_STOP_IDS.add(stop.id);
+  // The activating guide already saw the activate-confirm modal — no need to
+  // recap with the arrival modal on refresh. Mark as locally acked so
+  // maybeShowPendingStopAnnouncement() skips it for this device.
+  if (SESSION) markStopAcked(SESSION.id, stop.id);
   renderPins();
   renderStopList();
   return { ok: true, row: data };
@@ -5104,10 +5142,15 @@ function subscribeStopActivations() {
       // On reconnect, run catch-up so any activations we missed during the
       // disconnect get applied. The catch-up uses ACTIVE_STOP_IDS, which is
       // append-only, so re-running is safe even when we have nothing missed.
+      console.log('[realtime] stop_activations channel status:', status);
       if (status === 'SUBSCRIBED' && _stopActivationSubscribed) {
         catchUpStopActivations().then(() => {
           renderPins();
           if (ROLE === 'guide') renderStopList();
+          // Defense in depth: try the arrival modal here too in case the
+          // initial bottom-of-loadSessionAndTour call fired before
+          // ACTIVE_STOP_IDS was fully populated.
+          maybeShowPendingStopAnnouncement();
         }).catch(err => {
           console.warn('[chunk C] reconcile catch-up failed', err);
         });
@@ -5324,9 +5367,14 @@ function dismissStopArrivalModal(opts) {
 // onStopActivated() because they just tapped through the activate-confirm
 // modal seconds before.
 function maybeShowPendingStopAnnouncement() {
+  console.log('[maybeShow] enter — role:', ROLE,
+    'TOUR:', !!TOUR, 'SESSION:', SESSION ? SESSION.id : null,
+    'active:', TOUR && [...ACTIVE_STOP_IDS],
+    'modalOpen:', !!_arrivalStop);
   if (!TOUR || !SESSION) return;
   if (_arrivalStop) return;          // a modal is already open
   const acked = getAckedStops(SESSION.id);
+  console.log('[maybeShow] acked stops:', [...acked]);
   let candidate = null;
   for (const stop of TOUR.stops) {
     if (!ACTIVE_STOP_IDS.has(stop.id)) continue;
@@ -5334,8 +5382,10 @@ function maybeShowPendingStopAnnouncement() {
     if (!candidate || stop.ordinal > candidate.ordinal) candidate = stop;
   }
   if (candidate) {
-    console.log('[arrival modal] showing pending stop on resume:', candidate.name);
+    console.log('[maybeShow] showing candidate:', candidate.name, 'id:', candidate.id);
     showStopArrivalModal(candidate);
+  } else {
+    console.log('[maybeShow] no candidate (all active stops acked, or none active)');
   }
 }
 
