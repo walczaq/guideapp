@@ -614,6 +614,54 @@
     padding: 6px 12px;
     background: transparent; color: var(--signal-good);
     border: 1px solid var(--signal-good); border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .stop-row-active-pill:hover,
+  .stop-row-active-pill:active {
+    background: var(--signal-good);
+    color: var(--paper);
+  }
+  .stop-row-active-pill[disabled] { opacity: 0.5; cursor: progress; }
+
+  /* ── Chunk C: stop activation banner ───────────────────────────────────
+     Slides down from the top of the map when a new stop activates. Shows
+     the stop name. Auto-dismisses after STOP_BANNER_DURATION_MS. Positioned
+     below the map-hud (burger + signal) so it doesn't overlap them.
+     Sits at z-index 7 — below the modal (40) and above the regular HUD. */
+  .stop-banner {
+    position: absolute;
+    left: 16px; right: 16px;
+    top: calc(env(safe-area-inset-top, 0) + 76px);
+    padding: 12px 16px;
+    background: var(--paper);
+    color: var(--ink);
+    border: 1px solid var(--ink);
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18), 0 0 0 4px var(--paper-2);
+    z-index: 7;
+    transform: translateY(-200px);
+    opacity: 0;
+    transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.3, 1.1), opacity 0.35s;
+    pointer-events: none;
+    visibility: hidden;
+  }
+  .stop-banner.show {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+  .stop-banner-stamp {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--mark);
+    margin-bottom: 4px;
+  }
+  .stop-banner-name {
+    font-family: 'Fraunces', serif; font-weight: 400;
+    font-size: 20px; line-height: 1.15;
+    font-variation-settings: "opsz" 90;
   }
 
   /* ── Touchscreen joystick (dev simulator) ──────────────────────────────
@@ -722,6 +770,61 @@
   .stop-modal-btn.primary {
     background: var(--ink); color: var(--paper);
   }
+  /* "Danger" treatment for the primary button — used when the action is
+     destructive (deactivate stop, end session). Same shape, different ink. */
+  .stop-modal-btn.primary.danger {
+    background: var(--mark);
+    border-color: var(--mark);
+    color: var(--paper);
+  }
+
+  /* End-session action at the bottom of the Control Center. Subdued (we
+     don't want accidental taps) but discoverable. */
+  .end-session-row {
+    margin-top: 20px; padding-top: 18px;
+    border-top: 1px solid var(--rule-soft);
+    display: flex; justify-content: center;
+  }
+  .end-session-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 10px 18px;
+    background: transparent; color: var(--mark);
+    border: 1px solid var(--mark); border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .end-session-btn:hover,
+  .end-session-btn:active {
+    background: var(--mark);
+    color: var(--paper);
+  }
+
+  /* "Tour ended" full-screen state shown to passengers when sessions.ended_at
+     is set (realtime UPDATE). Replaces the map view entirely. */
+  .session-ended-screen {
+    position: absolute; inset: 0;
+    background: var(--paper);
+    z-index: 80;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 40px; text-align: center; gap: 18px;
+  }
+  .session-ended-screen.show { display: flex; }
+  .session-ended-stamp {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule);
+  }
+  .session-ended-title {
+    font-family: 'Fraunces', serif; font-style: italic;
+    font-size: 32px; line-height: 1.15; color: var(--ink);
+    font-variation-settings: "opsz" 90;
+  }
+  .session-ended-sub {
+    font-size: 15px; line-height: 1.5; color: #4a4a4a;
+    max-width: 280px;
+  }
 </style>
 </head>
 <body>
@@ -759,6 +862,14 @@
       <div class="gps-banner" id="gps-banner">
         <b>Location unavailable</b>
         <span id="gps-banner-msg">Checking…</span>
+      </div>
+
+      <!-- Stop activation banner (chunk C) — slides down when a new stop
+           activates, auto-dismisses after a few seconds. Mostly for passengers
+           to know what's happening; also visible to guides as confirmation. -->
+      <div class="stop-banner" id="stop-banner">
+        <div class="stop-banner-stamp" id="stop-banner-stamp">Stop № 01</div>
+        <div class="stop-banner-name" id="stop-banner-name">…</div>
       </div>
 
       <!-- Broadcasting banner (chunk F) — shown to guides when visibility ≠ off.
@@ -915,10 +1026,10 @@
     <div class="screen-body">
       <div class="about-block">
         <b>v0.5 — Stops + activation broadcasts.</b>
-        Tours now have a stop → pin hierarchy. Guides activate stops; passengers see pins reveal as stops activate. Activated stops stay on for the rest of the session.
+        Tours have a stop → pin hierarchy. Guides activate stops; passengers see pins reveal as stops activate. Activated stops stay on for the rest of the session.
       </div>
       <div class="about-block muted">
-        Chunks A + B done: stops + pins tables, seed-tour migration, guide-side activation flow. Guides see a Stops list in the bottom sheet, get a geofenced "Activate this stop?" prompt on arrival, and can manually activate from the list. Activations call the activate_stop RPC and persist to stop_activations. Passengers still see all pins by default — chunk C swaps that for realtime reveal driven by stop_activations. Future: realtime fan-out + passenger reveal (C), Service Worker + Web Push (D), iOS-foreground lobby copy (E).
+        Chunks A + B + C done, plus session controls. Chunk A: stops + pins tables, seed migration. Chunk B: guide-side activation (geofence prompt + manual button + RPC). Chunk C: realtime fan-out — passengers subscribe to stop_activations and reveal pins in real time with a chime and a top banner. Session controls: tap the Active pill to deactivate a stop (with confirm); "End session" button at the bottom of the Control Center closes the session for everyone and returns the guide to the create-session form; passengers see a "Tour ended" screen via realtime UPDATE on sessions. Future: Web Push for closed-app passengers (D), iOS-foreground lobby copy (E).
       </div>
       <div class="about-block muted">
         v0.4 still works: invite-code auth, live guide view, realtime passenger dots, breadcrumb trails. v0.3 still works: GPS fixes captured locally, queued in IndexedDB, synced to Supabase when network is available.
@@ -929,11 +1040,21 @@
     </div>
   </div>
 
+  <!-- Tour-ended screen (session controls) — full-screen state passengers
+       see when the guide ends the session. Realtime UPDATE on sessions
+       carrying a non-null ended_at flips this on. -->
+  <div class="session-ended-screen" id="session-ended-screen">
+    <div class="session-ended-stamp">Fieldnote · Tour ended</div>
+    <div class="session-ended-title">That's a wrap.</div>
+    <div class="session-ended-sub">Your guide has ended this tour. Thanks for walking with us.</div>
+  </div>
+
   <!-- STOP ACTIVATION MODAL (chunk B) — shown in guide view when:
        (a) the guide's GPS enters a stop's activation_radius_m and has stayed
            inside for STOP_DWELL_MS, OR
        (b) the guide tapped a manual "Activate" button in the bottom sheet.
-       Dismissed via "Not yet" or auto-dismissed after successful activation. -->
+       Also reused for deactivation confirms and end-session confirms via
+       the _modalMode flag. -->
   <div class="stop-modal-backdrop" id="stop-modal-backdrop">
     <div class="stop-modal">
       <div class="stop-modal-header">
@@ -955,12 +1076,17 @@
 
 <script>
 // ╭──────────────────────────────────────────────────────╮
-// │  v0.4 — LIVE GUIDE VIEW                              │
+// │  v0.5 — STOPS + ACTIVATION BROADCASTS                │
+// │  Chunks shipped: A (schema + reshape), B (guide-side │
+// │  activation: geofence + modal + manual button),      │
+// │  C (realtime fan-out + passenger reveal + banner).   │
+// │  Code from the v0.4 live guide view (auth, sheet,    │
+// │  dots, trails, realtime, visibility, names) intact.  │
 // ╰──────────────────────────────────────────────────────╯
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.4 · build 2026-05-05-2254';
+const BUILD_VERSION = '0.5 · chunk C + session controls · build 2026-05-13-2043';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -1471,6 +1597,7 @@ const STOP_DWELL_MS = 3000;
 // Currently-displayed stop in the activation modal (or null if dismissed).
 let _modalStop = null;
 let _modalSource = null;  // 'geofence' | 'manual' — for stamp text + telemetry later
+let _modalMode = 'activate';  // 'activate' | 'deactivate' — branches button label + action
 
 // Reshape a Supabase-returned tour row (with nested stops and pins from a
 // foreign-key select) into the in-memory TOUR shape documented above.
@@ -1791,17 +1918,11 @@ async function loadSessionAndTour(sessionId) {
   SESSION = session;
   TOUR = reshapeTour(tour);
 
-  // Seed ACTIVE_STOP_IDS based on role:
-  //   - guide (chunk B): catch up from stop_activations — guides see only
-  //     stops they (or a previous guide-device for this session) have
-  //     activated. Lets a refresh restore the guide's mid-tour state.
-  //   - passenger: still on the chunk A parity path (activate-all). Chunk C
-  //     replaces this with the passenger-side catch-up + realtime subscribe.
-  if (ROLE === 'guide') {
-    await catchUpStopActivations();
-  } else {
-    for (const stop of TOUR.stops) ACTIVE_STOP_IDS.add(stop.id);
-  }
+  // Chunk C: both roles now seed ACTIVE_STOP_IDS from the stop_activations
+  // catch-up query. Pins of inactive stops stay hidden — the guide controls
+  // reveal pace by activating stops. New activations during the session
+  // arrive via subscribeStopActivations() below.
+  await catchUpStopActivations();
 
   applyTourMetadata();
   hideLoading();
@@ -1820,6 +1941,23 @@ async function loadSessionAndTour(sessionId) {
   // Now that we have a session, start the sync worker. It will pick up any
   // leftover rows from a previous page-load and stream new fixes to Supabase.
   startSyncWorker();
+
+  // Chunk C: subscribe to live stop_activation INSERTs for this session.
+  // Both guide and passenger views subscribe — guide for multi-device
+  // consistency, passenger for pin reveal + chime + banner on activation.
+  subscribeStopActivations();
+
+  // Session controls: subscribe to UPDATEs on sessions so passengers (and
+  // any second-device guide) get kicked to the "Tour ended" screen when
+  // the active guide ends the session.
+  subscribeSession();
+
+  // If the session is ALREADY ended when we joined, jump straight to the
+  // ended screen so we don't show a stale active map while waiting on
+  // a realtime event that won't come.
+  if (SESSION && SESSION.ended_at) {
+    showSessionEnded();
+  }
 }
 
 // ── PASSENGER NAMES (chunk G) ──
@@ -3764,7 +3902,10 @@ function mountGuideBottomSheet() {
       </div>
       <!-- Passengers section — wraps the empty-state share-link card AND
            the populated list. The label sits above both; the count badge
-           lives in the label so it's always visible regardless of state. -->
+           lives in the label so it's always visible regardless of state.
+           NOTE: an "End session" row is appended below this section by
+           mountGuideBottomSheet via injected markup — that way the button
+           lives at the bottom of the sheet, after Passengers. -->
       <div class="passengers-section">
         <div class="passengers-section-label">
           <span>Passengers</span>
@@ -3788,6 +3929,11 @@ function mountGuideBottomSheet() {
         <div class="guide-sheet-list" id="guide-sheet-list" style="display:none;">
           <!-- passenger rows populate here -->
         </div>
+      </div>
+
+      <!-- End-session action — last item in the Control Center body. -->
+      <div class="end-session-row">
+        <button class="end-session-btn" id="end-session-btn">End session</button>
       </div>
     </div>
   `;
@@ -3864,6 +4010,12 @@ function mountGuideBottomSheet() {
   // the activation modal's buttons (idempotent — safe to call multiple times).
   renderStopList();
   wireStopModalHandlers();
+
+  // Session controls: end-session button at the bottom of the Control Center.
+  const endBtn = document.getElementById('end-session-btn');
+  if (endBtn) {
+    endBtn.addEventListener('click', showEndSessionModal);
+  }
 }
 
 function applySheetState() {
@@ -4534,20 +4686,57 @@ function showActivateStopModal(stop, source) {
 
   _modalStop = stop;
   _modalSource = source || 'geofence';
+  _modalMode = 'activate';
 
   const backdrop = document.getElementById('stop-modal-backdrop');
   const stamp = document.getElementById('stop-modal-stamp');
   const title = document.getElementById('stop-modal-title');
+  const sub = document.getElementById('stop-modal-sub');
   const errEl = document.getElementById('stop-modal-error');
   const activateBtn = document.getElementById('stop-modal-activate');
+  const dismissBtn = document.getElementById('stop-modal-dismiss');
 
   if (!backdrop || !stamp || !title || !errEl || !activateBtn) return;
 
   stamp.textContent = _modalSource === 'geofence' ? 'Approaching' : 'Manual';
   title.textContent = stop.name;
+  if (sub) sub.textContent = "Start this stop? Pins will reveal on passengers' phones.";
   errEl.textContent = '';
   activateBtn.disabled = false;
   activateBtn.textContent = 'Activate';
+  activateBtn.classList.remove('danger');
+  if (dismissBtn) dismissBtn.textContent = 'Not yet';
+  backdrop.classList.add('show');
+}
+
+// Show the deactivation modal. Reuses the same backdrop element with
+// different text and button label — the click handler branches on
+// _modalMode to call the right RPC.
+function showDeactivateStopModal(stop) {
+  if (!ACTIVE_STOP_IDS.has(stop.id)) return;
+
+  _modalStop = stop;
+  _modalSource = 'manual';
+  _modalMode = 'deactivate';
+
+  const backdrop = document.getElementById('stop-modal-backdrop');
+  const stamp = document.getElementById('stop-modal-stamp');
+  const title = document.getElementById('stop-modal-title');
+  const sub = document.getElementById('stop-modal-sub');
+  const errEl = document.getElementById('stop-modal-error');
+  const activateBtn = document.getElementById('stop-modal-activate');
+  const dismissBtn = document.getElementById('stop-modal-dismiss');
+
+  if (!backdrop || !stamp || !title || !errEl || !activateBtn) return;
+
+  stamp.textContent = 'Deactivate';
+  title.textContent = stop.name;
+  if (sub) sub.textContent = "Deactivate this stop? Its pins will hide from passengers.";
+  errEl.textContent = '';
+  activateBtn.disabled = false;
+  activateBtn.textContent = 'Deactivate';
+  activateBtn.classList.add('danger');
+  if (dismissBtn) dismissBtn.textContent = 'Cancel';
   backdrop.classList.add('show');
 }
 
@@ -4566,8 +4755,8 @@ function dismissActivateStopModal(asNotYet) {
 }
 
 // Calls the activate_stop RPC. On success, updates ACTIVE_STOP_IDS, re-renders
-// pins (in case future chunks have the passenger view active in this window
-// too), re-renders the stops list, and closes the modal.
+// pins, re-renders the stops list. The realtime INSERT event will arrive
+// shortly after — dedupe handles that.
 async function activateStop(stop) {
   const token = getStoredGuideToken();
   if (!token) {
@@ -4588,9 +4777,87 @@ async function activateStop(stop) {
   return { ok: true, row: data };
 }
 
+// Calls the deactivate_stop RPC. On success, removes from ACTIVE_STOP_IDS,
+// re-renders. Realtime DELETE event fans out to other clients; their
+// onStopDeactivated handler hides the pins on their end.
+async function deactivateStop(stop) {
+  const token = getStoredGuideToken();
+  if (!token) {
+    return { error: 'You must be signed in as a guide to deactivate stops.' };
+  }
+  const { error } = await supabaseClient.rpc('deactivate_stop', {
+    p_session_id: SESSION.id,
+    p_stop_id: stop.id,
+    p_guide_token: token,
+  });
+  if (error) {
+    console.warn('[session controls] deactivate_stop failed', error);
+    return { error: error.message || 'Could not deactivate stop.' };
+  }
+  ACTIVE_STOP_IDS.delete(stop.id);
+  renderPins();
+  renderStopList();
+  return { ok: true };
+}
+
+// Calls the end_session RPC. On success, clears the last-session memo,
+// then redirects the guide to the bare URL — boot() will then show the
+// create-session form. Passengers detect the end via realtime UPDATE on
+// sessions and see the "Tour ended" screen (no need for the guide to wait).
+async function endCurrentSession() {
+  const token = getStoredGuideToken();
+  if (!token) {
+    return { error: 'You must be signed in as a guide to end the session.' };
+  }
+  if (!SESSION) {
+    return { error: 'No session to end.' };
+  }
+  const { error } = await supabaseClient.rpc('end_session', {
+    p_session_id: SESSION.id,
+    p_guide_token: token,
+  });
+  if (error) {
+    console.warn('[session controls] end_session failed', error);
+    return { error: error.message || 'Could not end session.' };
+  }
+  // Drop sticky last-session memory so boot()'s path-3 logic doesn't try
+  // to auto-resume into the now-ended session, then go to the bare URL.
+  clearLastSession();
+  window.location.href = window.location.pathname;
+  return { ok: true };
+}
+
+// Show the end-session confirmation. Reuses the stop-modal element with
+// end-session text + danger styling on the primary button.
+function showEndSessionModal() {
+  _modalStop = null;
+  _modalSource = 'manual';
+  _modalMode = 'end-session';
+
+  const backdrop = document.getElementById('stop-modal-backdrop');
+  const stamp = document.getElementById('stop-modal-stamp');
+  const title = document.getElementById('stop-modal-title');
+  const sub = document.getElementById('stop-modal-sub');
+  const errEl = document.getElementById('stop-modal-error');
+  const activateBtn = document.getElementById('stop-modal-activate');
+  const dismissBtn = document.getElementById('stop-modal-dismiss');
+
+  if (!backdrop || !stamp || !title || !errEl || !activateBtn) return;
+
+  stamp.textContent = 'End session';
+  title.textContent = 'End this tour?';
+  if (sub) sub.textContent = 'This closes the session for you and every passenger who joined. They will see "Tour ended". You can start a new session afterwards.';
+  errEl.textContent = '';
+  activateBtn.disabled = false;
+  activateBtn.textContent = 'End session';
+  activateBtn.classList.add('danger');
+  if (dismissBtn) dismissBtn.textContent = 'Cancel';
+  backdrop.classList.add('show');
+}
+
 // Render the stops section in the guide bottom sheet. Re-rendered after
-// session load (initial), after every successful activation, and any time
-// ACTIVE_STOP_IDS changes from below.
+// session load (initial), after every successful activation/deactivation,
+// and any time ACTIVE_STOP_IDS changes from below.
 function renderStopList() {
   const container = document.getElementById('stops-list');
   if (!container || !TOUR) return;
@@ -4604,9 +4871,13 @@ function renderStopList() {
       <div class="stop-row-name">${(stop.name || '').replace(/</g, '&lt;')}</div>
     `;
     if (isActive) {
-      const pill = document.createElement('div');
+      // Tap the pill to deactivate (with confirmation). Recovery path for
+      // mis-taps + a way to retest pin reveal during a session.
+      const pill = document.createElement('button');
       pill.className = 'stop-row-active-pill';
       pill.textContent = 'Active';
+      pill.title = 'Tap to deactivate';
+      pill.addEventListener('click', () => showDeactivateStopModal(stop));
       row.appendChild(pill);
     } else {
       const btn = document.createElement('button');
@@ -4631,19 +4902,198 @@ function wireStopModalHandlers() {
   if (!dismissBtn || !activateBtn || !errEl) return;
   dismissBtn.addEventListener('click', () => dismissActivateStopModal(true));
   activateBtn.addEventListener('click', async () => {
-    if (!_modalStop) return;
+    const mode = _modalMode;
+    // end-session has no _modalStop; activate/deactivate require one.
+    if (mode !== 'end-session' && !_modalStop) return;
     activateBtn.disabled = true;
-    activateBtn.textContent = 'Activating…';
+    if (mode === 'deactivate') activateBtn.textContent = 'Deactivating…';
+    else if (mode === 'end-session') activateBtn.textContent = 'Ending…';
+    else activateBtn.textContent = 'Activating…';
     errEl.textContent = '';
-    const result = await activateStop(_modalStop);
+
+    let result;
+    if (mode === 'end-session') {
+      result = await endCurrentSession();
+    } else if (mode === 'deactivate') {
+      result = await deactivateStop(_modalStop);
+    } else {
+      result = await activateStop(_modalStop);
+    }
+
     if (result && result.ok) {
+      // For end-session we redirect inside endCurrentSession() — this branch
+      // basically won't run, but dismissing is harmless if it does.
       dismissActivateStopModal(false);
     } else {
       activateBtn.disabled = false;
       activateBtn.textContent = 'Try again';
-      errEl.textContent = (result && result.error) || 'Could not activate.';
+      errEl.textContent = (result && result.error) || 'Could not complete.';
     }
   });
+}
+
+// ╭──────────────────────────────────────────────────────╮
+// │  v0.5 CHUNK C — REALTIME FAN-OUT                     │
+// │                                                       │
+// │  Subscribes to INSERTs on stop_activations for this  │
+// │  session. On a new activation:                        │
+// │    - guide who activated: no-op (local state already  │
+// │      reflects the change; dedupe check returns early) │
+// │    - passenger / other guide device: add to           │
+// │      ACTIVE_STOP_IDS → render pins → chime + banner   │
+// ╰──────────────────────────────────────────────────────╯
+
+const STOP_BANNER_DURATION_MS = 4000;
+let _stopActivationChannel = null;
+let _stopActivationSubscribed = false;
+let _stopBannerTimer = null;
+
+function subscribeStopActivations() {
+  if (_stopActivationSubscribed) return;        // idempotent
+  if (!SESSION) return;
+  _stopActivationSubscribed = true;
+
+  _stopActivationChannel = supabaseClient
+    .channel(`stop_activations:${SESSION.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'stop_activations',
+        filter: `session_id=eq.${SESSION.id}`,
+      },
+      (payload) => onStopActivated(payload.new)
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'stop_activations',
+        filter: `session_id=eq.${SESSION.id}`,
+      },
+      // payload.old has the deleted row's data (with REPLICA IDENTITY DEFAULT
+      // this includes at least the primary key; with FULL it'd include all
+      // columns. We only need stop_id, which is enough either way.)
+      (payload) => onStopDeactivated(payload.old)
+    )
+    .subscribe((status) => {
+      // Status callback: 'SUBSCRIBED', 'CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'.
+      // On reconnect, run catch-up so any activations we missed during the
+      // disconnect get applied. The catch-up uses ACTIVE_STOP_IDS, which is
+      // append-only, so re-running is safe even when we have nothing missed.
+      if (status === 'SUBSCRIBED' && _stopActivationSubscribed) {
+        catchUpStopActivations().then(() => {
+          renderPins();
+          if (ROLE === 'guide') renderStopList();
+        }).catch(err => {
+          console.warn('[chunk C] reconcile catch-up failed', err);
+        });
+      }
+    });
+}
+
+function onStopActivated(row) {
+  // Idempotency: the activator's own device added the stop_id locally before
+  // the realtime event came back. Any other client (passenger, second guide
+  // device) hits this path with a fresh stop_id.
+  if (ACTIVE_STOP_IDS.has(row.stop_id)) return;
+  ACTIVE_STOP_IDS.add(row.stop_id);
+
+  const stop = TOUR ? TOUR.stops.find(s => s.id === row.stop_id) : null;
+  renderPins();
+  if (ROLE === 'guide') renderStopList();
+
+  if (stop) {
+    playChime();
+    showStopActivationBanner(stop);
+  }
+}
+
+// DELETE realtime handler — fires when a guide deactivates a stop via the
+// deactivate_stop RPC. Removes the stop's id from ACTIVE_STOP_IDS and
+// re-renders. Silent retraction: no chime, no banner. The deactivating
+// device already updated its own state in deactivateStop(); this dedupes.
+function onStopDeactivated(row) {
+  if (!row || row.stop_id == null) return;
+  if (!ACTIVE_STOP_IDS.has(row.stop_id)) return;   // already in sync
+  ACTIVE_STOP_IDS.delete(row.stop_id);
+  renderPins();
+  if (ROLE === 'guide') renderStopList();
+}
+
+// Subscribe to UPDATEs on the sessions row for this session. Used today to
+// detect end-of-session (ended_at non-null). Idempotent via the flag.
+let _sessionChannel = null;
+let _sessionSubscribed = false;
+
+function subscribeSession() {
+  if (_sessionSubscribed || !SESSION) return;
+  _sessionSubscribed = true;
+  _sessionChannel = supabaseClient
+    .channel(`session:${SESSION.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'sessions',
+        filter: `id=eq.${SESSION.id}`,
+      },
+      (payload) => onSessionUpdated(payload.new)
+    )
+    .subscribe();
+}
+
+function onSessionUpdated(row) {
+  if (!row) return;
+  // Capture into module state so anything that re-checks ended_at sees it.
+  SESSION = Object.assign({}, SESSION, row);
+  if (row.ended_at) {
+    showSessionEnded();
+  }
+}
+
+// Show the full-screen "Tour ended" state. Hides the map + bottom sheet by
+// layering above them. Disabled for the guide who issued the end (they're
+// already mid-redirect to the bare URL).
+function showSessionEnded() {
+  if (ROLE === 'guide') return;   // guide is redirecting anyway
+  const screen = document.getElementById('session-ended-screen');
+  if (screen) screen.classList.add('show');
+  // Stop any further realtime work on this page — the session is over.
+  try { if (_stopActivationChannel) _stopActivationChannel.unsubscribe(); } catch {}
+  try { if (_sessionChannel) _sessionChannel.unsubscribe(); } catch {}
+}
+
+// Slide-down banner at the top of the map. Auto-dismisses after
+// STOP_BANNER_DURATION_MS. If another activation fires before the timer
+// expires, the new banner replaces the old one immediately.
+function showStopActivationBanner(stop) {
+  const banner = document.getElementById('stop-banner');
+  const stamp = document.getElementById('stop-banner-stamp');
+  const name = document.getElementById('stop-banner-name');
+  if (!banner || !stamp || !name) return;
+
+  stamp.textContent = `Stop № ${String(stop.ordinal).padStart(2, '0')} · Starting`;
+  name.textContent = stop.name || '';
+  banner.classList.add('show');
+
+  if (_stopBannerTimer) clearTimeout(_stopBannerTimer);
+  _stopBannerTimer = setTimeout(() => {
+    banner.classList.remove('show');
+    _stopBannerTimer = null;
+  }, STOP_BANNER_DURATION_MS);
+
+  // Tap to dismiss early.
+  banner.onclick = () => {
+    banner.classList.remove('show');
+    if (_stopBannerTimer) {
+      clearTimeout(_stopBannerTimer);
+      _stopBannerTimer = null;
+    }
+  };
 }
 
 // ╭──────────────────────────────────────────────────────╮
@@ -4660,7 +5110,7 @@ let JOYSTICK_MODE = false;     // when true, suppress real GPS and drive walker 
 let _joyVecX = 0, _joyVecY = 0;// unit vector × strength of current deflection
 let _joyLoopRunning = false;
 let _joyWired = false;
-const JOY_MAX_SPEED_MPS = 6;   // meters per second at full knob deflection (~jog pace)
+const JOY_MAX_SPEED_MPS = 18;  // meters per second at full knob deflection (~bike pace; 3× the original jog rate)
 const JOY_MAX_R_PX = 36;        // knob travel radius in px (matches widget visuals)
 
 // Turn the simulator on. If we have no fix yet, seed the walker at the tour
