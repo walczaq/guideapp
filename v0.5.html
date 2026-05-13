@@ -1,0 +1,4151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Fieldnote v0.5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/idb@8/build/umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<style>
+  :root {
+    --ink: #1a1d1a;
+    --paper: #ebe5d7;
+    --paper-2: #dcd4c2;
+    --paper-3: #d0c7b3;
+    --rule: #2a2e2a;
+    --rule-soft: rgba(42,46,42,0.15);
+    --mark: #b8331d;
+    --pin-ring: rgba(184, 51, 29, 0.18);
+    --you: #1a1d1a;
+    --armed: #c79428;
+    --signal-good: #48835a;
+    --signal-weak: #c79428;
+    --signal-bad: #b8331d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+  body {
+    font-family: 'Fraunces', Georgia, serif;
+    background: #1a1a1a;
+    color: var(--ink);
+    font-feature-settings: "ss01" on;
+    user-select: none; -webkit-user-select: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* phone frame on desktop only */
+  .phone {
+    position: relative;
+    width: 390px; height: 844px;
+    max-height: calc(100dvh - 32px);
+    background: var(--paper);
+    overflow: hidden;
+    border-radius: 44px;
+    box-shadow: 0 0 0 10px #0a0a0a, 0 0 0 12px #2a2a2a, 0 40px 80px rgba(0,0,0,0.4);
+  }
+  .phone::before {
+    content: ""; position: absolute;
+    top: 10px; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 28px;
+    background: #0a0a0a; border-radius: 20px;
+    z-index: 200; pointer-events: none;
+  }
+  .proto-label {
+    position: fixed; top: 14px; left: 50%;
+    transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: #777;
+    pointer-events: none;
+  }
+  @media (max-width: 500px), (pointer: coarse) {
+    body { background: var(--paper); }
+    .phone {
+      width: 100vw; height: 100dvh; max-height: 100dvh;
+      border-radius: 0; box-shadow: none;
+    }
+    .phone::before { display: none; }
+    .proto-label { display: none; }
+  }
+
+  /* screens stack */
+  .screen {
+    position: absolute; inset: 0;
+    background: var(--paper);
+    display: flex; flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.28s cubic-bezier(0.3, 0.8, 0.3, 1);
+    z-index: 50; overflow: hidden;
+  }
+  .screen.visible { transform: translateX(0); }
+  .screen.home { transform: translateX(0); z-index: 1; transition: none; }
+  .status-bar { height: 50px; flex-shrink: 0; padding-top: env(safe-area-inset-top); }
+
+  /* map */
+  .map-stage { position: relative; flex: 1; overflow: hidden; }
+  #mapbox-map { position: absolute; inset: 0; z-index: 0; }
+  .mapboxgl-ctrl-bottom-left,
+  .mapboxgl-ctrl-top-right {
+    display: none !important;
+  }
+  .mapboxgl-ctrl-attrib {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px !important;
+    background: rgba(235,229,215,0.8) !important;
+    padding: 2px 6px !important;
+  }
+  .overlay-svg {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 2;
+    overflow: visible;
+  }
+  .overlay-svg .pin-group { pointer-events: auto; }
+  .overlay-svg .passenger-group { pointer-events: auto; }
+
+  /* HUD */
+  .map-hud {
+    position: absolute;
+    top: env(safe-area-inset-top, 0);
+    left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 12px 16px; pointer-events: none; z-index: 5;
+  }
+  .map-hud > * { pointer-events: auto; }
+  .icon-btn {
+    width: 48px; height: 48px;
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--ink);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    transition: background 0.1s, transform 0.1s;
+  }
+  .icon-btn:active { transform: scale(0.94); background: var(--paper-2); }
+  .icon-btn svg { width: 22px; height: 22px; }
+
+  /* signal indicator (top-right) */
+  .signal {
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 14px;
+    padding: 0 14px; height: 48px;
+    display: flex; align-items: center; gap: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em;
+    color: var(--rule);
+  }
+  .signal-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--signal-bad);
+    transition: background 0.3s;
+  }
+  .signal-dot.good { background: var(--signal-good); }
+  .signal-dot.weak { background: var(--signal-weak); }
+  .signal-dot.searching { background: var(--signal-bad); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  /* zoom + follow */
+  .zoom-controls {
+    position: absolute; right: 16px; bottom: 30px;
+    display: flex; flex-direction: column; gap: 4px; z-index: 5;
+  }
+  .zoom-btn {
+    width: 44px; height: 44px;
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px; font-weight: 700; color: var(--ink);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  }
+  .zoom-btn:active { background: var(--paper-2); }
+  .zoom-btn.active {
+    background: var(--ink); color: var(--paper); border-color: var(--ink);
+  }
+
+  /* pins */
+  .pin-group { cursor: pointer; }
+  /* The radius circle is normally hidden — it appears only when the pin is
+     "armed" (the passenger is approaching it and the trigger is about to fire).
+     This makes the circle MEAN something: if you see it, something is happening.
+     pointer-events: none always — the circle is purely decorative. */
+  .pin-radius {
+    fill: var(--pin-ring);
+    stroke: var(--mark); stroke-width: 1; stroke-dasharray: 4 3;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease-out;
+  }
+  .pin-group.armed .pin-radius {
+    fill: rgba(199, 148, 40, 0.25);
+    stroke: var(--armed); opacity: 0.9;
+    animation: armedPulse 1.2s ease-in-out infinite;
+  }
+  @keyframes armedPulse { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
+  /* The marker rect IS tappable — it's the small target the user actually clicks. */
+  .pin-marker {
+    fill: var(--mark); stroke: var(--ink); stroke-width: 1.5;
+    pointer-events: auto;
+  }
+  .pin-group.visited .pin-marker { fill: var(--paper-2); stroke: var(--rule); }
+  .pin-group.visited .pin-label { fill: var(--rule); }
+  .pin-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700;
+    fill: var(--paper); text-anchor: middle; pointer-events: none;
+  }
+
+  /* you dot — accuracy halo + heading */
+  .you-accuracy {
+    fill: rgba(72, 131, 90, 0.15);
+    stroke: rgba(72, 131, 90, 0.4);
+    stroke-width: 1;
+  }
+  .you-dot { fill: var(--you); stroke: var(--paper); stroke-width: 2.5; }
+  .you-halo { fill: var(--ink); opacity: 0.12; }
+
+  /* Guide dot — beacon blue. Used both in the guide's own view and (later,
+     once chunk F lands) in passenger views when guide visibility is on. */
+  .you-dot.guide {
+    fill: #2563eb;          /* clear, authoritative blue */
+    stroke: var(--paper);
+    stroke-width: 2.5;
+  }
+  .you-accuracy.guide {
+    fill: rgba(37, 99, 235, 0.12);
+    stroke: rgba(37, 99, 235, 0.4);
+  }
+  .you-halo.guide {
+    fill: #2563eb;
+    opacity: 0.18;
+  }
+
+  /* Passenger dots and trails — visible only in guide view (chunk C onwards).
+     Color is set per-element in JS (deterministic from passenger_id) so each
+     passenger has a stable, distinct color across sessions/devices.
+     Chunk E will overlay state colors (green/dimmed/orange/grey/red) on top
+     of this base — the per-passenger color stays as the trail identity. */
+  .passenger-dot {
+    stroke: var(--paper);
+    stroke-width: 2;
+  }
+  .passenger-halo { /* fill + opacity set inline */ }
+  /* Pulsing halo — used when a passenger is in a trouble state
+     (chunk E: disconnected). Inline opacity is 0.18; the
+     animation lifts it to 0.5 and back, drawing the eye to the dot. */
+  .passenger-halo.pulse {
+    animation: passengerHaloPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes passengerHaloPulse {
+    0%, 100% { opacity: 0.18; }
+    50%      { opacity: 0.5; }
+  }
+  .passenger-trail {
+    /* All visual attrs (stroke, stroke-width, opacity) are set inline per
+       passenger so selection state can drive them. Don't add CSS overrides
+       here — they'd win over the inline attributes for SVG presentation. */
+    fill: none;
+  }
+
+  /* generic screen header */
+  .screen-header {
+    display: flex; align-items: center;
+    padding: 14px 16px; gap: 12px;
+    border-bottom: 1px solid var(--rule-soft);
+    background: var(--paper);
+  }
+  .back-btn {
+    width: 40px; height: 40px;
+    background: transparent; border: none; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--ink); margin-left: -8px;
+  }
+  .back-btn:active { background: var(--paper-2); }
+  .back-btn svg { width: 22px; height: 22px; }
+  .screen-title {
+    font-family: 'Fraunces', serif; font-weight: 400;
+    font-size: 22px; flex: 1;
+    font-variation-settings: "opsz" 90;
+  }
+  .screen-title em { font-style: italic; color: var(--mark); }
+  .screen-body {
+    flex: 1; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px 20px 40px;
+  }
+
+  /* menu */
+  .menu-masthead {
+    padding: 8px 4px 24px; margin-bottom: 8px;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .menu-masthead-stamp {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule); margin-bottom: 8px;
+  }
+  .menu-masthead h1 {
+    font-family: 'Fraunces', serif; font-weight: 400;
+    font-size: 34px; line-height: 1;
+    font-variation-settings: "opsz" 90;
+  }
+  .menu-masthead h1 em { font-style: italic; color: var(--mark); }
+  .menu-masthead .sub {
+    margin-top: 6px; font-size: 14px; font-style: italic; color: #4a4a4a;
+  }
+  .menu-list { display: flex; flex-direction: column; }
+  .menu-item {
+    display: flex; align-items: center; gap: 14px;
+    padding: 18px 4px;
+    border: none; border-bottom: 1px solid var(--rule-soft);
+    background: transparent;
+    cursor: pointer; text-align: left; width: 100%;
+    font-family: 'Fraunces', serif;
+    font-size: 17px; color: var(--ink);
+  }
+  .menu-item:active { background: var(--paper-2); }
+  .menu-icon {
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--paper-2); border-radius: 10px; flex-shrink: 0;
+  }
+  .menu-icon svg { width: 18px; height: 18px; color: var(--ink); }
+  .menu-label { flex: 1; }
+  .menu-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule); opacity: 0.7; margin-left: 6px;
+  }
+  .menu-chevron { color: var(--rule); opacity: 0.4; font-size: 22px; }
+
+  /* arrived popup */
+  .pin-popup {
+    position: absolute; left: 16px; right: 16px;
+    top: 50%;
+    transform: translateY(calc(-50% + 20px));
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 0 0 8px var(--paper-2);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.3s, transform 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.1), visibility 0s linear 0.3s;
+    z-index: 20;
+  }
+  .pin-popup.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(-50%);
+    pointer-events: auto;
+    transition: opacity 0.3s, transform 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.1), visibility 0s;
+  }
+  .popup-header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .popup-stamp {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--mark);
+  }
+  .popup-close {
+    background: transparent; border: none;
+    font-size: 20px; cursor: pointer;
+    padding: 4px 8px; margin: -4px -8px;
+    color: var(--ink);
+  }
+  .popup-body { padding: 18px 20px 22px; }
+  .popup-body h2 {
+    font-weight: 400; font-size: 24px; line-height: 1.15;
+    margin-bottom: 10px;
+    font-variation-settings: "opsz" 90;
+  }
+  .popup-body p { font-size: 15px; line-height: 1.55; color: #2a2e2a; }
+
+  /* GPS error banner — when location fails or is denied */
+  .gps-banner {
+    position: absolute; left: 16px; right: 16px;
+    top: calc(env(safe-area-inset-top, 0) + 76px);
+    background: var(--mark);
+    color: var(--paper);
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 13px; line-height: 1.4;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 8;
+    transform: translateY(-200px);
+    transition: transform 0.3s cubic-bezier(0.3, 0.8, 0.3, 1);
+    pointer-events: none;
+    visibility: hidden;
+  }
+  .gps-banner.show {
+    transform: translateY(0);
+    pointer-events: auto;
+    visibility: visible;
+  }
+  .gps-banner b {
+    font-weight: 700;
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  /* Broadcasting banner — slim notification at top of guide's view when
+     they're sharing their location with passengers (phone or bus_pin mode).
+     Hidden by default; updateBroadcastBanner() flips display + text. */
+  .broadcast-banner {
+    position: absolute; left: 16px; right: 16px;
+    top: calc(env(safe-area-inset-top, 0) + 76px);
+    background: #2563eb;       /* beacon blue — same family as guide identity */
+    color: var(--paper);
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    z-index: 8;
+  }
+  .broadcast-banner.bus {
+    background: #1d4ed8;       /* slightly deeper blue for bus mode */
+  }
+  .broadcast-banner::before {
+    content: '';
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--paper);
+    margin-right: 8px;
+    vertical-align: middle;
+    animation: broadcastPulse 1.5s ease-in-out infinite;
+  }
+  @keyframes broadcastPulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.3; }
+  }
+
+  /* Guide bottom sheet — appears in role=guide view only.
+     Three drag-snap states managed in JS via .style.height directly. */
+  .guide-sheet {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    background: var(--paper);
+    border-top: 1px solid var(--ink);
+    box-shadow: 0 -8px 24px rgba(0,0,0,0.15);
+    display: flex; flex-direction: column;
+    z-index: 30;
+    transition: height 0.25s cubic-bezier(0.3, 0.8, 0.3, 1);
+    overflow: hidden;
+    touch-action: none;  /* prevent page scroll while dragging the handle */
+  }
+  .guide-sheet-handle {
+    flex-shrink: 0;
+    height: 60px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: grab;
+    user-select: none;
+    background: var(--paper);
+    border-bottom: 1px solid var(--rule);
+    touch-action: none;
+  }
+  .guide-sheet-handle:active { cursor: grabbing; }
+  .guide-sheet-grip {
+    width: 36px; height: 4px;
+    background: var(--rule);
+    border-radius: 2px;
+    margin-bottom: 8px;
+  }
+  .guide-sheet-title {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--ink);
+  }
+  .guide-sheet-title-count {
+    background: var(--ink); color: var(--paper);
+    padding: 2px 8px; border-radius: 10px;
+    font-size: 10px;
+  }
+  .guide-sheet-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 20px 24px;
+  }
+  .guide-sheet-empty {
+    text-align: center;
+    padding: 16px 0;
+  }
+
+  /* Visibility control (chunk F). Two independent pill toggles. Each pill
+     stays distinct (own border, own active state) — they're not a segmented
+     control. Tap to flip on/off. */
+  .visibility-section {
+    padding: 0 0 16px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .visibility-section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule);
+    margin-bottom: 10px;
+  }
+  .visibility-control {
+    display: flex;
+    gap: 8px;
+  }
+  .vis-btn {
+    flex: 1;
+    padding: 10px 6px;
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 999px;        /* pill */
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .vis-btn:active { transform: scale(0.97); }
+  .vis-btn.active {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: var(--paper);
+    font-weight: 600;
+  }
+  .visibility-bus-hint {
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: rgba(37, 99, 235, 0.08);
+    border-left: 2px solid #2563eb;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink);
+    line-height: 1.4;
+  }
+
+  /* about screen text */
+  .about-block {
+    font-size: 15px; line-height: 1.55; color: #2a2e2a;
+    margin-bottom: 14px;
+  }
+  .about-block.muted { color: #4a4a4a; }
+  .about-block b { font-weight: 600; color: var(--ink); }
+</style>
+</head>
+<body>
+
+<div class="proto-label">Fieldnote v0.5 · prototype</div>
+
+<div class="phone" id="phone">
+
+  <!-- HOME (map) -->
+  <div class="screen home" id="screen-home">
+    <div class="map-stage" id="stage">
+      <div id="mapbox-map"></div>
+
+      <svg class="overlay-svg" id="overlay">
+        <g id="pins-layer"></g>
+        <g id="you-layer"></g>
+        <g id="passengers-layer"></g>
+      </svg>
+
+      <div class="map-hud">
+        <button class="icon-btn" id="burger-btn" aria-label="Menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="4" y1="7" x2="20" y2="7"/>
+            <line x1="4" y1="12" x2="20" y2="12"/>
+            <line x1="4" y1="17" x2="20" y2="17"/>
+          </svg>
+        </button>
+        <div class="signal" id="signal">
+          <span class="signal-dot searching" id="signal-dot"></span>
+          <span id="signal-text">Searching</span>
+        </div>
+      </div>
+
+      <!-- GPS error banner -->
+      <div class="gps-banner" id="gps-banner">
+        <b>Location unavailable</b>
+        <span id="gps-banner-msg">Checking…</span>
+      </div>
+
+      <!-- Broadcasting banner (chunk F) — shown to guides when visibility ≠ off.
+           Sits below the map-hud, full-width, slim. Color shifts by mode. -->
+      <div class="broadcast-banner" id="broadcast-banner" style="display:none;">
+        <span id="broadcast-banner-text">Broadcasting your location</span>
+      </div>
+
+      <div class="zoom-controls">
+        <button class="zoom-btn" id="zoom-in">+</button>
+        <button class="zoom-btn" id="zoom-out">−</button>
+        <button class="zoom-btn" id="recenter" style="margin-top: 4px;" title="Follow me">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <line x1="12" y1="2" x2="12" y2="5"/>
+            <line x1="12" y1="19" x2="12" y2="22"/>
+            <line x1="2" y1="12" x2="5" y2="12"/>
+            <line x1="19" y1="12" x2="22" y2="12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="pin-popup" id="popup">
+        <div class="popup-header">
+          <span class="popup-stamp" id="popup-stamp">Pin № 01 · Arrived</span>
+          <button class="popup-close" id="popup-close">✕</button>
+        </div>
+        <div class="popup-body">
+          <h2 id="popup-title">…</h2>
+          <p id="popup-body-el">…</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MENU -->
+  <div class="screen" id="screen-menu">
+    <div class="status-bar"></div>
+    <div class="screen-header">
+      <button class="back-btn" data-close-screen>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </button>
+      <div class="screen-title">Menu</div>
+    </div>
+    <div class="screen-body">
+      <div class="menu-masthead">
+        <div class="menu-masthead-stamp">Tour № 001 · Hardcoded</div>
+        <h1>Fossvogs<em>dalur</em></h1>
+        <div class="sub">a walk from Gautland 21</div>
+      </div>
+      <div class="menu-list">
+        <button class="menu-item" data-action="share-invite" id="menu-share-invite" style="display:none;">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/>
+              <rect x="14" y="3" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/>
+              <line x1="14" y1="14" x2="14" y2="17"/>
+              <line x1="17" y1="14" x2="21" y2="14"/>
+              <line x1="14" y1="20" x2="14" y2="21"/>
+              <line x1="17" y1="17" x2="17" y2="21"/>
+              <line x1="20" y1="17" x2="21" y2="17"/>
+              <line x1="20" y1="20" x2="21" y2="20"/>
+            </svg>
+          </div>
+          <div class="menu-label">Share invite</div>
+          <span class="menu-chevron">›</span>
+        </button>
+        <button class="menu-item" data-action="edit-name" id="menu-edit-name" style="display:none;">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <div class="menu-label" id="menu-edit-name-label">Your name</div>
+          <span class="menu-chevron">›</span>
+        </button>
+        <button class="menu-item" data-action="reset">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="1 4 1 10 7 10"/>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+          </div>
+          <div class="menu-label">Reset visited pins</div>
+          <span class="menu-chevron">›</span>
+        </button>
+        <button class="menu-item" data-action="about">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="16" x2="12" y2="12"/>
+              <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+          </div>
+          <div class="menu-label">About this build</div>
+          <span class="menu-chevron">›</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SHARE INVITE -->
+  <div class="screen" id="screen-share">
+    <div class="status-bar"></div>
+    <div class="screen-header">
+      <button class="back-btn" data-close-screen>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </button>
+      <div class="screen-title">Share invite</div>
+    </div>
+    <div class="screen-body">
+      <div style="text-align:center; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); line-height:1.5; margin-bottom:20px;">
+        Scan with another phone's camera, or copy the link.
+      </div>
+      <div id="share-qr-wrap" style="display:flex; justify-content:center; padding:20px; background:#ffffff; border:2px solid var(--ink); border-radius:12px; margin-bottom:18px;">
+        <!-- QR SVG inserted at runtime by qrcode-generator -->
+        <div id="share-qr" style="display:flex; align-items:center; justify-content:center; min-height:240px; min-width:240px; background:#ffffff;"></div>
+      </div>
+      <div id="share-url" style="padding:12px 14px; background:var(--paper-2); border:1px solid var(--rule); border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:11px; word-break:break-all; user-select:all; line-height:1.5; margin-bottom:14px;"></div>
+      <button
+        id="share-copy-btn"
+        style="width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+      >
+        Copy link
+      </button>
+    </div>
+  </div>
+
+  <!-- ABOUT -->
+  <div class="screen" id="screen-about">
+    <div class="status-bar"></div>
+    <div class="screen-header">
+      <button class="back-btn" data-close-screen>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </button>
+      <div class="screen-title">About v0.5</div>
+    </div>
+    <div class="screen-body">
+      <div class="about-block">
+        <b>v0.5 — Stops + activation broadcasts.</b>
+        Tours now have a stop → pin hierarchy. Guides activate stops; passengers see pins reveal as stops activate. Activated stops stay on for the rest of the session.
+      </div>
+      <div class="about-block muted">
+        Chunk A done: stops + pins tables, seed-tour migration, code reads pins via stops. All stops auto-activate on session join for parity — guide-controlled activation lands in chunk B. Future chunks: activation prompt + manual button (B), realtime fan-out + passenger reveal (C), Service Worker + Web Push (D), iOS-foreground lobby copy (E).
+      </div>
+      <div class="about-block muted">
+        v0.4 still works: invite-code auth, live guide view, realtime passenger dots, breadcrumb trails. v0.3 still works: GPS fixes captured locally, queued in IndexedDB, synced to Supabase when network is available.
+      </div>
+      <div class="about-block muted" id="about-debug">
+        <!-- populated at runtime with session + passenger info -->
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ╭──────────────────────────────────────────────────────╮
+// │  v0.4 — LIVE GUIDE VIEW                              │
+// ╰──────────────────────────────────────────────────────╯
+
+// Build version. Bumped every time a new file is shipped — visible in the
+// About panel so you can confirm you're running the latest deploy.
+const BUILD_VERSION = '0.4 · build 2026-05-05-2254';
+
+// ── 0. CONFIG ──
+// Public client-side credentials. Both are designed to live in client code.
+// Mapbox token: protected by URL allowlist in Mapbox dashboard.
+// Supabase publishable key: protected by Row Level Security (RLS) policies
+// on the database — anon key can only do what the policies explicitly allow.
+const MAPBOX_TOKEN = 'pk.eyJ1IjoiZmllbGRub3RlMSIsImEiOiJjbW9mbmhtZmcwMGI2MnNzZmpmOG95OTYyIn0.ZkANytVZy65-RZf4--aEzQ';
+const SUPABASE_URL = 'https://xgelrfdrdvrlltcsquqh.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_56-3xMMvHZFtw2LGKkcqew_09NhbiB0';
+
+// Default tour slug used when neither ?session nor ?tour is in the URL,
+// and the user hasn't yet created a session. Used by the "create session"
+// form as the tour to attach the new session to.
+const DEFAULT_TOUR_SLUG = 'fossvogsdalur-001';
+
+// Generate an 8-character nanoid (URL-safe, ~218 trillion possible values).
+// Not cryptographically perfect, but plenty for a session join token where
+// the only attack is "guess someone else's session ID."
+const NANOID_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+function nanoid8() {
+  // crypto.getRandomValues is available in all modern browsers + secure contexts.
+  // Fills a Uint8Array with cryptographically random bytes.
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  let id = '';
+  for (let i = 0; i < 8; i++) {
+    id += NANOID_ALPHABET[bytes[i] % NANOID_ALPHABET.length];
+  }
+  return id;
+}
+
+// Build a human-readable session label from tour + date + guide name.
+// Format: YYYY-MM-DD-INITIALS-tourshort
+// Used in dashboards/logs/Linear comments — never in URLs (URL uses nanoid).
+function makeSessionLabel(tourSlug, guideName) {
+  const d = new Date();
+  const date = d.toISOString().slice(0, 10);  // "2026-04-26"
+  const initials = (guideName || '?')
+    .split(/\s+/)
+    .map(w => w[0] || '')
+    .join('')
+    .toUpperCase()
+    .slice(0, 3) || '?';
+  // Take the first chunk of the slug before any dashes
+  const tourShort = (tourSlug || 'tour').split('-')[0].slice(0, 8);
+  return `${date}-${initials}-${tourShort}`;
+}
+
+// ── PASSENGER ID ──
+// A stable per-device identifier. Generated once, stored in localStorage,
+// reused on every visit. Lets the guide distinguish "Sigrún's phone" from
+// "another phone called Sigrún" across reloads.
+//
+// We use a longer nanoid (16 chars) here than for sessions, because:
+//  - Passenger IDs aren't typed by humans, so there's no readability cost
+//  - They live forever per device, so collision over time matters more
+//  - 16 chars = ~10^28 possible values, effectively zero collision risk
+//
+// Reset path: clearing site data / using incognito / a different browser
+// produces a new ID. That's intentional — we don't have user accounts yet,
+// so "this device" is the unit of identity for v0.3.
+const PASSENGER_ID_KEY = 'fieldnote_passenger_id';
+
+function nanoid16() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let id = '';
+  for (let i = 0; i < 16; i++) {
+    id += NANOID_ALPHABET[bytes[i] % NANOID_ALPHABET.length];
+  }
+  return id;
+}
+
+function getOrCreatePassengerId() {
+  // localStorage can throw in private mode on some old browsers, so we wrap.
+  try {
+    let id = localStorage.getItem(PASSENGER_ID_KEY);
+    if (!id) {
+      id = nanoid16();
+      localStorage.setItem(PASSENGER_ID_KEY, id);
+    }
+    return id;
+  } catch (err) {
+    // Fallback: generate an in-memory ID that lasts for this page load only.
+    // Better than crashing; worse than persistent (the user will look like a
+    // new passenger every refresh). Real fix is to detect this and warn.
+    console.warn('localStorage unavailable; using in-memory passenger ID', err);
+    return nanoid16();
+  }
+}
+
+// Resolved at module load — every other piece of code can rely on this being set.
+const PASSENGER_ID = getOrCreatePassengerId();
+
+// ── GUIDE AUTH ──
+// Custom auth (not Supabase Auth). Beta guides redeem an invite code once,
+// receive a device token stored in localStorage, and use that token to
+// identify themselves on every subsequent visit.
+//
+// Two server-side RPCs do the work:
+//   redeem_invite_code(code, name, token) — first-time redemption
+//   lookup_guide_by_token(token) — check if a stored token is still valid
+//   recover_guide_access(code, name, new_token) — recover access on a new device
+//
+// Direct read/write to `guides` and `invite_codes` is denied by RLS; the RPCs
+// run as security-definer and are the only way clients can touch those tables.
+//
+// Token format: 32-char nanoid. Long enough to be effectively unguessable.
+
+const GUIDE_TOKEN_KEY = 'fieldnote_guide_token';
+
+function nanoid32() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  let id = '';
+  for (let i = 0; i < 32; i++) {
+    id += NANOID_ALPHABET[bytes[i] % NANOID_ALPHABET.length];
+  }
+  return id;
+}
+
+function getStoredGuideToken() {
+  try { return localStorage.getItem(GUIDE_TOKEN_KEY) || null; }
+  catch { return null; }
+}
+
+function storeGuideToken(token) {
+  try { localStorage.setItem(GUIDE_TOKEN_KEY, token); }
+  catch (err) { console.warn('Could not persist guide token', err); }
+}
+
+function clearGuideToken() {
+  try { localStorage.removeItem(GUIDE_TOKEN_KEY); }
+  catch {}
+}
+
+// Set when we successfully verify the guide on this load. Used by:
+//  - the "create session" form (we now know the guide's name)
+//  - the role=guide gate (we know we're allowed in)
+//  - future v0.4 features that attach session ownership to a guide
+let GUIDE = null;  // shape: { id, name } when logged in, otherwise null
+
+// Verify the stored token against the server. Returns the guide or null.
+// Network errors return null too (treat as logged-out, fail safe).
+async function verifyGuideToken() {
+  const token = getStoredGuideToken();
+  if (!token) return null;
+
+  const { data, error } = await supabaseClient.rpc('lookup_guide_by_token', {
+    p_token: token,
+  });
+
+  if (error) {
+    console.warn('Guide token lookup failed', error);
+    return null;
+  }
+  // The RPC returns a table (array) — empty if no match.
+  if (!data || data.length === 0) {
+    // Token was invalid (probably revoked). Clean it up so the user is sent
+    // back to the invite form on next interaction.
+    clearGuideToken();
+    return null;
+  }
+  return { id: data[0].guide_id, name: data[0].guide_name };
+}
+
+// Try to redeem an invite code. Returns the new guide on success, or throws.
+async function redeemInviteCode(code, name) {
+  const token = nanoid32();
+  const { data, error } = await supabaseClient.rpc('redeem_invite_code', {
+    p_code: code.trim(),
+    p_name: name.trim(),
+    p_token: token,
+  });
+  if (error) {
+    // Surface the error message to the form. Common cases:
+    //  "Invalid invite code"
+    //  "Invite code has already been used"
+    throw new Error(error.message || 'Could not redeem invite code');
+  }
+  if (!data || data.length === 0) {
+    throw new Error('Unexpected response from server');
+  }
+  storeGuideToken(token);
+  return { id: data[0].guide_id, name: data[0].guide_name };
+}
+
+// Recover access on a fresh device. Caller provides the original invite code
+// + the name they used at registration; on match, a new device token is
+// issued (rotating the old one out). Two-factor by design: code is the
+// private secret, name is the public identifier.
+async function recoverGuideAccess(code, name) {
+  const token = nanoid32();
+  const { data, error } = await supabaseClient.rpc('recover_guide_access', {
+    p_code: code.trim(),
+    p_name: name.trim(),
+    p_new_token: token,
+  });
+  if (error) {
+    throw new Error(error.message || 'Could not recover access');
+  }
+  if (!data || data.length === 0) {
+    throw new Error('Unexpected response from server');
+  }
+  storeGuideToken(token);
+  return { id: data[0].guide_id, name: data[0].guide_name };
+}
+
+// Recover access on a new device. Requires the original invite code + the name
+// the guide registered with. Issues a fresh device token, replacing whatever
+// token was previously valid. Old tokens stop working immediately.
+async function recoverGuideAccess(code, name) {
+  const token = nanoid32();
+  const { data, error } = await supabaseClient.rpc('recover_guide_access', {
+    p_code: code.trim(),
+    p_name: name.trim(),
+    p_new_token: token,
+  });
+  if (error) {
+    throw new Error(error.message || 'Could not recover access');
+  }
+  if (!data || data.length === 0) {
+    throw new Error('Unexpected response from server');
+  }
+  storeGuideToken(token);
+  return { id: data[0].guide_id, name: data[0].guide_name };
+}
+
+// ── LOCATION QUEUE (IndexedDB) ──
+// Every GPS fix is written here first. A separate sync worker (chunk D) will
+// later drain this queue to Supabase when the network is available.
+//
+// Why: phones go offline. WiFi disappears. Pages reload. We must capture every
+// fix on the device, persistently, *before* even thinking about the network.
+// That's the whole point of "offline-first" — the local store is the source of
+// truth; the network is a sync mechanism.
+//
+// Schema:
+//   Database: "fieldnote"
+//   Object store: "pending_locations"
+//   Key: auto-incrementing integer (used to delete a row after sync)
+//   Value: {
+//     session_id, passenger_id, lng, lat, accuracy, client_recorded_at
+//   }
+//
+// Indexes:
+//   "by_session" on session_id — for inspecting a session's queue
+//   "by_recorded" on client_recorded_at — for sending oldest-first
+
+const DB_NAME = 'fieldnote';
+const DB_VERSION = 1;
+const STORE_LOCATIONS = 'pending_locations';
+
+let _dbPromise = null;
+
+// Open (or create) the database. Cached as a promise so concurrent callers
+// share the same open DB instead of racing.
+function openDB() {
+  if (_dbPromise) return _dbPromise;
+  _dbPromise = idb.openDB(DB_NAME, DB_VERSION, {
+    upgrade(db, oldVersion, newVersion) {
+      // upgrade() runs once, the first time the user visits with this DB_VERSION.
+      // For chunk C we have a single store; later chunks may add more.
+      if (!db.objectStoreNames.contains(STORE_LOCATIONS)) {
+        const store = db.createObjectStore(STORE_LOCATIONS, {
+          keyPath: 'id',
+          autoIncrement: true,
+        });
+        store.createIndex('by_session', 'session_id');
+        store.createIndex('by_recorded', 'client_recorded_at');
+      }
+    },
+  });
+  return _dbPromise;
+}
+
+// Append one location row to the queue.
+// `fix` shape: { lng, lat, accuracy, client_recorded_at }
+// session_id and passenger_id are added here so callers don't have to thread them.
+async function queueLocation(fix) {
+  if (!SESSION) {
+    // No session, nothing to queue against. Useful guard for the legacy ?tour mode.
+    return;
+  }
+  const db = await openDB();
+  await db.add(STORE_LOCATIONS, {
+    session_id: SESSION.id,
+    passenger_id: PASSENGER_ID,
+    lng: fix.lng,
+    lat: fix.lat,
+    accuracy: fix.accuracy ?? null,
+    client_recorded_at: fix.client_recorded_at,  // ISO string
+  });
+  // Nudge the sync worker. Bails fast if offline or if a sync is already
+  // running, so this is essentially free when we can't actually send.
+  syncOnce().catch(() => {});
+}
+
+// Read all queued rows, oldest first. Used by the sync worker (chunk D)
+// and by the debug panel to show queue contents.
+async function getQueuedLocations(limit = 1000) {
+  const db = await openDB();
+  return db.getAllFromIndex(STORE_LOCATIONS, 'by_recorded', null, limit);
+}
+
+// Count rows currently in the queue. Lightweight; called frequently to update
+// the debug indicator.
+async function getQueueSize() {
+  const db = await openDB();
+  return db.count(STORE_LOCATIONS);
+}
+
+// Delete a queued row by its auto-incrementing id. Called by chunk D after a
+// successful sync of that row to Supabase.
+async function deleteQueuedLocation(id) {
+  const db = await openDB();
+  await db.delete(STORE_LOCATIONS, id);
+}
+
+// Wipe the queue entirely. Useful for testing and for a "reset" button.
+async function clearLocationQueue() {
+  const db = await openDB();
+  await db.clear(STORE_LOCATIONS);
+}
+
+// ── SYNC WORKER ──
+// Periodically (and on connectivity change) drains the local queue to Supabase.
+//
+// Rules of the worker:
+//  1. Never delete a row before Supabase has confirmed the insert. If we delete
+//     first, a network error mid-send loses data permanently.
+//  2. Only one sync runs at a time. We use a simple in-flight flag because
+//     overlapping syncs would cause duplicate-key errors and double-deletes.
+//  3. Failures are silent and retried — no error popups for "couldn't reach
+//     Supabase," because that's the normal state when offline. The queue
+//     count in the UI is the user-visible signal.
+//  4. Batches are bounded (50 rows) to keep individual requests small and to
+//     bound the worst case if the queue ever grows huge.
+//
+// Triggers for a sync attempt:
+//   - On a fixed interval (every 10s) — handles the "we just had a fix queued"
+//     case while online, and the slow drip while offline.
+//   - On `window.addEventListener('online', ...)` — fires the instant WiFi
+//     comes back, so reconnection drains the queue immediately.
+//   - On every queueLocation() write — cheap to attempt; bails fast if offline
+//     or if a sync is already running.
+
+const SYNC_INTERVAL_MS = 10000;
+const SYNC_BATCH_SIZE = 50;
+let _syncInFlight = false;
+let _syncTimer = null;
+// Stats kept for the debug panel — purely informational.
+const _syncStats = {
+  lastAttemptAt: null,   // ms timestamp of the last sync attempt
+  lastSuccessAt: null,   // ms timestamp of the last successful sync
+  lastError: null,       // error message from the most recent failure
+  totalSynced: 0,        // running count of rows successfully sent this page-load
+};
+
+async function syncOnce() {
+  if (_syncInFlight) return;          // already running
+  if (!navigator.onLine) return;      // browser knows we're offline; skip
+  _syncInFlight = true;
+  _syncStats.lastAttemptAt = Date.now();
+
+  try {
+    // Get oldest rows first. Using getAllFromIndex with the by_recorded index
+    // means rows come back in client_recorded_at order, which is also roughly
+    // insertion order — newest data lands in Supabase chronologically.
+    const rows = await getQueuedLocations(SYNC_BATCH_SIZE);
+    if (rows.length === 0) {
+      // Nothing to sync. Update stats so the UI shows we *checked*.
+      _syncStats.lastSuccessAt = Date.now();
+      _syncStats.lastError = null;
+      return;
+    }
+
+    // Build the payload Supabase expects. We strip the local `id` field — the
+    // DB auto-assigns its own bigserial id on insert. Everything else is the
+    // schema we agreed on.
+    const payload = rows.map(r => ({
+      session_id: r.session_id,
+      passenger_id: r.passenger_id,
+      lng: r.lng,
+      lat: r.lat,
+      accuracy: r.accuracy,
+      client_recorded_at: r.client_recorded_at,
+    }));
+
+    const { error } = await supabaseClient
+      .from('passenger_locations')
+      .insert(payload);
+
+    if (error) {
+      // Could be RLS, schema mismatch, network blip, server outage. We don't
+      // distinguish — leave rows in place and try again later.
+      _syncStats.lastError = error.message;
+      console.warn('[sync] insert failed', error);
+      return;
+    }
+
+    // Insert succeeded — now safe to delete those rows from the local queue.
+    // We delete by id one at a time (idb has no bulk delete by primary-key
+    // array, and we're only doing 50 max).
+    for (const r of rows) {
+      try {
+        await deleteQueuedLocation(r.id);
+      } catch (err) {
+        // If a delete fails (extremely rare), the next sync will see this row
+        // again and try to re-insert it — Supabase will accept the duplicate
+        // (different bigserial id, no unique constraint that would reject).
+        // Mild data dup is worse than data loss; we accept it.
+        console.warn('[sync] queue delete failed for row', r.id, err);
+      }
+    }
+
+    _syncStats.totalSynced += rows.length;
+    _syncStats.lastSuccessAt = Date.now();
+    _syncStats.lastError = null;
+
+    // If we hit the batch limit, more rows are probably waiting. Kick another
+    // sync immediately rather than waiting for the next interval.
+    if (rows.length === SYNC_BATCH_SIZE) {
+      // setTimeout 0 yields to the event loop so we don't recurse synchronously.
+      setTimeout(() => { syncOnce().catch(() => {}); }, 0);
+    }
+  } catch (err) {
+    _syncStats.lastError = (err && err.message) || String(err);
+    console.warn('[sync] unexpected error', err);
+  } finally {
+    _syncInFlight = false;
+    updateDebugQueueCount();
+  }
+}
+
+// Kick the worker on page load and set up triggers. Called from boot() once
+// we have a session — no point syncing before then.
+function startSyncWorker() {
+  if (_syncTimer) return;             // already running
+  // Periodic ticker.
+  _syncTimer = setInterval(() => {
+    syncOnce().catch(() => {});
+  }, SYNC_INTERVAL_MS);
+  // Reconnection trigger — fires when the browser regains network.
+  window.addEventListener('online', () => {
+    syncOnce().catch(() => {});
+  });
+  // Try once immediately so any leftover rows from a previous session-load
+  // start draining without waiting for the first interval.
+  syncOnce().catch(() => {});
+}
+
+// ── 1. THE TOUR ──
+// Loaded from Supabase at runtime. Until loadTour() resolves, this stays null
+// and the app shows a loading state.
+//
+// Shape after load (v0.5 — stops + pins hierarchy):
+//   {
+//     id, slug, name, subtitle,
+//     home: { lng, lat },
+//     stops: [
+//       {
+//         id, ordinal, name, subtitle, lng, lat, activation_radius_m,
+//         pins: [
+//           { id, ordinal, title, body, lng, lat, radius }  // radius aliased from trigger_radius_m
+//         ]
+//       }
+//     ]
+//   }
+//
+// Pins live under stops. Use activePins() (defined below) to iterate the
+// flat list of pins that should be visible/triggerable right now — that
+// helper filters by ACTIVE_STOP_IDS.
+let TOUR = null;
+
+// ── 1b. THE SESSION ──
+// Set when the URL contains ?session=<id> and the row was found.
+// Shape: { id, label, tour_slug, guide_name, started_at, ended_at }
+// Stays null when running in legacy ?tour=<slug> mode (no session).
+let SESSION = null;
+
+// ── 1d. ACTIVE STOPS ──
+// Stops that have been activated this session. Pins are only rendered and
+// triggerable for activated stops.
+//
+// In chunk A this is populated with ALL stops on session load (parity with
+// v0.4 — every pin is visible the moment the passenger joins). Chunk C
+// replaces this with a catch-up query that loads only stops whose
+// stop_activations row exists. Chunk B adds the guide-side flow to insert
+// new activation rows.
+const ACTIVE_STOP_IDS = new Set();
+
+// Reshape a Supabase-returned tour row (with nested stops and pins from a
+// foreign-key select) into the in-memory TOUR shape documented above.
+// Aliases trigger_radius_m → radius and keeps ordinals sorted.
+function reshapeTour(raw) {
+  return {
+    id: raw.id,
+    slug: raw.slug,
+    name: raw.name,
+    subtitle: raw.subtitle,
+    home: { lng: raw.home_lng, lat: raw.home_lat },
+    stops: (raw.stops || [])
+      .slice()
+      .sort((a, b) => a.ordinal - b.ordinal)
+      .map(s => ({
+        id: s.id,
+        ordinal: s.ordinal,
+        name: s.name,
+        subtitle: s.subtitle,
+        lng: s.lng,
+        lat: s.lat,
+        activation_radius_m: s.activation_radius_m,
+        pins: (s.pins || [])
+          .slice()
+          .sort((a, b) => a.ordinal - b.ordinal)
+          .map(p => ({
+            id: p.id,
+            ordinal: p.ordinal,
+            title: p.title,
+            body: p.body,
+            lng: p.lng,
+            lat: p.lat,
+            radius: p.trigger_radius_m,
+          })),
+      })),
+  };
+}
+
+// Flat list of pins from currently-active stops. Use this anywhere the old
+// code said `TOUR.pins` — that field no longer exists.
+function activePins() {
+  if (!TOUR) return [];
+  const out = [];
+  for (const stop of TOUR.stops) {
+    if (!ACTIVE_STOP_IDS.has(stop.id)) continue;
+    for (const pin of stop.pins) out.push(pin);
+  }
+  return out;
+}
+
+// Flat list of all pins regardless of activation. Used by initMap to compute
+// the initial bounds (we want to fit the whole tour even if pins are hidden).
+function allPins() {
+  if (!TOUR) return [];
+  const out = [];
+  for (const stop of TOUR.stops) {
+    for (const pin of stop.pins) out.push(pin);
+  }
+  return out;
+}
+
+// ── 1c. ROLE ──
+// Set during boot from the URL ?role= param. Two values for v0.4:
+//   'passenger' (default) — broadcasts location, follows triggers, sees own dot
+//   'guide'              — observes passengers, no triggers, no self-tracking
+//                          (yet — guide visibility toggle comes in chunk F)
+let ROLE = 'passenger';
+
+// ── 2. STATE ──
+// Everything that changes while the app is running.
+const state = {
+  // GPS-related
+  gpsMode: 'searching',  // 'searching' | 'real' | 'simulated' | 'denied' | 'unavailable'
+  youLng: null,
+  youLat: null,
+  accuracy: null,        // GPS accuracy radius in meters
+  heading: null,         // degrees, may be null on phones not moving
+
+  // Tour-related
+  armedPinId: null,      // pin currently inside its radius
+  firedPinIds: new Set(),// pins whose chime has already fired this session
+
+  // UI
+  following: false,      // map auto-centers on YOU when true
+};
+
+// ── 3. DOM REFERENCES ──
+const overlay = document.getElementById('overlay');
+const pinsLayer = document.getElementById('pins-layer');
+const passengersLayer = document.getElementById('passengers-layer');
+const youLayer = document.getElementById('you-layer');
+const popup = document.getElementById('popup');
+const popupTitle = document.getElementById('popup-title');
+const popupBodyEl = document.getElementById('popup-body-el');
+const popupStamp = document.getElementById('popup-stamp');
+const popupClose = document.getElementById('popup-close');
+const signalDot = document.getElementById('signal-dot');
+const signalText = document.getElementById('signal-text');
+const gpsBanner = document.getElementById('gps-banner');
+const gpsBannerMsg = document.getElementById('gps-banner-msg');
+
+// ── SVG OVERLAY SIZING ──
+// The overlay SVG sits on top of Mapbox. For its internal coordinate system
+// to match screen pixels (so translate(400, 300) means "400px right, 300px down"),
+// its viewBox must equal its pixel dimensions. We set this on load and on resize.
+function syncOverlaySize() {
+  const stage = document.getElementById('stage');
+  const w = stage.clientWidth;
+  const h = stage.clientHeight;
+  overlay.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  overlay.setAttribute('width', w);
+  overlay.setAttribute('height', h);
+}
+syncOverlaySize();
+window.addEventListener('resize', () => {
+  syncOverlaySize();
+  renderAll();
+});
+
+let map = null;  // Mapbox map instance
+
+// ── 4. BOOT ──
+// Order of operations:
+//   1. Validate config (Mapbox + Supabase) — fail loud if missing
+//   2. Read ?tour=<slug> from URL, default if absent
+//   3. Show loading state
+//   4. Fetch tour from Supabase
+//   5. Init map with the loaded tour, or show error screen if fetch failed
+
+// `window.supabase` is the global injected by the CDN bundle (which owns that name);
+// we destructure createClient out and name our instance `supabaseClient` to avoid shadowing.
+const { createClient } = window.supabase;
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── 4. BOOT ──
+// Three URL states for v0.3 chunk A:
+//
+//   ?session=<id>            → join the named session, fetch its tour, render map
+//   ?tour=<slug>             → legacy v0.2 mode, load tour directly (kept for testing)
+//   (neither)                → show "create session" form so a guide can start one
+//
+// The "create session" path generates a nanoid, inserts a session row,
+// then redirects to ?session=<newId>.
+
+async function boot() {
+  // Config sanity check.
+  if (!MAPBOX_TOKEN || !MAPBOX_TOKEN.startsWith('pk.')) {
+    showFatalError('Mapbox token missing. Paste your public token (pk.…) into the MAPBOX_TOKEN constant.');
+    return;
+  }
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    showFatalError('Supabase config missing. Set SUPABASE_URL and SUPABASE_KEY at the top of the script.');
+    return;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get('session');
+  const tourSlug = params.get('tour');
+  const role = params.get('role');
+
+  // Verify any stored guide token. Cheap — one RPC call. Result populates
+  // module-level GUIDE so downstream code knows whether we're a logged-in guide.
+  GUIDE = await verifyGuideToken();
+
+  // Auth gate: ?role=guide requires a valid token. If missing or invalid,
+  // show the invite-code form. After successful redemption the form reloads
+  // the page, taking us through this boot path again.
+  if (role === 'guide' && !GUIDE) {
+    showInviteCodeForm();
+    return;
+  }
+
+  // Lock in the role for the rest of the page-load. Default is passenger.
+  // Three ways the role gets set:
+  //   ?role=passenger     — explicit override, forces passenger view (escape hatch)
+  //   ?role=guide         — explicit, requires auth (gated above)
+  //   (no ?role param)    — implicit: if logged in as a guide, default to guide view
+  //                         on session URLs. This removes the friction of typing
+  //                         &role=guide manually on phone keyboards every time.
+  if (role === 'passenger') {
+    ROLE = 'passenger';
+  } else if (role === 'guide' && GUIDE) {
+    ROLE = 'guide';
+  } else if (!role && GUIDE && sessionId) {
+    // Authenticated guide opening a session without specifying role → guide.
+    ROLE = 'guide';
+  } else {
+    ROLE = 'passenger';
+  }
+
+  if (sessionId) {
+    // Path 1: join an existing session.
+    // If we're a logged-in guide, remember this session so we can resume
+    // it on next bare-URL visit (instead of always landing in "create new").
+    if (GUIDE) rememberLastSession(sessionId);
+    await loadSessionAndTour(sessionId);
+  } else if (tourSlug) {
+    // Path 2: legacy direct-tour mode (v0.2 behavior). Useful for testing
+    // a tour without going through the session flow.
+    await loadTourDirectly(tourSlug);
+  } else if (GUIDE) {
+    // Path 3a: logged-in guide visiting bare URL. If they have a recent
+    // session, take them straight back to it. Otherwise show create-session form.
+    const last = getLastSession();
+    if (last) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('session', last);
+      window.location.replace(url.toString());
+      return;
+    }
+    showCreateSessionForm();
+  } else {
+    // Path 3b: bare URL, not a logged-in guide. This person is most likely
+    // a passenger who needs a session link from their guide. Show a friendly
+    // landing screen with two paths: "I have a code" (guides) or "I'm joining
+    // a tour" (passengers — explains they need a link).
+    showLandingScreen();
+  }
+}
+
+// Bare-URL landing for users who aren't logged in and don't have a session/tour.
+// Two paths out:
+//   - "I'm a guide" → opens the invite-code form
+//   - "I'm joining a tour" → explains they need a link from their guide
+function showLandingScreen() {
+  hideLoading();
+  let el = document.getElementById('landing-screen');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'landing-screen';
+  el.style.cssText =
+    'position:absolute; inset:0; z-index:90; background:var(--paper);' +
+    'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+    'gap:20px; padding:40px; text-align:center;';
+  el.innerHTML = `
+    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
+      Fieldnote
+    </div>
+    <div style="font-family:'Fraunces',serif; font-style:italic; font-size:24px; color:var(--ink); max-width:280px; line-height:1.3;">
+      Welcome.
+    </div>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:260px; line-height:1.6;">
+      Joining a tour? Open the link your guide sent you — it ends with <code>?session=…</code>.
+    </div>
+    <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--rule); width:240px;"></div>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule);">
+      Are you a guide?
+    </div>
+    <button
+      id="landing-guide-btn"
+      style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+    >
+      Guide login
+    </button>
+  `;
+  document.getElementById('phone').appendChild(el);
+
+  document.getElementById('landing-guide-btn').addEventListener('click', () => {
+    el.remove();
+    showInviteCodeForm();
+  });
+}
+
+// Remember the last session a guide opened, so visiting the bare URL on the
+// same device next time resumes that session instead of always starting new.
+// Cleared explicitly via "End session" button (chunk H, deferred).
+const LAST_SESSION_KEY = 'fieldnote_last_session';
+function rememberLastSession(sessionId) {
+  try { localStorage.setItem(LAST_SESSION_KEY, sessionId); } catch {}
+}
+function getLastSession() {
+  try { return localStorage.getItem(LAST_SESSION_KEY) || null; } catch { return null; }
+}
+function clearLastSession() {
+  try { localStorage.removeItem(LAST_SESSION_KEY); } catch {}
+}
+
+// Load a session by ID, then load its tour, then init the map.
+async function loadSessionAndTour(sessionId) {
+  showLoading(`Joining session ${sessionId}…`);
+
+  // Fetch the session row.
+  const { data: session, error: sessionErr } = await supabaseClient
+    .from('sessions')
+    .select('id, label, tour_slug, guide_name, started_at, ended_at')
+    .eq('id', sessionId)
+    .single();
+
+  if (sessionErr || !session) {
+    showFatalError(`Couldn't find session "${sessionId}". The link may be wrong, or the session may have been deleted.`);
+    return;
+  }
+
+  // Fetch the tour referenced by the session, with nested stops and pins.
+  // The select syntax `stops ( ..., pins ( ... ) )` uses Supabase's automatic
+  // foreign-key join — works because `stops.tour_id` and `pins.stop_id` are
+  // declared as foreign keys in the schema.
+  const { data: tour, error: tourErr } = await supabaseClient
+    .from('tours')
+    .select(`
+      id, slug, name, subtitle, home_lng, home_lat,
+      stops (
+        id, ordinal, name, subtitle, lng, lat, activation_radius_m,
+        pins (
+          id, ordinal, title, body, lng, lat, trigger_radius_m
+        )
+      )
+    `)
+    .eq('slug', session.tour_slug)
+    .single();
+
+  if (tourErr || !tour) {
+    showFatalError(`Session "${sessionId}" references tour "${session.tour_slug}", which couldn't be loaded.`);
+    return;
+  }
+
+  // Stash session + tour into module state.
+  SESSION = session;
+  TOUR = reshapeTour(tour);
+
+  // Chunk A parity: activate every stop on session join. This keeps v0.4
+  // behavior (all pins visible immediately) while the new schema lands.
+  // Chunk C replaces this with a stop_activations catch-up query.
+  for (const stop of TOUR.stops) ACTIVE_STOP_IDS.add(stop.id);
+
+  applyTourMetadata();
+  hideLoading();
+
+  // Chunk G: before showing the map to a passenger, make sure they've
+  // registered a name with this session. Guides skip this — they identified
+  // themselves by typing a name when creating the session, and pulled their
+  // GUIDE row earlier via the auth flow.
+  if (ROLE === 'passenger') {
+    const named = await ensurePassengerNameRegistered();
+    if (!named) return;   // gate is on screen, will reload page on submit
+  }
+
+  initMap(MAPBOX_TOKEN);
+
+  // Now that we have a session, start the sync worker. It will pick up any
+  // leftover rows from a previous page-load and stream new fixes to Supabase.
+  startSyncWorker();
+}
+
+// ── PASSENGER NAMES (chunk G) ──
+// Each passenger registers a name via session_passengers when they first
+// join. The row's primary key is (session_id, passenger_id) so each passenger
+// owns one row per session.
+//
+// MY_NAME caches our own current name across the session — used to prefill
+// the edit form, used by the burger-menu label, and as the source of truth
+// for "have I registered yet."
+let MY_NAME = null;
+
+// Check whether the current passenger has a session_passengers row for this
+// session. If yes, populate MY_NAME and return true. If no, show the name
+// gate (full-screen prompt) and return false. The gate's submit handler
+// reloads the page on success, taking us back through this same path with
+// a freshly inserted row.
+async function ensurePassengerNameRegistered() {
+  if (!SESSION) return true;   // no session, no name needed (shouldn't happen)
+
+  const { data, error } = await supabaseClient
+    .from('session_passengers')
+    .select('name')
+    .eq('session_id', SESSION.id)
+    .eq('passenger_id', PASSENGER_ID)
+    .maybeSingle();
+
+  if (error) {
+    // Network or RLS error. Don't block the user forever — let them through
+    // with no name; chunk G's read side gracefully handles missing names.
+    console.warn('session_passengers lookup failed', error);
+    return true;
+  }
+  if (data && data.name) {
+    MY_NAME = data.name;
+    return true;
+  }
+  // No row yet — show the gate.
+  showNameEntryGate();
+  return false;
+}
+
+// Full-screen name-entry prompt. Blocks the map until the passenger types a
+// name. On submit, inserts the row and reloads (boot picks up the saved name
+// via ensurePassengerNameRegistered → MY_NAME, lets initMap proceed).
+function showNameEntryGate() {
+  hideLoading();
+  let el = document.getElementById('name-gate-screen');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'name-gate-screen';
+  el.style.cssText =
+    'position:absolute; inset:0; z-index:90; background:var(--paper);' +
+    'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+    'gap:18px; padding:40px; text-align:center;';
+  const guideName = (SESSION && SESSION.guide_name) ? SESSION.guide_name : 'your guide';
+  el.innerHTML = `
+    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
+      Joining tour
+    </div>
+    <div style="font-family:'Fraunces',serif; font-style:italic; font-size:24px; color:var(--ink); max-width:280px; line-height:1.3;">
+      What's your name?
+    </div>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:280px; line-height:1.5;">
+      So ${guideName} can recognize you on the map.
+    </div>
+    <input
+      id="name-gate-input"
+      type="text"
+      placeholder="your name"
+      maxlength="40"
+      autocomplete="given-name"
+      style="font-family:'JetBrains Mono',monospace; font-size:14px; padding:14px 16px; border:1px solid var(--rule); background:var(--paper-2); width:260px; border-radius:6px; text-align:center;"
+    />
+    <button
+      id="name-gate-submit"
+      style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+    >
+      Join tour
+    </button>
+    <div id="name-gate-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
+  `;
+  document.getElementById('phone').appendChild(el);
+
+  const input = document.getElementById('name-gate-input');
+  const errorEl = document.getElementById('name-gate-error');
+  const btn = document.getElementById('name-gate-submit');
+
+  async function trySubmit() {
+    const name = (input.value || '').trim();
+    errorEl.textContent = '';
+    if (!name) { input.focus(); errorEl.textContent = 'Enter a name to continue.'; return; }
+    if (name.length > 40) { errorEl.textContent = 'Name is too long.'; return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Joining…';
+    try {
+      const { error } = await supabaseClient
+        .from('session_passengers')
+        .insert({
+          session_id: SESSION.id,
+          passenger_id: PASSENGER_ID,
+          name,
+        });
+      if (error) throw new Error(error.message || 'Could not register name.');
+      // Reload — boot path picks up the saved name and shows the map.
+      window.location.reload();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      btn.disabled = false;
+      btn.textContent = 'Join tour';
+    }
+  }
+  btn.addEventListener('click', trySubmit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') trySubmit();
+  });
+  input.focus();
+}
+
+// Edit-name form, accessible from burger menu. Independent overlay (NOT part
+// of the screen-stack system) — same z-index pattern as the name gate so it
+// sits cleanly above everything. Removed via el.remove() on save or back.
+function showEditNameForm() {
+  let el = document.getElementById('edit-name-overlay');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'edit-name-overlay';
+  // Independent overlay — NOT part of the screen-stack system. Same z-index
+  // pattern as the name gate so it sits cleanly above everything.
+  el.style.cssText =
+    'position:absolute; inset:0; z-index:95; background:var(--paper);' +
+    'display:flex; flex-direction:column;';
+  el.innerHTML = `
+    <div class="status-bar"></div>
+    <div class="screen-header">
+      <button class="back-btn" id="edit-name-back" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </button>
+      <div class="screen-title">Your name</div>
+    </div>
+    <div style="flex:1; padding:30px 28px; display:flex; flex-direction:column; gap:14px;">
+      <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); line-height:1.5;">
+        How your guide sees you on the map.
+      </div>
+      <input
+        id="edit-name-input"
+        type="text"
+        placeholder="your name"
+        maxlength="40"
+        value="${(MY_NAME || '').replace(/"/g, '&quot;')}"
+        style="font-family:'JetBrains Mono',monospace; font-size:14px; padding:12px 14px; border:1px solid var(--rule); background:var(--paper-2); border-radius:6px;"
+      />
+      <button
+        id="edit-name-save"
+        style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+      >Save</button>
+      <div id="edit-name-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
+    </div>
+  `;
+  document.getElementById('phone').appendChild(el);
+
+  const input = document.getElementById('edit-name-input');
+  const errorEl = document.getElementById('edit-name-error');
+  const btn = document.getElementById('edit-name-save');
+  const back = document.getElementById('edit-name-back');
+
+  back.addEventListener('click', () => el.remove());
+
+  async function trySave() {
+    const name = (input.value || '').trim();
+    errorEl.textContent = '';
+    if (!name) { input.focus(); errorEl.textContent = 'Name cannot be empty.'; return; }
+    if (name.length > 40) { errorEl.textContent = 'Name is too long.'; return; }
+    if (name === MY_NAME) { el.remove(); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      const { error } = await supabaseClient
+        .from('session_passengers')
+        .update({ name })
+        .eq('session_id', SESSION.id)
+        .eq('passenger_id', PASSENGER_ID);
+      if (error) throw new Error(error.message || 'Could not save name.');
+      MY_NAME = name;
+      el.remove();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      btn.disabled = false;
+      btn.textContent = 'Save';
+    }
+  }
+  btn.addEventListener('click', trySave);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') trySave();
+  });
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+}
+
+// Legacy v0.2 path — load a tour directly without a session.
+// Kept around so we can test tour rendering without the session flow.
+async function loadTourDirectly(slug) {
+  showLoading(`Loading ${slug}…`);
+  const { data, error } = await supabaseClient
+    .from('tours')
+    .select(`
+      id, slug, name, subtitle, home_lng, home_lat,
+      stops (
+        id, ordinal, name, subtitle, lng, lat, activation_radius_m,
+        pins (
+          id, ordinal, title, body, lng, lat, trigger_radius_m
+        )
+      )
+    `)
+    .eq('slug', slug)
+    .single();
+
+  if (error || !data) {
+    showFatalError(`Couldn't load tour "${slug}". ${error ? error.message : 'No tour found with that slug.'}`);
+    return;
+  }
+
+  TOUR = reshapeTour(data);
+
+  // Chunk A parity: activate every stop. See loadSessionAndTour for context.
+  for (const stop of TOUR.stops) ACTIVE_STOP_IDS.add(stop.id);
+
+  applyTourMetadata();
+  hideLoading();
+  initMap(MAPBOX_TOKEN);
+}
+
+// Render the invite-code redemption form. Shown when ?role=guide is in the URL
+// but no valid guide token is present. Two modes:
+//   - "first" — code hasn't been redeemed yet, first-time registration
+//   - "recover" — code was previously redeemed; new device, same guide
+// User toggles between them via the link at the bottom. Reloads the page after
+// successful redemption/recovery so boot() picks up the new token.
+function showInviteCodeForm() {
+  hideLoading();
+  let el = document.getElementById('invite-code-screen');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'invite-code-screen';
+  el.style.cssText =
+    'position:absolute; inset:0; z-index:90; background:var(--paper);' +
+    'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+    'gap:18px; padding:40px; text-align:center;';
+  el.innerHTML = `
+    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
+      Fieldnote · Guide access
+    </div>
+    <div id="invite-headline" style="font-family:'Fraunces',serif; font-style:italic; font-size:22px; color:var(--ink); max-width:280px; line-height:1.3;">
+      Beta access only.
+    </div>
+    <div id="invite-blurb" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:260px; line-height:1.5;">
+      Paste your invite code below. If you don't have one, ask Filip.
+    </div>
+    <input
+      id="invite-code-input"
+      type="text"
+      placeholder="invite code"
+      autocomplete="off"
+      autocapitalize="off"
+      style="font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:6px; text-align:center;"
+    />
+    <input
+      id="invite-name-input"
+      type="text"
+      placeholder="your name"
+      style="font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:6px; text-align:center;"
+    />
+    <button
+      id="invite-redeem-btn"
+      style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+    >
+      Redeem
+    </button>
+    <div id="invite-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
+    <a id="invite-mode-toggle" href="#" style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); text-decoration:underline;">
+      Already had access? Recover.
+    </a>
+  `;
+  document.getElementById('phone').appendChild(el);
+
+  const codeInput = document.getElementById('invite-code-input');
+  const nameInput = document.getElementById('invite-name-input');
+  const errorEl = document.getElementById('invite-error');
+  const btn = document.getElementById('invite-redeem-btn');
+  const headline = document.getElementById('invite-headline');
+  const blurb = document.getElementById('invite-blurb');
+  const toggle = document.getElementById('invite-mode-toggle');
+
+  let mode = 'first';  // 'first' or 'recover'
+
+  function applyMode() {
+    if (mode === 'first') {
+      headline.textContent = 'Beta access only.';
+      blurb.textContent = "Paste your invite code below. If you don't have one, ask Filip.";
+      btn.textContent = 'Redeem';
+      toggle.textContent = 'Already had access? Recover.';
+    } else {
+      headline.textContent = 'Recover access.';
+      blurb.textContent = 'Enter the invite code you originally redeemed and your name. Your new device replaces the old one.';
+      btn.textContent = 'Recover';
+      toggle.textContent = "First time? Redeem an invite.";
+    }
+    errorEl.textContent = '';
+  }
+
+  toggle.addEventListener('click', e => {
+    e.preventDefault();
+    mode = (mode === 'first') ? 'recover' : 'first';
+    applyMode();
+    codeInput.focus();
+  });
+
+  async function trySubmit() {
+    const code = (codeInput.value || '').trim();
+    const name = (nameInput.value || '').trim();
+    errorEl.textContent = '';
+    if (!code) { codeInput.focus(); errorEl.textContent = 'Enter your invite code.'; return; }
+    if (!name) { nameInput.focus(); errorEl.textContent = 'Enter your name.'; return; }
+
+    btn.disabled = true;
+    btn.textContent = (mode === 'first') ? 'Redeeming…' : 'Recovering…';
+    try {
+      if (mode === 'first') {
+        await redeemInviteCode(code, name);
+      } else {
+        await recoverGuideAccess(code, name);
+      }
+      // On success, just reload — boot() will see the new token and proceed.
+      window.location.reload();
+    } catch (err) {
+      errorEl.textContent = err.message || 'Could not complete.';
+      btn.disabled = false;
+      btn.textContent = (mode === 'first') ? 'Redeem' : 'Recover';
+    }
+  }
+
+  btn.addEventListener('click', trySubmit);
+  // Press Enter in either field to submit.
+  [codeInput, nameInput].forEach(input => {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') trySubmit();
+    });
+  });
+  codeInput.focus();
+}
+
+// Render the "create session" form — a name input + a button.
+// On submit: generate nanoid, insert session row, redirect to ?session=<id>.
+function showCreateSessionForm() {
+  hideLoading();
+  let el = document.getElementById('create-session-screen');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'create-session-screen';
+  el.style.cssText =
+    'position:absolute; inset:0; z-index:90; background:var(--paper);' +
+    'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+    'gap:24px; padding:40px; text-align:center;';
+  el.innerHTML = `
+    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
+      Fieldnote · Start a tour
+    </div>
+    <div style="font-family:'Fraunces',serif; font-style:italic; font-size:24px; color:var(--ink); max-width:280px; line-height:1.3;">
+      Start a session to share your tour with passengers.
+    </div>
+    <input
+      id="guide-name-input"
+      type="text"
+      placeholder="Your name (e.g. Filip)"
+      value="${GUIDE ? GUIDE.name.replace(/"/g, '&quot;') : ''}"
+      style="font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:6px; text-align:center;"
+    />
+    <button
+      id="create-session-btn"
+      style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+    >
+      Start Session
+    </button>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); opacity:0.5;">
+      Tour: <code>${DEFAULT_TOUR_SLUG}</code>
+    </div>
+  `;
+  document.getElementById('phone').appendChild(el);
+
+  document.getElementById('create-session-btn').addEventListener('click', async () => {
+    const nameInput = document.getElementById('guide-name-input');
+    const guideName = (nameInput.value || '').trim();
+    if (!guideName) {
+      nameInput.focus();
+      nameInput.style.borderColor = 'var(--mark)';
+      return;
+    }
+    await createSession(DEFAULT_TOUR_SLUG, guideName);
+  });
+}
+
+// Insert a new session row, then redirect the page to ?session=<newId>.
+async function createSession(tourSlug, guideName) {
+  showLoading('Creating session…');
+
+  const id = nanoid8();
+  const label = makeSessionLabel(tourSlug, guideName);
+
+  // owner_guide_id will be set once the sessions table has that column
+  // (alter-table migration pending — see briefing's v0.4 schema). Until then
+  // sessions are created without ownership tracked. The auto role-promote
+  // logic in boot() handles guide-vs-passenger view selection regardless.
+  const insertPayload = {
+    id, label, tour_slug: tourSlug, guide_name: guideName,
+  };
+
+  const { data, error } = await supabaseClient
+    .from('sessions')
+    .insert(insertPayload)
+    .select()
+    .single();
+
+  if (error || !data) {
+    showFatalError(`Couldn't create session. ${error ? error.message : 'Unknown error.'}`);
+    return;
+  }
+
+  // Redirect to the new session URL. We pass role=guide explicitly so the
+  // creator lands in guide view immediately — no ambiguity, no relying on
+  // auto-promote logic, even survives if the user isn't logged in (which
+  // shouldn't happen but belt-and-suspenders).
+  const newUrl = `${window.location.pathname}?session=${id}&role=guide`;
+  window.location.replace(newUrl);
+}
+
+function applyTourMetadata() {
+  // Replace the menu's static title with whatever the loaded tour says.
+  const masthead = document.querySelector('.menu-masthead h1');
+  const sub = document.querySelector('.menu-masthead .sub');
+  const stamp = document.querySelector('.menu-masthead-stamp');
+  if (masthead) masthead.textContent = TOUR.name;
+  if (sub) sub.textContent = TOUR.subtitle || '';
+  if (stamp) stamp.textContent = `Tour · ${TOUR.slug}`;
+
+  // Populate the About-screen debug block so we can verify session + passenger
+  // identity from inside the running app (instead of hunting in the URL bar).
+  const debug = document.getElementById('about-debug');
+  if (debug) {
+    const sessionLine = SESSION
+      ? `Session: <code>${SESSION.id}</code><br>Label: <code>${SESSION.label}</code><br>Guide: <code>${SESSION.guide_name}</code>`
+      : `No session (legacy ?tour mode)`;
+    const guideLine = GUIDE
+      ? `Logged-in guide: <code>${GUIDE.name}</code> <button id="debug-logout" style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:3px 7px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">log out</button>`
+      : `Not logged in as a guide`;
+    // Show a role-switch link only when the toggle would actually change something
+    // (i.e. you're a logged-in guide, on a session URL).
+    const roleSwitchLine = (GUIDE && SESSION)
+      ? `Role: <code>${ROLE}</code> <button id="debug-role-switch" style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:3px 7px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">view as ${ROLE === 'guide' ? 'passenger' : 'guide'}</button>`
+      : '';
+    const newSessionLine = (GUIDE && SESSION)
+      ? `<button id="debug-new-session" style="font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">start new session</button>`
+      : '';
+    debug.innerHTML = `
+      <div style="opacity:0.5; font-size:10px; margin-bottom:6px;">Build: <code>${BUILD_VERSION}</code></div>
+      ${guideLine}<br>
+      ${roleSwitchLine ? roleSwitchLine + '<br>' : ''}
+      ${sessionLine}<br>
+      ${newSessionLine ? newSessionLine + '<br>' : ''}
+      Passenger: <code>${PASSENGER_ID.slice(0, 8)}…</code><br>
+      Queue: <code id="debug-queue-count">…</code>
+      <button id="debug-clear-queue" style="margin-left:8px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 8px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">clear</button>
+      <button id="debug-force-sync" style="margin-left:4px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 8px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">sync now</button>
+      <br>
+      <span id="debug-sync-stats" style="opacity:0.7;">Sync: idle</span><br>
+      <span id="debug-passengers" style="opacity:0.7;">Passengers: idle</span>
+    `;
+    if (GUIDE) {
+      const logoutBtn = document.getElementById('debug-logout');
+      if (logoutBtn) logoutBtn.addEventListener('click', () => {
+        clearGuideToken();
+        window.location.reload();
+      });
+    }
+    if (GUIDE && SESSION) {
+      const switchBtn = document.getElementById('debug-role-switch');
+      if (switchBtn) switchBtn.addEventListener('click', () => {
+        // Reload with explicit ?role= param so the change sticks for this view.
+        const url = new URL(window.location.href);
+        url.searchParams.set('role', ROLE === 'guide' ? 'passenger' : 'guide');
+        window.location.href = url.toString();
+      });
+      const newSessionBtn = document.getElementById('debug-new-session');
+      if (newSessionBtn) newSessionBtn.addEventListener('click', () => {
+        // Drop sticky last-session memory and visit the bare URL — boot's
+        // path 3a will see no last-session and show create-session form.
+        clearLastSession();
+        window.location.href = window.location.pathname;
+      });
+    }
+    document.getElementById('debug-clear-queue').addEventListener('click', async () => {
+      await clearLocationQueue();
+      updateDebugQueueCount();
+    });
+    document.getElementById('debug-force-sync').addEventListener('click', () => {
+      syncOnce().catch(() => {});
+    });
+    updateDebugQueueCount();
+    // Refresh the sync-stats line every couple seconds so it reflects activity.
+    setInterval(updateDebugSyncStats, 2000);
+    setInterval(updateDebugPassengers, 2000);
+    updateDebugSyncStats();
+    updateDebugPassengers();
+  }
+}
+
+// Render a compact one-line passenger summary for the debug panel.
+// Helps tell at a glance whether catch-up returned data and whether trails
+// have enough points to render.
+function updateDebugPassengers() {
+  const el = document.getElementById('debug-passengers');
+  if (!el) return;
+  const count = PASSENGERS.size;
+  if (count === 0) {
+    el.textContent = `Passengers: 0`;
+    return;
+  }
+  let totalPoints = 0;
+  let trailable = 0;
+  for (const [, p] of PASSENGERS) {
+    const n = p.trail ? p.trail.length : 0;
+    totalPoints += n;
+    if (n >= 2) trailable += 1;
+  }
+  el.textContent = `Passengers: ${count} · ${totalPoints} fixes · ${trailable} with trails`;
+}
+
+// Render a compact one-line sync status for the debug panel.
+function updateDebugSyncStats() {
+  const el = document.getElementById('debug-sync-stats');
+  if (!el) return;
+  const fmtAgo = (ts) => {
+    if (!ts) return 'never';
+    const sec = Math.round((Date.now() - ts) / 1000);
+    if (sec < 60) return `${sec}s ago`;
+    const min = Math.round(sec / 60);
+    return `${min}m ago`;
+  };
+  const online = navigator.onLine ? 'online' : 'offline';
+  const last = _syncStats.lastSuccessAt
+    ? `last ok ${fmtAgo(_syncStats.lastSuccessAt)}`
+    : 'no syncs yet';
+  const total = `${_syncStats.totalSynced} synced this load`;
+  const err = _syncStats.lastError ? ` · err: ${_syncStats.lastError}` : '';
+  // Subscription state is only meaningful in guide view; in passenger view
+  // it stays "idle" forever. Show it always — its absence in passenger mode
+  // tells you something too.
+  const sub = _subscriptionStatus !== 'idle' ? ` · sub: ${_subscriptionStatus}` : '';
+  el.textContent = `Sync: ${online} · ${last} · ${total}${sub}${err}`;
+}
+
+// Update the queue-size readout in the About panel. Called on initial load,
+// after every queue write, and after the manual "clear" button.
+async function updateDebugQueueCount() {
+  const el = document.getElementById('debug-queue-count');
+  if (!el) return;
+  try {
+    const n = await getQueueSize();
+    el.textContent = `${n} pending`;
+  } catch (err) {
+    el.textContent = 'error';
+  }
+}
+
+function showLoading(msg) {
+  let el = document.getElementById('loading-screen');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'loading-screen';
+    el.style.cssText =
+      'position:absolute; inset:0; z-index:90; background:var(--paper);' +
+      'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+      'gap:20px; padding:40px; text-align:center;';
+    el.innerHTML =
+      '<div style="font-family:\'Fraunces\',serif; font-style:italic; font-size:22px; color:var(--ink);" id="loading-msg"></div>' +
+      '<div style="font-family:\'JetBrains Mono\',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">Fieldnote</div>';
+    document.getElementById('phone').appendChild(el);
+  }
+  document.getElementById('loading-msg').textContent = msg;
+}
+function hideLoading() {
+  const el = document.getElementById('loading-screen');
+  if (el) el.remove();
+}
+function showFatalError(msg) {
+  hideLoading();
+  let el = document.getElementById('error-screen');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'error-screen';
+    el.style.cssText =
+      'position:absolute; inset:0; z-index:95; background:var(--paper);' +
+      'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+      'gap:20px; padding:40px; text-align:center;';
+    document.getElementById('phone').appendChild(el);
+  }
+  el.innerHTML =
+    '<div style="font-family:\'Fraunces\',serif; font-style:italic; font-size:22px; color:var(--mark);">Something went wrong</div>' +
+    '<div style="font-family:\'JetBrains Mono\',monospace; font-size:12px; line-height:1.6; color:var(--rule); max-width:300px;">' +
+    msg.replace(/</g, '&lt;') +
+    '</div>';
+}
+
+boot();
+
+// ── 5. MAP INIT ──
+function initMap(token) {
+  mapboxgl.accessToken = token;
+
+  // Compute the geographic bounds of this tour for the INITIAL view only.
+  // The map opens fitted to the tour bounds (so pins are visible), but the
+  // user can freely pan and zoom anywhere afterward — no maxBounds, no
+  // minZoom/maxZoom locks. Real tours span huge geography (10-12hr drives,
+  // multiple stops); locking the map to the home area was a v0.1 leftover
+  // assumption that doesn't match reality.
+  // Use ALL pins (not just active ones) so the initial map view always shows
+  // the whole tour area, even when chunks B/C are live and pins start hidden.
+  const allPoints = [TOUR.home, ...allPins()];
+  const lngs = allPoints.map(p => p.lng);
+  const lats = allPoints.map(p => p.lat);
+  const PADDING_DEG = 0.002;
+  const bounds = [
+    [Math.min(...lngs) - PADDING_DEG, Math.min(...lats) - PADDING_DEG],
+    [Math.max(...lngs) + PADDING_DEG, Math.max(...lats) + PADDING_DEG],
+  ];
+
+  map = new mapboxgl.Map({
+    container: 'mapbox-map',
+    style: 'mapbox://styles/mapbox/outdoors-v12',
+    bounds: bounds,                  // open with the whole tour visible
+    fitBoundsOptions: { padding: 40 },
+    // No maxBounds — user can pan anywhere on the globe.
+    // No minZoom/maxZoom — user can zoom from world view to street level freely.
+    // Mapbox's defaults (0–22) are fine.
+    attributionControl: false,
+    pitchWithRotate: false,
+    dragRotate: false,
+  });
+  map.touchZoomRotate.disableRotation();
+  map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
+
+  map.on('load', () => {
+    renderAll();
+    // GPS runs for everyone — guides need to see their own location too.
+    // What differs by role is what gets *broadcast* (queued + synced):
+    //   passenger → always queues their fixes
+    //   guide     → only queues when "Visible to passengers" is on (chunk F)
+    // For now (chunks B–E), guide queueing is suppressed in onGpsSuccess.
+    startGeolocation();
+    if (ROLE === 'guide') {
+      startGuideShell();
+    } else {
+      // Passengers listen for the guide's broadcasts (chunk F pass 2).
+      // Guide self-rendering is local; only passengers need this.
+      startPassengerGuideListening();
+    }
+  });
+  map.on('move', renderAll);
+  map.on('zoom', renderAll);
+
+  // user dragging the map breaks follow mode
+  map.on('dragstart', () => {
+    if (state.following) {
+      state.following = false;
+      document.getElementById('recenter').classList.remove('active');
+    }
+  });
+}
+
+// ── 6. GEOLOCATION ──
+// Using watchPosition for continuous tracking. Accuracy and update frequency
+// are at the browser's discretion — we ask for high accuracy but don't get a guarantee.
+let geoWatchId = null;
+
+// ── 6b. GUIDE SHELL ──
+// Counterpart to startGeolocation, called instead when ROLE === 'guide'.
+// Mounts the bottom-sheet UI and hides passenger-only HUD elements.
+// No GPS, no triggers, no walker dot.
+//
+// Chunk B scope: layout only. Passenger list shows "Passengers (0)" with a
+// share-link card. Live data lands in chunk C (catch-up query) and chunk D
+// (realtime subscription).
+function startGuideShell() {
+  // Hide the follow-me button — it's about auto-centering on your own dot,
+  // which is more confusing than helpful when the guide is observing
+  // multiple passengers. Signal pill stays visible: the guide still wants
+  // to know whether their own GPS is healthy (will matter when they go
+  // visible-to-passengers in chunk F).
+  const recenter = document.getElementById('recenter');
+  if (recenter) recenter.style.display = 'none';
+
+  mountGuideBottomSheet();
+  bindMapDeselectHandler();
+
+  // Catch-up first, then subscribe. Order matters: if we subscribed first,
+  // any rows arriving during the catch-up query would be racing with our
+  // initial dataset. Doing catch-up first means the in-memory state is
+  // populated before we start receiving live events.
+  (async () => {
+    await catchUpPassengers();
+    startPassengerLocationsSubscription();
+    // Chunk G pass 2: names ride alongside locations. Catch up names then
+    // subscribe — independent table, independent realtime channel.
+    await catchUpPassengerNames();
+    startPassengerNamesSubscription();
+  })().catch(err => {
+    console.warn('Guide shell startup failed', err);
+  });
+
+  // State tick — re-evaluate passenger states every 5s, even with no new
+  // GPS data. State transitions like "disconnected" happen by absence
+  // (no fix in 60s), not by event, so timer is necessary. Also refreshes
+  // the passenger list rows so "no signal" status flips correctly.
+  if (_stateTickHandle) clearInterval(_stateTickHandle);
+  _stateTickHandle = setInterval(() => {
+    if (PASSENGERS.size > 0) {
+      renderPassengers();
+      renderPassengerList();
+    }
+  }, 5000);
+
+  // Backgrounded-tab handler — see notes on bindVisibilityCatchUp. Fires
+  // catch-up when we become visible again so the guide isn't looking at
+  // stale passenger data after switching apps / tabs.
+  bindVisibilityCatchUp();
+}
+
+let _stateTickHandle = null;
+
+// ── PASSENGERS (guide view) ──
+// In-memory map of passenger_id → {
+//   lng, lat, accuracy, lastUpdate,    // most recent position (drives the dot)
+//   trail: [{lng,lat}, ...]            // every position seen for this passenger
+// }
+// Drives the dot rendering, trail rendering, and the bottom-sheet count.
+const PASSENGERS = new Map();
+
+// ID of the currently selected passenger (or null). Tap a passenger dot to
+// select them: their trail goes full-strength + thicker, all other trails
+// dim. Tap the same dot again, or tap empty map, to deselect.
+let SELECTED_PASSENGER = null;
+
+// ── GUIDE VISIBILITY (chunk F) ──
+// Two independent flags governing what passengers see of the guide.
+// They can be on/off in any combination.
+//
+//   SHARE_LOCATION    — when true, guide's GPS fixes inserted into
+//                       guide_locations every 5s, source='phone'. Passengers
+//                       see a beacon-blue dot at the guide's live position.
+//
+//   BUS_PIN_ON        — when true, the manually-placed bus pin is "live" and
+//                       visible to passengers as a beacon-blue square. Pin
+//                       position is in BUS_PIN.
+//                       BUS_PIN_PLACING flag indicates "next map tap places
+//                       the pin" — this auto-exits after one placement so
+//                       subsequent map taps don't accidentally move the pin.
+//                       Toggling the bus-pin pill OFF removes the pin entirely.
+//
+// State drives:
+//   - The two pills in the bottom-sheet header
+//   - Whether onGpsSuccess broadcasts a phone fix
+//   - Whether map taps place the bus pin
+//   - The top "broadcasting" banner (shown if either flag is on)
+let SHARE_LOCATION = false;
+let BUS_PIN_ON = false;
+let BUS_PIN_PLACING = false;     // true between "user tapped pill" and "user tapped map"
+
+// Where the bus pin currently is (when BUS_PIN_ON). Null if not placed yet.
+let BUS_PIN = null;  // shape: { lng, lat }
+
+// Throttle for guide-phone broadcasts (mirrors the passenger queue throttle).
+let _lastGuideBroadcastAt = 0;
+const GUIDE_BROADCAST_INTERVAL_MS = 5000;
+
+// ── PASSENGER STATE (chunk E) ──
+// One automatic state evaluated against each passenger's recent activity:
+//   'disconnected' — no updates received for 60+ seconds
+//
+// We initially designed in a 'stationary' state too (no movement in 15+ min),
+// but dropped it: passenger phones lock their screens during a tour, which
+// throttles GPS and looks identical to "stationary" in the data. Stationary
+// would fire constantly and stop being a useful signal. Disconnected fires
+// for the same reason but is honestly named — the guide just needs to know
+// "I've lost contact with this person," not why.
+//
+// State drives:
+//   - Outer ring color (paper / grey)
+//   - Halo pulse animation (off / grey-pulse)
+// Identity (the half-half pair) stays unchanged regardless of state.
+
+const STATE_DISCONNECTED_MS = 60 * 1000;        // no fix in 60s = disconnected
+
+const STATE_RING_COLORS = {
+  disconnected: '#888888',   // mid-grey, reads against paper and against passenger colors
+};
+const STATE_HALO_COLORS = STATE_RING_COLORS;
+
+// Evaluate one passenger's current state. Returns null (default) or
+// 'disconnected'. Pure function of passenger record + current time.
+function evaluatePassengerState(p, now) {
+  if (!p.lastUpdate) return null;
+  const lastTs = Date.parse(p.lastUpdate);
+  if (isNaN(lastTs)) return null;
+  if (now - lastTs > STATE_DISCONNECTED_MS) return 'disconnected';
+  return null;
+}
+
+// Curated color palette for passenger dots and trails.
+// Picked to be:
+//   - Vibrant — saturated enough to read clearly on small half-dots
+//   - Each measurably contrasts (≥3:1 WCAG) against the cream paper background
+//   - No blues (reserved for the guide's beacon-blue identity at #2563eb)
+//   - State colors (green/orange/red/grey for staleness in chunk E) override
+//     identity color when active, so brief overlap with those hues is fine
+// Twelve entries pair-combined gives 12 × 11 = 132 unique two-color combos —
+// enough for the extreme upper-bound case of 60 passengers in one session.
+const PASSENGER_PALETTE = [
+  '#dc2626',  // vibrant red
+  '#be123c',  // crimson
+  '#e11d48',  // hot pink
+  '#db2777',  // vibrant pink
+  '#c026d3',  // magenta
+  '#86198f',  // plum vivid
+  '#7c3aed',  // royal purple
+  '#15803d',  // forest vibrant
+  '#4d7c0f',  // lime deep
+  '#854d0e',  // olive vibrant
+  '#b45309',  // rust
+  '#c2410c',  // burnt orange
+];
+
+// Map passenger_id → [primaryColor, secondaryColor], deterministically.
+// Uses two FNV-1a hashes (different starting seeds) to pick two distinct
+// indices into the palette. Same passenger always gets the same pair across
+// reloads / devices / tabs.
+function colorsForPassenger(passengerId) {
+  // Hash 1 — primary color
+  let h1 = 2166136261;
+  for (let i = 0; i < passengerId.length; i++) {
+    h1 ^= passengerId.charCodeAt(i);
+    h1 = (h1 * 16777619) >>> 0;
+  }
+  // Hash 2 — different seed so it's not correlated with hash 1
+  let h2 = 3338459;
+  for (let i = 0; i < passengerId.length; i++) {
+    h2 ^= passengerId.charCodeAt(i);
+    h2 = (h2 * 16777619) >>> 0;
+  }
+  const i1 = h1 % PASSENGER_PALETTE.length;
+  // Force the secondary index to differ from primary — without this, a
+  // passenger could end up with two halves of the same color.
+  let i2 = h2 % PASSENGER_PALETTE.length;
+  if (i2 === i1) i2 = (i2 + 1) % PASSENGER_PALETTE.length;
+  return [PASSENGER_PALETTE[i1], PASSENGER_PALETTE[i2]];
+}
+
+// Backwards-compat shim — earlier code calls colorForPassenger() (singular)
+// expecting one color. Returns the primary so existing callers don't break.
+function colorForPassenger(passengerId) {
+  return colorsForPassenger(passengerId)[0];
+}
+
+// Catch-up query: ask Supabase for all rows in this session, ordered oldest
+// first. Build per-passenger state including the full trail.
+//
+// Why oldest-first for chunk C: the trail is the chronological path, so we
+// process rows in order. The "current position" naturally ends up being the
+// last row we see for each passenger (which is the most recent).
+async function catchUpPassengers({ merge = false } = {}) {
+  if (!SESSION) return;
+
+  // Pull all rows in this session, oldest first. Generous limit; if a session
+  // ever exceeds 50k rows we'll need pagination, but at 5s intervals that's
+  // ~70 hours of one passenger's tracking — well past reality.
+  const { data, error } = await supabaseClient
+    .from('passenger_locations')
+    .select('passenger_id, lng, lat, accuracy, client_recorded_at')
+    .eq('session_id', SESSION.id)
+    .order('client_recorded_at', { ascending: true })
+    .limit(50000);
+
+  if (error) {
+    console.warn('passenger_locations catch-up failed', error);
+    return;
+  }
+  if (!data) return;
+
+  // Walk through rows in chronological order, building each passenger's trail
+  // and overwriting their "current" with the latest fix. Track each row's
+  // timestamp so the subscription handler can dedupe rows that arrive both
+  // via catch-up and via realtime push.
+  //
+  // merge=false (default for first call): wipe state and rebuild from query.
+  // merge=true (used on reconnect-reconcile): keep existing state, only add
+  //   rows we haven't seen. Live data + reconciled gap, no double-count.
+  if (!merge) PASSENGERS.clear();
+  for (const row of data) {
+    let p = PASSENGERS.get(row.passenger_id);
+    if (!p) {
+      p = {
+        lng: row.lng,
+        lat: row.lat,
+        accuracy: row.accuracy,
+        lastUpdate: row.client_recorded_at,
+        trail: [],
+        _seenTimestamps: new Set(),
+      };
+      PASSENGERS.set(row.passenger_id, p);
+    }
+    if (p._seenTimestamps.has(row.client_recorded_at)) continue;
+    p._seenTimestamps.add(row.client_recorded_at);
+    p.trail.push({ lng: row.lng, lat: row.lat });
+    if (!p.lastUpdate || row.client_recorded_at > p.lastUpdate) {
+      p.lng = row.lng;
+      p.lat = row.lat;
+      p.accuracy = row.accuracy;
+      p.lastUpdate = row.client_recorded_at;
+    }
+  }
+  renderPassengers();
+  updatePassengerCount();
+}
+
+// Render the in-memory PASSENGERS map as SVG dots + trails.
+// Two SVG layers: the trails go behind the dots (so dot stays visually on top).
+//
+// Trails: one <polyline> per passenger holding all their positions. Browsers
+// handle thousand-point polylines comfortably; this is far cheaper than
+// drawing one segment-element per pair of points.
+//
+// Called after the catch-up query, after every realtime event (chunk D),
+// and on every map move/zoom (so dots/trails track the map projection).
+function renderPassengers() {
+  if (!passengersLayer) return;
+  passengersLayer.innerHTML = '';
+  if (PASSENGERS.size === 0) return;
+
+  // Pass 1: trails (so they render below dots).
+  // Each trail rendered as a sequence of dashed line segments. The dashed
+  // stroke is the visual style; the per-segment rendering is so we can fade
+  // older segments (lower opacity) toward the start of the trail.
+  //
+  // Selection-aware: when a passenger is selected, their trail keeps the
+  // age-based fade but at higher overall opacity; other trails ghost.
+  for (const [passengerId, p] of PASSENGERS) {
+    if (!p.trail || p.trail.length < 2) continue;
+    const [colorA] = colorsForPassenger(passengerId);
+    const isSelected = SELECTED_PASSENGER === passengerId;
+    const noneSelected = SELECTED_PASSENGER === null;
+    // Selection multiplier on top of per-segment age-opacity. Selected = 1.0,
+    // default = 0.85 (matches old solid-line look), unselected-when-other-
+    // selected = 0.08 (ghost).
+    let selMul;
+    if (noneSelected) selMul = 0.85;
+    else if (isSelected) selMul = 1.0;
+    else selMul = 0.08;
+
+    const projected = p.trail.map(t => project(t.lng, t.lat));
+    const N = projected.length;
+    for (let i = 0; i < N - 1; i++) {
+      // Age fade: oldest segment ~0.25 opacity multiplier, newest 1.0.
+      // Linear ramp from old → new. Combined with selection multiplier.
+      const ageT = N <= 2 ? 1 : i / (N - 2);          // 0 = oldest, 1 = newest
+      const ageOpacity = 0.25 + 0.75 * ageT;
+      const segOpacity = ageOpacity * selMul;
+
+      const a = projected[i];
+      const b = projected[i + 1];
+      const seg = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      seg.setAttribute('class', 'passenger-trail');
+      seg.setAttribute('data-passenger-id', passengerId);
+      seg.setAttribute('x1', a.x);
+      seg.setAttribute('y1', a.y);
+      seg.setAttribute('x2', b.x);
+      seg.setAttribute('y2', b.y);
+      seg.setAttribute('stroke', colorA);
+      seg.setAttribute('stroke-width', '3');
+      seg.setAttribute('stroke-linecap', 'round');
+      // Dashed pattern: 2px dash, 4px gap. Reads as dotted at typical zoom.
+      seg.setAttribute('stroke-dasharray', '2 4');
+      seg.setAttribute('opacity', String(segOpacity));
+      passengersLayer.appendChild(seg);
+    }
+  }
+
+  // Pass 2: dots (drawn after trails so they sit visually on top).
+  // Half-half rendering: two semicircles, one for each color, with a thin
+  // hairline between them so the split is visible at small sizes.
+  // Tappable: tap to select-and-highlight, tap again to deselect.
+  // Selection-aware: when a passenger is selected, all OTHER passenger dots
+  // dim to 0.4 opacity so the selected one visually wins.
+  // State-aware (chunk E): the outer ring + halo color reflect connection state.
+  //   default — paper-colored ring, static halo in primary identity color
+  //   disconnected — grey ring, halo pulses grey
+  const DOT_R = 10;
+  const HALO_R = 16;
+  const now = Date.now();
+  for (const [passengerId, p] of PASSENGERS) {
+    const { x, y } = project(p.lng, p.lat);
+    const [colorA, colorB] = colorsForPassenger(passengerId);
+    const isSelected = SELECTED_PASSENGER === passengerId;
+    const noneSelected = SELECTED_PASSENGER === null;
+    const dotOpacity = (noneSelected || isSelected) ? 1.0 : 0.4;
+
+    // State eval — drives ring color and halo behavior.
+    const state = evaluatePassengerState(p, now);
+    const ringColor = state ? STATE_RING_COLORS[state] : 'var(--paper)';
+    const haloColor = state ? STATE_HALO_COLORS[state] : colorA;
+    const haloPulses = state !== null;
+
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', 'passenger-group' + (isSelected ? ' selected' : ''));
+    g.setAttribute('data-passenger-id', passengerId);
+    g.setAttribute('data-state', state || 'default');
+    g.setAttribute('transform', `translate(${x}, ${y})`);
+    g.setAttribute('opacity', String(dotOpacity));
+    g.style.cursor = 'pointer';
+
+    g.addEventListener('click', (e) => {
+      e.stopPropagation();
+      togglePassengerSelection(passengerId);
+    });
+
+    if (isSelected) {
+      const selRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      selRing.setAttribute('r', DOT_R + 5);
+      selRing.setAttribute('fill', 'none');
+      selRing.setAttribute('stroke', colorA);
+      selRing.setAttribute('stroke-width', '2.5');
+      selRing.setAttribute('opacity', '0.85');
+      g.appendChild(selRing);
+    }
+
+    // Halo — pulses when state ≠ default to draw attention. When default,
+    // it's a static soft glow in the passenger's primary identity color.
+    // When pulsing, opacity is driven by CSS animation; we must NOT set it
+    // inline (inline SVG attrs beat CSS animations the same way they beat
+    // CSS rules).
+    const halo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    halo.setAttribute('class', 'passenger-halo' + (haloPulses ? ' pulse' : ''));
+    halo.setAttribute('r', HALO_R);
+    halo.setAttribute('fill', haloColor);
+    if (!haloPulses) halo.setAttribute('opacity', '0.18');
+    g.appendChild(halo);
+
+    // Left half — semicircle on the LEFT.
+    const halfL = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    halfL.setAttribute('d', `M 0 ${-DOT_R} A ${DOT_R} ${DOT_R} 0 0 0 0 ${DOT_R} Z`);
+    halfL.setAttribute('fill', colorA);
+    g.appendChild(halfL);
+
+    // Right half — semicircle on the RIGHT.
+    const halfR = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    halfR.setAttribute('d', `M 0 ${-DOT_R} A ${DOT_R} ${DOT_R} 0 0 1 0 ${DOT_R} Z`);
+    halfR.setAttribute('fill', colorB);
+    g.appendChild(halfR);
+
+    // Hairline between halves.
+    const split = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    split.setAttribute('x1', 0); split.setAttribute('y1', -DOT_R);
+    split.setAttribute('x2', 0); split.setAttribute('y2', DOT_R);
+    split.setAttribute('stroke', 'var(--paper)');
+    split.setAttribute('stroke-width', '1');
+    g.appendChild(split);
+
+    // Outer ring — color reflects state (paper / orange / grey).
+    const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    ring.setAttribute('class', 'passenger-dot');
+    ring.setAttribute('r', DOT_R);
+    ring.setAttribute('fill', 'none');
+    ring.setAttribute('stroke', ringColor);
+    // Bump ring stroke when state ≠ default so it reads as a deliberate
+    // signal, not a default render artifact.
+    ring.setAttribute('stroke-width', state ? '3' : '2');
+    g.appendChild(ring);
+
+    // Name label above the dot (chunk G pass 2). Renders when NAMES_VISIBLE
+    // is on OR when this passenger is selected. Uses SVG <text> with
+    // paint-order=stroke + thick white stroke + black fill — this gives the
+    // same black-text-on-white-halo look as the guide/bus markers, but with
+    // pure SVG (no HTML markers needed).
+    const showLabel = NAMES_VISIBLE || isSelected;
+    if (showLabel) {
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', 0);
+      label.setAttribute('y', -(HALO_R + 6));     // sits above the halo
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('font-family', 'JetBrains Mono, monospace');
+      label.setAttribute('font-size', '10');
+      label.setAttribute('font-weight', '700');
+      label.setAttribute('letter-spacing', '0.04em');
+      label.setAttribute('fill', '#000000');
+      label.setAttribute('stroke', '#ffffff');
+      label.setAttribute('stroke-width', '3');
+      label.setAttribute('paint-order', 'stroke');   // halo behind glyph
+      label.setAttribute('pointer-events', 'none');  // never absorbs taps
+      label.textContent = passengerDisplayName(p, passengerId);
+      g.appendChild(label);
+    }
+
+    passengersLayer.appendChild(g);
+  }
+}
+
+// Toggle selection: if this passenger is already selected, deselect; otherwise
+// select them. Re-render to apply visual state.
+function togglePassengerSelection(passengerId) {
+  if (SELECTED_PASSENGER === passengerId) {
+    SELECTED_PASSENGER = null;
+  } else {
+    SELECTED_PASSENGER = passengerId;
+  }
+  renderPassengers();
+}
+
+// Tap empty map = deselect. Wire up on map init.
+function bindMapDeselectHandler() {
+  if (!map) return;
+  map.on('click', (e) => {
+    // Bus-pin placement: triggered by tapping the pill, then this single
+    // map tap places it. Auto-exits placing mode so subsequent map taps
+    // don't move it accidentally — moving requires re-tapping the pill.
+    if (BUS_PIN_PLACING && ROLE === 'guide' && SESSION) {
+      BUS_PIN_PLACING = false;
+      placeBusPin(e.lngLat.lng, e.lngLat.lat);
+      return;
+    }
+    // Otherwise: clicking empty map = deselect any selected passenger.
+    if (SELECTED_PASSENGER !== null) {
+      SELECTED_PASSENGER = null;
+      renderPassengers();
+    }
+  });
+}
+
+// Insert an is_off=true sentinel row into guide_locations. Used when the guide
+// turns off either signal (share-location or bus-pin), so the passenger-side
+// reader can detect "this source is no longer live" and stop rendering it.
+// Position fields are required by the schema; we use the last known position
+// (it's the last "valid" location they had — passengers won't render anyway
+// since is_off=true, but keeping the position avoids null-handling churn).
+async function insertGuideOffSentinel(source, lng, lat) {
+  if (!SESSION) return;
+  const { error } = await supabaseClient.from('guide_locations').insert({
+    session_id: SESSION.id,
+    source,
+    lng: lng ?? 0,
+    lat: lat ?? 0,
+    is_off: true,
+  });
+  if (error) console.warn('guide off-sentinel insert failed', error);
+}
+
+// Toggle the "Share my location" pill. Independent of bus-pin state.
+async function toggleShareLocation() {
+  const wasOn = SHARE_LOCATION;
+  SHARE_LOCATION = !SHARE_LOCATION;
+  updateBroadcastBanner();
+  updateVisibilityControlUI();
+
+  if (!wasOn && SHARE_LOCATION) {
+    // Turning ON: don't wait for the next GPS callback — insert one row right
+    // now using the last known position. Without this, the first row only
+    // arrives whenever watchPosition decides to fire next, which can be 5–30s
+    // depending on the browser. That delay made it look like the toggle didn't
+    // work; passenger views saw nothing until the next natural fix.
+    if (SESSION && state.youLng != null && state.youLat != null) {
+      _lastGuideBroadcastAt = Date.now();
+      const { error } = await supabaseClient.from('guide_locations').insert({
+        session_id: SESSION.id,
+        source: 'phone',
+        lng: state.youLng,
+        lat: state.youLat,
+      });
+      if (error) console.warn('immediate phone insert failed', error);
+    }
+  }
+
+  if (wasOn && !SHARE_LOCATION) {
+    // Turning OFF: insert a sentinel row so passenger views know to hide the
+    // guide dot. Use the most recent known position. If no fix yet, use 0,0
+    // (passenger ignores the row anyway because is_off=true).
+    await insertGuideOffSentinel('phone', state.youLng, state.youLat);
+  }
+}
+
+async function toggleBusPin() {
+  if (BUS_PIN_ON) {
+    // Turning OFF: insert sentinel BEFORE clearing BUS_PIN so the position
+    // we send is the last known one (helpful for any debug or analytics view).
+    if (BUS_PIN) {
+      await insertGuideOffSentinel('bus_pin', BUS_PIN.lng, BUS_PIN.lat);
+    }
+    BUS_PIN_ON = false;
+    BUS_PIN_PLACING = false;
+    BUS_PIN = null;
+    closeBusPinPopup();
+    renderBusPinOnGuideMap();
+    updateBroadcastBanner();
+    updateVisibilityControlUI();
+    return;
+  }
+  // Turning ON.
+  BUS_PIN_ON = true;
+  if (!BUS_PIN) {
+    BUS_PIN_PLACING = true;
+  } else {
+    placeBusPin(BUS_PIN.lng, BUS_PIN.lat);
+  }
+  updateBroadcastBanner();
+  updateVisibilityControlUI();
+}
+
+// Place (or move) the bus pin. Called from the map-click handler when in
+// bus_pin mode. Inserts a new guide_locations row with source='bus_pin' so
+// passengers see the new position instantly via realtime.
+async function placeBusPin(lng, lat) {
+  BUS_PIN = { lng, lat };
+  updateVisibilityControlUI();
+  updateBroadcastBanner();      // banner copy depends on whether pin is placed
+  renderBusPinOnGuideMap();
+
+  if (!SESSION) return;
+  const { error } = await supabaseClient.from('guide_locations').insert({
+    session_id: SESSION.id,
+    source: 'bus_pin',
+    lng,
+    lat,
+  });
+  if (error) console.warn('bus_pin insert failed', error);
+}
+
+// Render the bus pin on the guide's own map (so they can see where they
+// dropped it). Lives in its own SVG layer so it's separate from passenger
+// dots and the guide's own YOU dot.
+let _busPinMarker = null;
+function renderBusPinOnGuideMap() {
+  // Remove any existing marker first; we re-render on every move.
+  if (_busPinMarker) {
+    _busPinMarker.remove();
+    _busPinMarker = null;
+  }
+  if (!BUS_PIN || !map) return;
+
+  // Same plain-text-above-marker treatment as the passenger view's renderGuideMarkers.
+  // Tap anywhere on the wrap to open the Move / Remove popup.
+  const wrap = document.createElement('div');
+  wrap.style.cssText =
+    'display:flex; flex-direction:column; align-items:center; cursor:pointer;';
+  wrap.appendChild(buildFloatingLabel('Bus'));
+  const square = document.createElement('div');
+  square.style.cssText =
+    'width:24px; height:24px; background:#2563eb; border:2px solid var(--paper);' +
+    'border-radius:4px; box-shadow:0 2px 6px rgba(0,0,0,0.25);' +
+    'display:flex; align-items:center; justify-content:center; color:white;' +
+    'font-family:JetBrains Mono,monospace; font-size:9px; font-weight:700;';
+  square.textContent = 'BUS';
+  wrap.appendChild(square);
+  wrap.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    openBusPinPopup();
+  });
+  _busPinMarker = new mapboxgl.Marker({ element: wrap, anchor: 'bottom' })
+    .setLngLat([BUS_PIN.lng, BUS_PIN.lat])
+    .addTo(map);
+}
+
+// Show a small popup near the bus marker with Move / Remove actions.
+// Move: enters placement mode (next map tap moves the pin).
+// Remove: deletes pin AND turns off the bus-pin pill.
+function openBusPinPopup() {
+  // Remove any existing popup first.
+  closeBusPinPopup();
+  if (!BUS_PIN || !map) return;
+
+  const popup = new mapboxgl.Popup({
+    closeButton: false,
+    closeOnClick: true,
+    offset: 18,
+    className: 'bus-pin-popup',
+  });
+  const html = `
+    <div style="display:flex; flex-direction:column; gap:6px; padding:4px; min-width:120px;">
+      <button data-bus-action="move" style="font-family:'JetBrains Mono',monospace; font-size:11px; padding:8px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:6px; cursor:pointer; text-align:left;">Move pin</button>
+      <button data-bus-action="remove" style="font-family:'JetBrains Mono',monospace; font-size:11px; padding:8px 12px; background:var(--paper-2); border:1px solid var(--mark); color:var(--mark); border-radius:6px; cursor:pointer; text-align:left;">Remove pin</button>
+    </div>
+  `;
+  popup.setLngLat([BUS_PIN.lng, BUS_PIN.lat]).setHTML(html).addTo(map);
+  _busPinPopup = popup;
+
+  // Wire button handlers — popup HTML is a fresh DOM tree each time, so we
+  // re-bind every open. closeOnClick handles the dismiss-on-elsewhere case.
+  setTimeout(() => {
+    const root = popup.getElement();
+    if (!root) return;
+    root.querySelectorAll('[data-bus-action]').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const action = btn.dataset.busAction;
+        if (action === 'move') {
+          BUS_PIN_PLACING = true;
+          updateVisibilityControlUI();
+          updateBroadcastBanner();
+        } else if (action === 'remove') {
+          // Remove pin AND turn off the pill — same effect as toggling pill off.
+          BUS_PIN_ON = false;
+          BUS_PIN_PLACING = false;
+          BUS_PIN = null;
+          renderBusPinOnGuideMap();
+          updateBroadcastBanner();
+          updateVisibilityControlUI();
+        }
+        closeBusPinPopup();
+      });
+    });
+  }, 0);
+}
+
+let _busPinPopup = null;
+function closeBusPinPopup() {
+  if (_busPinPopup) {
+    _busPinPopup.remove();
+    _busPinPopup = null;
+  }
+}
+
+// Update the top "broadcasting" banner. Shown whenever EITHER flag is on;
+// text varies depending on what's active.
+function updateBroadcastBanner() {
+  const el = document.getElementById('broadcast-banner');
+  if (!el) return;
+  const txtEl = document.getElementById('broadcast-banner-text');
+  if (!SHARE_LOCATION && !BUS_PIN_ON) {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = '';
+  // Banner text reflects what passengers actually see:
+  let txt;
+  if (SHARE_LOCATION && BUS_PIN_ON && BUS_PIN) {
+    txt = 'Guide location live · Bus location live';
+  } else if (SHARE_LOCATION && BUS_PIN_ON && !BUS_PIN) {
+    txt = 'Guide location live · tap map to place bus';
+  } else if (SHARE_LOCATION) {
+    txt = 'Guide location live';
+  } else if (BUS_PIN_ON && BUS_PIN) {
+    txt = 'Bus location live';
+  } else {
+    // BUS_PIN_ON true but no position yet — placement pending.
+    txt = 'Tap the map to place the bus';
+  }
+  txtEl.textContent = txt;
+  // Bus class swaps to a slightly deeper blue when bus is the only signal.
+  el.classList.toggle('bus', !SHARE_LOCATION && BUS_PIN_ON);
+}
+
+// Update the visibility control in the bottom-sheet header.
+// Two independent pills: "Share my location" and "Bus pin". Each highlights
+// when its flag is on. Hint line below explains placement state.
+function updateVisibilityControlUI() {
+  const shareBtn = document.querySelector('#visibility-control [data-vis-pill="share"]');
+  const busBtn = document.querySelector('#visibility-control [data-vis-pill="bus"]');
+  if (shareBtn) shareBtn.classList.toggle('active', SHARE_LOCATION);
+  if (busBtn) busBtn.classList.toggle('active', BUS_PIN_ON);
+
+  const hint = document.getElementById('visibility-bus-hint');
+  if (hint) {
+    if (BUS_PIN_PLACING) {
+      hint.textContent = 'Tap the map to place the bus pin.';
+      hint.style.display = '';
+    } else {
+      hint.style.display = 'none';
+    }
+  }
+}
+
+// Sync the bottom-sheet header count + toggle empty state.
+function updatePassengerCount() {
+  const count = PASSENGERS.size;
+  const countEl = document.getElementById('guide-sheet-count');
+  if (countEl) countEl.textContent = String(count);
+
+  // Show empty state (share link) only when no passengers; otherwise show list.
+  // Chunk G now populates the list with named rows; renderPassengerList() draws them.
+  const emptyEl = document.getElementById('guide-sheet-empty');
+  const listEl = document.getElementById('guide-sheet-list');
+  if (emptyEl) emptyEl.style.display = count === 0 ? '' : 'none';
+  if (listEl) listEl.style.display = count === 0 ? 'none' : '';
+  // Toggle row visibility: only show "Show names" toggle when there are passengers.
+  const namesToggle = document.getElementById('names-toggle-row');
+  if (namesToggle) namesToggle.style.display = count === 0 ? 'none' : '';
+  renderPassengerList();
+}
+
+// ── PASSENGER NAMES (chunk G pass 2) ──
+// Pulls names from session_passengers and merges into the PASSENGERS Map's
+// `name` field. Subscribes for live INSERT (new joiner) and UPDATE (rename).
+//
+// NAMES_VISIBLE controls whether name labels render above passenger dots:
+//   true  (default) — every dot shows its passenger's name above it
+//   false           — names show only above the currently-selected passenger,
+//                     so guides who want a clean map can dim names when
+//                     everyone's identified visually.
+let NAMES_VISIBLE = true;
+let _namesChannel = null;
+let _namesSubscribeStarted = false;
+
+async function catchUpPassengerNames() {
+  if (!SESSION) return;
+  const { data, error } = await supabaseClient
+    .from('session_passengers')
+    .select('passenger_id, name')
+    .eq('session_id', SESSION.id);
+  if (error) {
+    console.warn('session_passengers catch-up failed', error);
+    return;
+  }
+  if (!data) return;
+  for (const row of data) {
+    let p = PASSENGERS.get(row.passenger_id);
+    if (!p) {
+      // No location yet from this passenger — pre-seed a name-only record so
+      // the list shows them once they appear. We DON'T add them to the map
+      // (no lng/lat), but we cache the name so when their first location row
+      // arrives, the dot already has its label.
+      p = { name: row.name, _seenTimestamps: new Set(), trail: [] };
+      PASSENGERS.set(row.passenger_id, p);
+    } else {
+      p.name = row.name;
+    }
+  }
+  // Re-render dots (for labels) and the bottom-sheet list.
+  renderPassengers();
+  renderPassengerList();
+}
+
+function startPassengerNamesSubscription() {
+  if (_namesSubscribeStarted) return;
+  if (!SESSION) return;
+  _namesSubscribeStarted = true;
+
+  _namesChannel = supabaseClient
+    .channel(`session_passengers:${SESSION.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',                    // INSERT (new joiner) + UPDATE (rename)
+        schema: 'public',
+        table: 'session_passengers',
+        filter: `session_id=eq.${SESSION.id}`,
+      },
+      (payload) => {
+        const row = payload.new;
+        if (!row || !row.passenger_id) return;
+        let p = PASSENGERS.get(row.passenger_id);
+        if (!p) {
+          p = { name: row.name, _seenTimestamps: new Set(), trail: [] };
+          PASSENGERS.set(row.passenger_id, p);
+        } else {
+          p.name = row.name;
+        }
+        renderPassengers();
+        renderPassengerList();
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        catchUpPassengerNames().catch(err => console.warn('names reconcile failed', err));
+      }
+    });
+
+  window.addEventListener('beforeunload', () => {
+    if (_namesChannel) {
+      try { supabaseClient.removeChannel(_namesChannel); } catch {}
+    }
+  });
+}
+
+// Display name for a passenger, with fallback if name not yet known.
+// Used by both the map labels and the bottom-sheet list rows.
+function passengerDisplayName(p, passengerId) {
+  if (p && p.name) return p.name;
+  // Fallback to last 4 chars of passenger_id — better than blank.
+  return passengerId ? passengerId.slice(-4) : '?';
+}
+
+// Render the passenger list rows in the bottom sheet. Each row: color dot
+// (using primary identity color), name, and a small disconnected indicator
+// when applicable. Tapping a row selects the passenger (same as tapping
+// their dot on the map).
+function renderPassengerList() {
+  const listEl = document.getElementById('guide-sheet-list');
+  if (!listEl) return;
+  // Sort: passengers with an actual location first (active dots), then
+  // name-only records (joined but no fix yet). Within each group, alpha by name.
+  const entries = Array.from(PASSENGERS.entries()).sort((a, b) => {
+    const aHasLoc = (a[1].lng != null) ? 0 : 1;
+    const bHasLoc = (b[1].lng != null) ? 0 : 1;
+    if (aHasLoc !== bHasLoc) return aHasLoc - bHasLoc;
+    const an = (a[1].name || '').toLowerCase();
+    const bn = (b[1].name || '').toLowerCase();
+    return an.localeCompare(bn);
+  });
+
+  const now = Date.now();
+  listEl.innerHTML = '';
+  for (const [passengerId, p] of entries) {
+    const [colorA, colorB] = colorsForPassenger(passengerId);
+    const isSelected = SELECTED_PASSENGER === passengerId;
+    const state = p.lng != null ? evaluatePassengerState(p, now) : null;
+    const hasLocation = p.lng != null;
+
+    const row = document.createElement('div');
+    row.className = 'passenger-row' + (isSelected ? ' selected' : '');
+    row.dataset.passengerId = passengerId;
+    row.style.cssText =
+      'display:flex; align-items:center; gap:10px; padding:10px 4px;' +
+      'border-bottom:1px solid var(--rule); cursor:pointer;' +
+      (isSelected ? 'background:rgba(0,0,0,0.04);' : '');
+
+    // Color dot — half-half split mirroring the on-map identity. Hard-stop
+    // gradient at 50% gives a clean vertical seam between the two colors.
+    // Dimmed if no location yet; grey ring overlay if disconnected.
+    const dot = document.createElement('div');
+    dot.style.cssText =
+      `width:14px; height:14px; border-radius:50%;` +
+      `background:linear-gradient(to right, ${colorA} 50%, ${colorB} 50%);` +
+      `flex-shrink:0; ${hasLocation ? '' : 'opacity:0.35;'}` +
+      (state === 'disconnected' ? ' box-shadow:0 0 0 2px #888888;' : '');
+    row.appendChild(dot);
+
+    // Name.
+    const nameEl = document.createElement('div');
+    nameEl.style.cssText =
+      'flex:1; font-family:JetBrains Mono,monospace; font-size:13px; color:var(--ink);' +
+      (hasLocation ? '' : ' opacity:0.55;');
+    nameEl.textContent = passengerDisplayName(p, passengerId);
+    row.appendChild(nameEl);
+
+    // Status text — small mono caption on the right.
+    const status = document.createElement('div');
+    status.style.cssText =
+      'font-family:JetBrains Mono,monospace; font-size:9px; letter-spacing:0.1em;' +
+      'text-transform:uppercase; color:var(--rule);';
+    if (!hasLocation) status.textContent = 'no fix yet';
+    else if (state === 'disconnected') status.textContent = 'no signal';
+    else status.textContent = 'live';
+    row.appendChild(status);
+
+    row.addEventListener('click', () => togglePassengerSelection(passengerId));
+    listEl.appendChild(row);
+  }
+}
+
+// Toggle map-name visibility. Re-renders dots so labels appear/disappear.
+function toggleNamesVisible() {
+  NAMES_VISIBLE = !NAMES_VISIBLE;
+  const btn = document.getElementById('names-toggle-btn');
+  if (btn) btn.classList.toggle('active', NAMES_VISIBLE);
+  renderPassengers();
+}
+
+// ── REALTIME SUBSCRIPTION ──
+// Push-based updates from Supabase: every time a row is inserted into
+// passenger_locations for our session, the handler runs.
+//
+// Lifecycle concerns:
+//  - Subscribe ONCE per page load. Set up a guard flag so re-running
+//    startGuideShell (shouldn't happen but) doesn't double-subscribe.
+//  - Auto-reconnect: Supabase handles this transparently. But during a
+//    disconnect, we may miss events. On reconnect we re-run catch-up to
+//    fill any gap, then continue receiving live.
+//  - Dedupe on (passenger_id, client_recorded_at): if the same row arrives
+//    via both subscription and a reconcile-catch-up, we only keep one.
+//  - Cleanup on page unload to release the channel cleanly.
+let _channel = null;
+let _subscribeStarted = false;
+let _subscriptionStatus = 'idle';   // 'idle' | 'subscribing' | 'subscribed' | 'error' | 'reconnecting'
+
+function startPassengerLocationsSubscription() {
+  if (_subscribeStarted) return;        // guard against double-start
+  if (!SESSION) return;
+  _subscribeStarted = true;
+  _subscriptionStatus = 'subscribing';
+  updateDebugSyncStats();
+
+  // Channel name is per-session so concurrent guide views (in different tabs
+  // or different devices) don't collide on each other's channels.
+  _channel = supabaseClient
+    .channel(`passenger_locations:${SESSION.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'passenger_locations',
+        filter: `session_id=eq.${SESSION.id}`,
+      },
+      (payload) => {
+        // payload.new is the inserted row.
+        applyIncomingLocationRow(payload.new);
+      }
+    )
+    .subscribe((status) => {
+      // Status callbacks: 'SUBSCRIBED', 'CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'
+      if (status === 'SUBSCRIBED') {
+        // First time we land here, the catch-up already ran. On RE-subscribe
+        // (i.e. we reconnected after a drop), re-run catch-up to fill any gap.
+        const wasReconnecting = _subscriptionStatus === 'reconnecting';
+        _subscriptionStatus = 'subscribed';
+        if (wasReconnecting) {
+          // Reconciliation pass: fetch any rows we may have missed during
+          // the disconnect. Use merge mode so we don't wipe the live state
+          // we already have — we only add rows whose timestamps we haven't seen.
+          catchUpPassengers({ merge: true }).catch(err => {
+            console.warn('Reconcile catch-up failed', err);
+          });
+        }
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        _subscriptionStatus = 'reconnecting';
+      } else if (status === 'CLOSED') {
+        _subscriptionStatus = 'idle';
+      }
+      updateDebugSyncStats();
+    });
+
+  // Release the channel on page unload so Supabase isn't holding ghost subscriptions.
+  window.addEventListener('beforeunload', () => {
+    if (_channel) {
+      try { supabaseClient.removeChannel(_channel); } catch {}
+    }
+  });
+}
+
+// Apply one incoming row (from subscription OR reconcile catch-up) to the
+// in-memory PASSENGERS state. Idempotent: if we already have this exact
+// (passenger_id, client_recorded_at) pair, we skip rather than dup.
+function applyIncomingLocationRow(row) {
+  if (!row || !row.passenger_id) return;
+
+  let p = PASSENGERS.get(row.passenger_id);
+  if (!p) {
+    p = {
+      lng: row.lng,
+      lat: row.lat,
+      accuracy: row.accuracy,
+      lastUpdate: row.client_recorded_at,
+      trail: [],
+      _seenTimestamps: new Set(),
+    };
+    PASSENGERS.set(row.passenger_id, p);
+  }
+  // Lazy migration: passengers that came in via catch-up (before this fn
+  // existed) won't have a _seenTimestamps set yet.
+  if (!p._seenTimestamps) {
+    p._seenTimestamps = new Set();
+    // Backfill from existing trail. No timestamps stored on trail points
+    // (they're just lng/lat for render efficiency) so we treat catch-up
+    // points as "seen by position+order" — close enough; live updates
+    // won't collide with them.
+  }
+
+  // Dedupe: same passenger + same recorded time = skip.
+  const ts = row.client_recorded_at;
+  if (p._seenTimestamps.has(ts)) return;
+  p._seenTimestamps.add(ts);
+
+  p.trail.push({ lng: row.lng, lat: row.lat });
+
+  // Update "current" only if this row is newer than what we have. Out-of-order
+  // events (rare but possible during reconnection) shouldn't move the dot back.
+  if (!p.lastUpdate || ts > p.lastUpdate) {
+    p.lng = row.lng;
+    p.lat = row.lat;
+    p.accuracy = row.accuracy;
+    p.lastUpdate = ts;
+  }
+
+  renderPassengers();
+  updatePassengerCount();
+}
+
+// ── PASSENGER VIEW: GUIDE MARKERS (chunk F pass 2) ──
+// Reads guide_locations to render the guide's live position (when sharing is on)
+// and/or the bus pin (when the guide has placed one), in the passenger's view.
+//
+// "Latest row per source" wins. If the latest row has is_off=true, that source
+// is hidden. There's NO freshness timeout — once a source is "live", we keep
+// rendering at last known position until an explicit is_off sentinel arrives.
+// (We had a 30s timeout earlier — false-positived when the guide was stationary
+// and GPS slowed down. Better to keep a possibly-stale dot than to lie by
+// hiding it. Same convention as passenger dots.)
+const GUIDE_VIEW = { phone: null, bus: null };
+
+let _guideMarkerPhone = null;
+let _guideMarkerBus = null;
+let _guideChannel = null;
+let _guideSubscribeStarted = false;
+
+async function catchUpGuideLocations() {
+  if (!SESSION) return;
+  const { data, error } = await supabaseClient
+    .from('guide_locations')
+    .select('source, lng, lat, set_at, is_off')
+    .eq('session_id', SESSION.id)
+    .order('set_at', { ascending: false })
+    .limit(200);
+  if (error) {
+    console.warn('guide_locations catch-up failed', error);
+    return;
+  }
+  if (!data) return;
+  const seen = new Set();
+  for (const row of data) {
+    if (seen.has(row.source)) continue;
+    seen.add(row.source);
+    applyGuideRowToState(row);
+  }
+  renderGuideMarkers();
+}
+
+function applyGuideRowToState(row) {
+  if (row.is_off) {
+    if (row.source === 'phone') GUIDE_VIEW.phone = null;
+    else if (row.source === 'bus_pin') GUIDE_VIEW.bus = null;
+    return;
+  }
+  const ts = Date.parse(row.set_at);
+  if (row.source === 'phone') {
+    GUIDE_VIEW.phone = { lng: row.lng, lat: row.lat, ts };
+  } else if (row.source === 'bus_pin') {
+    GUIDE_VIEW.bus = { lng: row.lng, lat: row.lat, ts };
+  }
+}
+
+function startGuideLocationsSubscription() {
+  if (_guideSubscribeStarted) return;
+  if (!SESSION) return;
+  _guideSubscribeStarted = true;
+  _guideChannel = supabaseClient
+    .channel(`guide_locations:${SESSION.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'guide_locations',
+        filter: `session_id=eq.${SESSION.id}`,
+      },
+      (payload) => {
+        applyGuideRowToState(payload.new);
+        renderGuideMarkers();
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        catchUpGuideLocations().catch(err => console.warn('guide reconcile failed', err));
+      }
+    });
+  window.addEventListener('beforeunload', () => {
+    if (_guideChannel) {
+      try { supabaseClient.removeChannel(_guideChannel); } catch {}
+    }
+  });
+}
+
+// Build a plain-text floating label with a pure-white "halo" around pure
+// black text (text-shadow trick) so it's legible against any map color.
+// White-on-black contrast is the strongest possible — works even where the
+// paper-cream halo would be too low-contrast (e.g. over light grass tiles).
+function buildFloatingLabel(text) {
+  const el = document.createElement('div');
+  el.style.cssText =
+    'font-family:JetBrains Mono,monospace; font-size:10px; font-weight:700;' +
+    'color:#000000; white-space:nowrap; pointer-events:none;' +
+    'letter-spacing:0.04em; margin-bottom:3px;' +
+    // Pure-white 8-direction halo — readable on any map background.
+    'text-shadow:' +
+      '-1px -1px 0 #ffffff,' +
+      ' 1px -1px 0 #ffffff,' +
+      '-1px  1px 0 #ffffff,' +
+      ' 1px  1px 0 #ffffff,' +
+      ' 0px -1px 0 #ffffff,' +
+      ' 0px  1px 0 #ffffff,' +
+      '-1px  0px 0 #ffffff,' +
+      ' 1px  0px 0 #ffffff;';
+  el.textContent = text;
+  return el;
+}
+
+function renderGuideMarkers() {
+  if (_guideMarkerPhone) { _guideMarkerPhone.remove(); _guideMarkerPhone = null; }
+  if (GUIDE_VIEW.phone) {
+    // Label above + dot below. Marker anchor is 'bottom' so the dot sits
+    // exactly on the lng/lat point; label floats above it.
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex; flex-direction:column; align-items:center;';
+    const labelText = (SESSION && SESSION.guide_name) ? SESSION.guide_name : 'Guide';
+    wrap.appendChild(buildFloatingLabel(labelText));
+    const dot = document.createElement('div');
+    dot.style.cssText =
+      'width:22px; height:22px; background:#2563eb; border:3px solid var(--paper);' +
+      'border-radius:50%; box-shadow:0 0 0 4px rgba(37,99,235,0.18), 0 2px 6px rgba(0,0,0,0.25);';
+    wrap.appendChild(dot);
+    _guideMarkerPhone = new mapboxgl.Marker({ element: wrap, anchor: 'bottom' })
+      .setLngLat([GUIDE_VIEW.phone.lng, GUIDE_VIEW.phone.lat])
+      .addTo(map);
+  }
+
+  if (_guideMarkerBus) { _guideMarkerBus.remove(); _guideMarkerBus = null; }
+  if (GUIDE_VIEW.bus) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex; flex-direction:column; align-items:center;';
+    wrap.appendChild(buildFloatingLabel('Bus'));
+    const square = document.createElement('div');
+    square.style.cssText =
+      'width:24px; height:24px; background:#2563eb; border:2px solid var(--paper);' +
+      'border-radius:4px; box-shadow:0 2px 6px rgba(0,0,0,0.25);' +
+      'display:flex; align-items:center; justify-content:center; color:white;' +
+      'font-family:JetBrains Mono,monospace; font-size:9px; font-weight:700;';
+    square.textContent = 'BUS';
+    wrap.appendChild(square);
+    _guideMarkerBus = new mapboxgl.Marker({ element: wrap, anchor: 'bottom' })
+      .setLngLat([GUIDE_VIEW.bus.lng, GUIDE_VIEW.bus.lat])
+      .addTo(map);
+  }
+}
+
+function startPassengerGuideListening() {
+  (async () => {
+    await catchUpGuideLocations();
+    startGuideLocationsSubscription();
+    bindVisibilityCatchUp();
+  })().catch(err => console.warn('Guide-listening startup failed', err));
+}
+
+// When the browser tab is backgrounded (alt-tab away, screen sleep, app switch
+// on mobile), browsers throttle JS and WebSocket message delivery. Realtime
+// events may sit unprocessed until the tab regains focus. Force a fresh
+// catch-up the moment we become visible again so the UI reflects current
+// state, not stale state from before backgrounding.
+//
+// Affects both guide_locations (this view) and passenger_locations (when in
+// guide view). One handler covers both cases.
+let _visibilityCatchUpBound = false;
+function bindVisibilityCatchUp() {
+  if (_visibilityCatchUpBound) return;
+  _visibilityCatchUpBound = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    // Re-fetch latest state. Each catch-up is idempotent thanks to the dedupe
+    // logic — running it on top of live data costs at most one round-trip.
+    if (ROLE === 'guide' && typeof catchUpPassengers === 'function') {
+      catchUpPassengers({ merge: true }).catch(err => console.warn('visibility-catchup passengers failed', err));
+    }
+    if (typeof catchUpGuideLocations === 'function') {
+      catchUpGuideLocations().catch(err => console.warn('visibility-catchup guide failed', err));
+    }
+  });
+}
+const SHEET_STATES = {
+  collapsed: 60,
+  half: 240,
+  full: 0.85,
+};
+let _sheetState = 'half';
+let _sheetEl = null;
+let _sheetDrag = null;
+
+function mountGuideBottomSheet() {
+  if (document.getElementById('guide-sheet')) return;
+  const phone = document.getElementById('phone');
+  const sheet = document.createElement('div');
+  sheet.id = 'guide-sheet';
+  sheet.className = 'guide-sheet';
+  sheet.innerHTML = `
+    <div class="guide-sheet-handle" id="guide-sheet-handle">
+      <div class="guide-sheet-grip"></div>
+      <div class="guide-sheet-title">
+        <span class="guide-sheet-title-main">Passengers</span>
+        <span class="guide-sheet-title-count" id="guide-sheet-count">0</span>
+      </div>
+    </div>
+    <div class="guide-sheet-body" id="guide-sheet-body">
+      <!-- Visibility control (chunk F) — two independent pills. -->
+      <div class="visibility-section" id="visibility-section">
+        <div class="visibility-section-label">Visible to passengers</div>
+        <div class="visibility-control" id="visibility-control">
+          <button class="vis-btn" data-vis-pill="share">Share my location</button>
+          <button class="vis-btn" data-vis-pill="bus">Bus pin</button>
+        </div>
+        <div class="visibility-bus-hint" id="visibility-bus-hint" style="display:none;"></div>
+      </div>
+      <!-- Names visibility toggle (chunk G pass 2) — controls whether passenger
+           name labels appear above their dots on the map. Default ON. Visible
+           only when there's at least one passenger. -->
+      <div class="names-toggle-row" id="names-toggle-row" style="display:none; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--rule); margin-bottom:8px;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink);">
+          Names on map
+        </div>
+        <button id="names-toggle-btn" class="vis-btn active" style="flex:0 0 auto; padding:6px 14px;">On</button>
+      </div>
+      <div class="guide-sheet-empty" id="guide-sheet-empty">
+        <div style="font-family:'Fraunces',serif; font-style:italic; font-size:18px; color:var(--ink); margin-bottom:8px;">
+          No passengers yet.
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); line-height:1.5;">
+          Share this link to start:
+        </div>
+        <div id="guide-share-link" style="margin-top:10px; padding:10px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:10px; word-break:break-all; user-select:all;">
+          ${SESSION ? `${window.location.origin}${window.location.pathname}?session=${SESSION.id}` : '—'}
+        </div>
+        <button
+          id="guide-share-copy"
+          style="margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:10px 18px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+        >Copy link</button>
+      </div>
+      <div class="guide-sheet-list" id="guide-sheet-list" style="display:none;">
+        <!-- passenger rows populate here in chunk C onward -->
+      </div>
+    </div>
+  `;
+  phone.appendChild(sheet);
+  _sheetEl = sheet;
+  applySheetState();
+  bindSheetDrag();
+
+  // Copy-link button. Uses the modern Clipboard API where available,
+  // falls back to a hidden textarea for older browsers / non-HTTPS.
+  const copyBtn = document.getElementById('guide-share-copy');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      const link = document.getElementById('guide-share-link');
+      if (!link) return;
+      const text = link.textContent.trim();
+      const flash = (msg) => {
+        const original = copyBtn.textContent;
+        copyBtn.textContent = msg;
+        copyBtn.disabled = true;
+        setTimeout(() => {
+          copyBtn.textContent = original;
+          copyBtn.disabled = false;
+        }, 1400);
+      };
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          // Fallback for non-HTTPS contexts. Creates a temporary textarea,
+          // selects its content, asks the browser to copy. Older approach.
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        flash('Copied');
+      } catch {
+        flash('Copy failed');
+      }
+    });
+  }
+
+  // Visibility pill handlers (chunk F). Two independent pills:
+  //   share — toggles SHARE_LOCATION on/off (no confirmation, instant)
+  //   bus   — toggles BUS_PIN_ON. On→Off removes pin entirely. Off→On enters
+  //           placement mode (next map tap places the pin).
+  document.querySelectorAll('#visibility-control .vis-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const pill = btn.dataset.visPill;
+      if (pill === 'share') {
+        await toggleShareLocation();
+      } else if (pill === 'bus') {
+        await toggleBusPin();
+      }
+    });
+  });
+
+  // Names-on-map toggle (chunk G pass 2). Flips NAMES_VISIBLE and re-renders.
+  // Button text mirrors the state so it's clear whether names are showing.
+  const namesBtn = document.getElementById('names-toggle-btn');
+  if (namesBtn) {
+    namesBtn.addEventListener('click', () => {
+      toggleNamesVisible();
+      namesBtn.textContent = NAMES_VISIBLE ? 'On' : 'Off';
+    });
+  }
+}
+
+function applySheetState() {
+  if (!_sheetEl) return;
+  const phone = document.getElementById('phone');
+  const phoneHeight = phone.clientHeight;
+  let h;
+  if (_sheetState === 'collapsed') h = SHEET_STATES.collapsed;
+  else if (_sheetState === 'half') h = SHEET_STATES.half;
+  else h = Math.round(phoneHeight * SHEET_STATES.full);
+  _sheetEl.style.height = h + 'px';
+  // Push the zoom controls above the sheet so they're always tappable.
+  // Plus a small margin so the bottom button isn't flush with the handle.
+  const zoomCtrl = document.querySelector('.zoom-controls');
+  if (zoomCtrl) zoomCtrl.style.bottom = (h + 12) + 'px';
+}
+
+function bindSheetDrag() {
+  const handle = document.getElementById('guide-sheet-handle');
+  if (!handle) return;
+  handle.addEventListener('pointerdown', e => {
+    _sheetDrag = {
+      startY: e.clientY,
+      startHeight: _sheetEl.offsetHeight,
+      moved: false,
+    };
+    handle.setPointerCapture(e.pointerId);
+    _sheetEl.style.transition = 'none';
+  });
+  handle.addEventListener('pointermove', e => {
+    if (!_sheetDrag) return;
+    const dy = e.clientY - _sheetDrag.startY;
+    if (Math.abs(dy) > 4) _sheetDrag.moved = true;
+    const phoneHeight = document.getElementById('phone').clientHeight;
+    let h = _sheetDrag.startHeight - dy;
+    h = Math.max(SHEET_STATES.collapsed, Math.min(phoneHeight * SHEET_STATES.full, h));
+    _sheetEl.style.height = h + 'px';
+    // Keep zoom controls above the sheet during drag.
+    const zoomCtrl = document.querySelector('.zoom-controls');
+    if (zoomCtrl) zoomCtrl.style.bottom = (h + 12) + 'px';
+  });
+  handle.addEventListener('pointerup', () => {
+    if (!_sheetDrag) return;
+    _sheetEl.style.transition = '';
+    if (_sheetDrag.moved) {
+      const h = _sheetEl.offsetHeight;
+      const phoneHeight = document.getElementById('phone').clientHeight;
+      const fullH = phoneHeight * SHEET_STATES.full;
+      const halfMid = (SHEET_STATES.collapsed + SHEET_STATES.half) / 2;
+      const fullMid = (SHEET_STATES.half + fullH) / 2;
+      if (h < halfMid) _sheetState = 'collapsed';
+      else if (h < fullMid) _sheetState = 'half';
+      else _sheetState = 'full';
+    } else {
+      // Tap (no drag): cycle states.
+      if (_sheetState === 'collapsed') _sheetState = 'half';
+      else if (_sheetState === 'half') _sheetState = 'full';
+      else _sheetState = 'collapsed';
+    }
+    _sheetDrag = null;
+    applySheetState();
+  });
+  handle.addEventListener('pointercancel', () => {
+    _sheetDrag = null;
+    _sheetEl.style.transition = '';
+    applySheetState();
+  });
+  window.addEventListener('resize', applySheetState);
+}
+
+function startGeolocation() {
+  if (!('geolocation' in navigator)) {
+    state.gpsMode = 'unavailable';
+    showGpsBanner('Your browser does not support geolocation. Use the "skip" option to test with a simulated walker.');
+    updateSignal();
+    return;
+  }
+
+  state.gpsMode = 'searching';
+  updateSignal();
+
+  geoWatchId = navigator.geolocation.watchPosition(
+    onGpsSuccess,
+    onGpsError,
+    {
+      enableHighAccuracy: true,
+      maximumAge: 2000,   // ok to use a position up to 2 seconds old
+      timeout: 30000,     // give up after 30 seconds if no fix
+    }
+  );
+}
+
+// 5-second throttle for queueing fixes. The browser may give us 1-3 fixes per
+// second; we only persist one every 5s to keep DB size + bandwidth sane.
+// State is held in module scope so it survives between handler calls.
+const QUEUE_INTERVAL_MS = 5000;
+let _lastQueuedAt = 0;
+
+function onGpsSuccess(pos) {
+  // First fix? Hide any "searching" banner.
+  hideGpsBanner();
+  state.gpsMode = 'real';
+  state.youLng = pos.coords.longitude;
+  state.youLat = pos.coords.latitude;
+  state.accuracy = pos.coords.accuracy;
+  state.heading = pos.coords.heading;  // null if not moving
+
+  updateSignal();
+
+  // Triggers (chime + popup) are passenger-only — guides don't get pinged
+  // by their own tour pins. They're observers, not participants.
+  if (ROLE === 'passenger') {
+    checkTriggers();
+  }
+
+  // Persist to local queue, throttled. Only queues when:
+  //  - we're inside a session, AND
+  //  - we're a passenger (passenger fixes always queue)
+  const now = Date.now();
+  if (SESSION && ROLE === 'passenger' && now - _lastQueuedAt >= QUEUE_INTERVAL_MS) {
+    _lastQueuedAt = now;
+    queueLocation({
+      lng: state.youLng,
+      lat: state.youLat,
+      accuracy: state.accuracy,
+      client_recorded_at: new Date(pos.timestamp || now).toISOString(),
+    }).then(() => {
+      updateDebugQueueCount();
+    }).catch(err => {
+      console.warn('queueLocation failed', err);
+    });
+  }
+
+  // Guide-phone broadcast: when SHARE_LOCATION is on, insert a row into
+  // guide_locations with source='phone'. Throttled to ~5s, same cadence as
+  // passenger queue. Direct insert (no IndexedDB queue) — guide is assumed
+  // online when broadcasting; if a network hiccup drops a fix, the next one
+  // fills in seconds later.
+  if (SESSION && ROLE === 'guide' && SHARE_LOCATION
+      && now - _lastGuideBroadcastAt >= GUIDE_BROADCAST_INTERVAL_MS) {
+    _lastGuideBroadcastAt = now;
+    supabaseClient.from('guide_locations').insert({
+      session_id: SESSION.id,
+      source: 'phone',
+      lng: state.youLng,
+      lat: state.youLat,
+    }).then(({ error }) => {
+      if (error) console.warn('guide_locations insert failed', error);
+    });
+  }
+
+  // first fix in this session — center the map on us
+  if (map && !state._everCentered) {
+    map.easeTo({ center: [state.youLng, state.youLat], duration: 800 });
+    state._everCentered = true;
+  }
+  if (state.following && map) {
+    map.setCenter([state.youLng, state.youLat]);
+  }
+  renderYou();
+}
+
+function onGpsError(err) {
+  // The error codes:
+  //   1 = PERMISSION_DENIED
+  //   2 = POSITION_UNAVAILABLE
+  //   3 = TIMEOUT
+  if (err.code === 1) {
+    state.gpsMode = 'denied';
+    showGpsBanner("Location permission was denied. Open your browser's site settings to allow it, or skip and use simulated mode.");
+  } else if (err.code === 2) {
+    state.gpsMode = 'unavailable';
+    showGpsBanner("Couldn't get a GPS fix. If you're indoors, step outside. Otherwise, this can take up to a minute.");
+  } else if (err.code === 3) {
+    state.gpsMode = 'unavailable';
+    showGpsBanner("GPS timed out. Make sure location services are enabled.");
+  }
+  updateSignal();
+}
+
+function showGpsBanner(msg) {
+  gpsBannerMsg.textContent = msg;
+  gpsBanner.classList.add('show');
+}
+function hideGpsBanner() {
+  gpsBanner.classList.remove('show');
+}
+
+// ── 7. SIGNAL INDICATOR (top-right) ──
+// Reflects gps state at a glance.
+function updateSignal() {
+  signalDot.classList.remove('good', 'weak', 'searching');
+  if (state.gpsMode === 'real') {
+    if (state.accuracy != null && state.accuracy <= 20) {
+      signalDot.classList.add('good');
+      signalText.textContent = `±${Math.round(state.accuracy)}m`;
+    } else if (state.accuracy != null && state.accuracy <= 50) {
+      signalDot.classList.add('weak');
+      signalText.textContent = `±${Math.round(state.accuracy)}m`;
+    } else {
+      signalDot.classList.add('weak');
+      signalText.textContent = state.accuracy ? `±${Math.round(state.accuracy)}m` : 'Weak';
+    }
+  } else if (state.gpsMode === 'searching') {
+    signalDot.classList.add('searching');
+    signalText.textContent = 'Searching';
+  } else {
+    signalText.textContent = 'No GPS';
+  }
+}
+
+// ── 8. RENDER PINS + YOU DOT ──
+// Convert lng/lat to screen pixels via Mapbox's projection.
+function project(lng, lat) {
+  if (map) return map.project([lng, lat]);
+  return { x: 0, y: 0 };
+}
+
+function pxPerMeter() {
+  if (!map) return 1;
+  const p1 = map.project([TOUR.home.lng, TOUR.home.lat]);
+  const p2 = map.project([TOUR.home.lng, TOUR.home.lat + 1/111000]);
+  return Math.abs(p2.y - p1.y);
+}
+
+function renderAll() {
+  renderPins();
+  renderPassengers();
+  renderYou();
+}
+
+function renderPins() {
+  pinsLayer.innerHTML = '';
+  const ppm = pxPerMeter();
+  // Iterate only pins of activated stops. In chunk A, all stops are active
+  // (parity with v0.4). In chunks B/C this naturally scopes to whatever the
+  // guide has activated.
+  activePins().forEach((pin, i) => {
+    const { x, y } = project(pin.lng, pin.lat);
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    let classes = 'pin-group';
+    if (pin.id === state.armedPinId) classes += ' armed';
+    if (state.firedPinIds.has(pin.id) && pin.id !== state.armedPinId) classes += ' visited';
+    g.setAttribute('class', classes);
+    g.setAttribute('transform', `translate(${x}, ${y})`);
+
+    // Trigger radius — visual representation of the pin's reach.
+    // We softly clamp the rendered circle so it doesn't get absurdly huge
+    // when zoomed in close or absurdly small when zoomed out. In between,
+    // the circle scales with the map at the pin's real meter size, which
+    // matches what the user expects.
+    //
+    // The clamp range is wide on purpose — only the extremes get trimmed.
+    // The actual trigger logic always uses pin.radius in real meters; this
+    // is purely how it LOOKS to the user.
+    const VISUAL_RADIUS_MIN_PX = 8;
+    const VISUAL_RADIUS_MAX_PX = 60;
+    const realPx = pin.radius * ppm;
+    const visualPx = Math.max(VISUAL_RADIUS_MIN_PX, Math.min(VISUAL_RADIUS_MAX_PX, realPx));
+    const r = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    r.setAttribute('class', 'pin-radius');
+    r.setAttribute('r', visualPx);
+    g.appendChild(r);
+
+    // marker — fixed screen size
+    const m = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    m.setAttribute('class', 'pin-marker');
+    m.setAttribute('x', -12); m.setAttribute('y', -12);
+    m.setAttribute('width', 24); m.setAttribute('height', 24);
+    m.setAttribute('rx', 2);
+    g.appendChild(m);
+
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('class', 'pin-label');
+    t.setAttribute('y', 4);
+    t.textContent = String(i + 1).padStart(2, '0');
+    g.appendChild(t);
+
+    // tap a pin to re-read its note (any time)
+    g.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showPopup(pin);
+    });
+    pinsLayer.appendChild(g);
+  });
+}
+
+function renderYou() {
+  youLayer.innerHTML = '';
+  if (state.youLng == null) return;
+  const { x, y } = project(state.youLng, state.youLat);
+  const ppm = pxPerMeter();
+
+  // When we're the guide, the dot styles itself in beacon blue rather than
+  // the passenger's green. Same dot, same logic; just a class modifier.
+  // This is also what passengers will eventually see (chunk F) when guide
+  // visibility is on — same blue treatment for visual consistency.
+  const isGuide = ROLE === 'guide';
+  const cls = (base) => isGuide ? `${base} guide` : base;
+
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  g.setAttribute('class', 'you-group');
+  g.setAttribute('transform', `translate(${x}, ${y})`);
+
+  // accuracy halo — only when we have real GPS with known accuracy.
+  // Cap visually so a wildly imprecise WiFi-based fix (which can be 10km+)
+  // doesn't blot out the entire map.
+  if (state.gpsMode === 'real' && state.accuracy && state.accuracy < 200) {
+    const acc = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    acc.setAttribute('class', cls('you-accuracy'));
+    acc.setAttribute('r', state.accuracy * ppm);
+    g.appendChild(acc);
+  }
+
+  const halo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  halo.setAttribute('class', cls('you-halo'));
+  halo.setAttribute('r', 18);
+  g.appendChild(halo);
+
+  // heading triangle (only if we have one)
+  if (state.heading != null && !isNaN(state.heading)) {
+    const heading = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    heading.setAttribute('points', '12,0 5,-4 5,4');
+    heading.setAttribute('fill', isGuide ? '#2563eb' : 'var(--ink)');
+    heading.setAttribute('transform', `rotate(${state.heading - 90})`);
+    g.appendChild(heading);
+  }
+
+  const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  dot.setAttribute('class', cls('you-dot'));
+  dot.setAttribute('r', 9);
+  g.appendChild(dot);
+
+  youLayer.appendChild(g);
+}
+
+// ── 9. TRIGGERS ──
+// On every position update (real GPS or simulated drag), check whether
+// the walker is inside any pin's radius. The closest one becomes "armed".
+// First time a pin arms, fire the chime + popup. Walking out doesn't re-fire.
+function metersBetween(lng1, lat1, lng2, lat2) {
+  const R = 6371000;
+  const toRad = (d) => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function checkTriggers() {
+  if (state.youLng == null) return;
+  let closest = null;
+  let closestDist = Infinity;
+  // Pins of non-activated stops are skipped here — activePins() handles the
+  // scoping, so an inactive stop's pins can't fire even if the passenger
+  // happens to walk through one of them.
+  for (const p of activePins()) {
+    if (state.firedPinIds.has(p.id)) continue;
+    const d = metersBetween(state.youLng, state.youLat, p.lng, p.lat);
+    if (d < p.radius && d < closestDist) {
+      closest = p;
+      closestDist = d;
+    }
+  }
+  if (closest && closest.id !== state.armedPinId) {
+    firePin(closest);
+  } else if (!closest && state.armedPinId) {
+    state.armedPinId = null;
+    renderPins();
+  }
+}
+
+function firePin(pin) {
+  state.armedPinId = pin.id;
+  state.firedPinIds.add(pin.id);
+  renderPins();
+  showPopup(pin);
+  playChime();
+}
+
+function showPopup(pin) {
+  // Number pins by position in the activated set (matches the labels shown
+  // by renderPins). Using activePins() rather than allPins() keeps the
+  // popup's "Pin № 03" consistent with what the passenger sees on the map.
+  const idx = activePins().findIndex(p => p.id === pin.id);
+  popupStamp.textContent = `Pin № ${String(idx + 1).padStart(2, '0')} · Arrived`;
+  popupTitle.textContent = pin.title;
+  popupBodyEl.textContent = pin.body;
+  popup.classList.add('show');
+}
+function closePopup() { popup.classList.remove('show'); }
+popupClose.addEventListener('click', closePopup);
+
+// ── 10. CHIME ──
+let audioCtx = null;
+function playChime() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = audioCtx.currentTime;
+    [660, 880].forEach((f, i) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0, now + i * 0.12);
+      g.gain.linearRampToValueAtTime(0.18, now + i * 0.12 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.7);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(now + i * 0.12); o.stop(now + i * 0.12 + 0.75);
+    });
+  } catch (e) {
+    // audio may be blocked until user interaction; silent fail
+  }
+}
+
+// ── 11. ZOOM + FOLLOW CONTROLS ──
+document.getElementById('zoom-in').addEventListener('click', () => {
+  if (map) map.zoomIn();
+});
+document.getElementById('zoom-out').addEventListener('click', () => {
+  if (map) map.zoomOut();
+});
+document.getElementById('recenter').addEventListener('click', () => {
+  state.following = !state.following;
+  document.getElementById('recenter').classList.toggle('active', state.following);
+  if (state.following && map && state.youLng != null) {
+    map.easeTo({ center: [state.youLng, state.youLat], duration: 300 });
+  }
+});
+
+// ── 12. SCREEN STACK ──
+const screenStack = [];
+function openScreen(id) {
+  document.getElementById(id).classList.add('visible');
+  screenStack.push(id);
+}
+function closeScreen() {
+  if (!screenStack.length) return;
+  document.getElementById(screenStack.pop()).classList.remove('visible');
+}
+document.querySelectorAll('[data-close-screen]').forEach(b => b.addEventListener('click', closeScreen));
+
+document.getElementById('burger-btn').addEventListener('click', () => {
+  // Reveal the "share invite" menu item whenever we're in an active session,
+  // regardless of role — passengers may want to invite a friend, guides may
+  // want to share with new arrivals. Hidden in legacy ?tour mode (no session).
+  const shareItem = document.getElementById('menu-share-invite');
+  if (shareItem) {
+    shareItem.style.display = SESSION ? '' : 'none';
+  }
+  // "Your name" — passenger-only, only when in a session. Show current name
+  // as a subtitle so they know what's stored without opening the form.
+  const editNameItem = document.getElementById('menu-edit-name');
+  if (editNameItem) {
+    editNameItem.style.display = (SESSION && ROLE === 'passenger') ? '' : 'none';
+    const labelEl = document.getElementById('menu-edit-name-label');
+    if (labelEl) labelEl.textContent = MY_NAME ? `Your name · ${MY_NAME}` : 'Your name';
+  }
+  openScreen('screen-menu');
+});
+
+document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
+  item.addEventListener('click', async () => {
+    const action = item.dataset.action;
+    if (action === 'reset') {
+      state.firedPinIds.clear();
+      state.armedPinId = null;
+      closePopup();
+      renderPins();
+      while (screenStack.length) closeScreen();
+    } else if (action === 'about') {
+      openScreen('screen-about');
+    } else if (action === 'share-invite') {
+      openShareScreen();
+    } else if (action === 'edit-name') {
+      // Close the menu, then show the edit form.
+      while (screenStack.length) closeScreen();
+      showEditNameForm();
+    }
+  });
+});
+
+// Build the Share screen contents (QR + URL + copy button) and open it.
+// Re-renders the QR each time it's opened, in case the session ever changes
+// (it doesn't currently, but cheap insurance).
+function openShareScreen() {
+  if (!SESSION) return;
+  const url = `${window.location.origin}${window.location.pathname}?session=${SESSION.id}`;
+
+  // Render URL text.
+  const urlEl = document.getElementById('share-url');
+  if (urlEl) urlEl.textContent = url;
+
+  // Render QR using qrcode-generator. typeNumber=0 auto-picks the smallest
+  // QR size that fits the data; ECC level 'M' = ~15% error correction, fine
+  // for casual scanning. createSvgTag returns an SVG string we drop in directly.
+  const qrEl = document.getElementById('share-qr');
+  if (qrEl && typeof qrcode === 'function') {
+    try {
+      const qr = qrcode(0, 'M');
+      qr.addData(url);
+      qr.make();
+      qrEl.innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+      const svg = qrEl.querySelector('svg');
+      if (svg) {
+        svg.style.maxWidth = '260px';
+        svg.style.width = '100%';
+        svg.style.height = 'auto';
+        svg.style.display = 'block';
+        // Force pure black on white for maximum scan contrast — overrides
+        // whatever the library decided. qrcode-generator paints cells as
+        // <path> elements; set their fill to true black, and the SVG bg
+        // (the rect that's the QR's "light" area) to pure white.
+        svg.querySelectorAll('path').forEach(p => p.setAttribute('fill', '#000000'));
+        svg.querySelectorAll('rect').forEach(r => r.setAttribute('fill', '#ffffff'));
+        svg.style.background = '#ffffff';
+      }
+    } catch (err) {
+      console.warn('QR render failed', err);
+      qrEl.innerHTML = '<div style="font-family:\'JetBrains Mono\',monospace; font-size:11px; color:var(--mark);">QR could not be generated.</div>';
+    }
+  } else if (qrEl) {
+    qrEl.innerHTML = '<div style="font-family:\'JetBrains Mono\',monospace; font-size:11px; color:var(--mark);">QR library not loaded.</div>';
+  }
+
+  // Wire up the copy button (idempotent — re-binding is fine on re-open).
+  const btn = document.getElementById('share-copy-btn');
+  if (btn) {
+    btn.onclick = async () => {
+      const original = btn.textContent;
+      const flash = (msg) => {
+        btn.textContent = msg;
+        btn.disabled = true;
+        setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 1400);
+      };
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(url);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = url;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        flash('Copied');
+      } catch {
+        flash('Copy failed');
+      }
+    };
+  }
+
+  openScreen('screen-share');
+}
+</script>
+</body>
+</html>
