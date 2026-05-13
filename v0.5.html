@@ -715,14 +715,26 @@
   /* Warning badge in the passenger arrival modal — colored row above notes
      when warning_level !== 'none'. */
   .stop-arrival-warning {
-    margin: 0 20px;
-    padding: 10px 12px;
+    /* Vertical margin gives breathing room from the joke + info-rows. */
+    margin: 14px 20px 16px;
+    padding: 12px 14px;
     border-radius: 6px;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing: 0.08em; line-height: 1.4;
+    font-size: 11px; letter-spacing: 0.08em; line-height: 1.45;
     display: none;
   }
   .stop-arrival-warning.show { display: block; }
+  /* Neutral state — note present without an explicit warning level. */
+  .stop-arrival-warning[data-level="note"] {
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    color: var(--ink);
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 14px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
   .stop-arrival-warning[data-level="info"] {
     background: rgba(37, 99, 235, 0.10);
     border: 1px solid #2563eb;
@@ -1260,10 +1272,7 @@
           <span class="stop-arrival-info-label">Weather</span>
           <span class="stop-arrival-info-value placeholder">to be added</span>
         </div>
-        <div class="stop-arrival-info-row">
-          <span class="stop-arrival-info-label">Notes from guide</span>
-          <span class="stop-arrival-info-value placeholder">none yet</span>
-        </div>
+
       </div>
       <div class="stop-arrival-actions">
         <button class="stop-arrival-ok" id="stop-arrival-ok">Got it</button>
@@ -1379,7 +1388,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · polish v2: duration input + warning pills · build 2026-05-13-2247';
+const BUILD_VERSION = '0.5 · polish v4: sticky modal + note-in-badge · build 2026-05-13-2340';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -5243,12 +5252,17 @@ function renderStopList() {
       <div class="stop-row-name">${(stop.name || '').replace(/</g, '&lt;')}</div>
     `;
     if (isActive) {
-      // Edit-note button (✎): tap → notes-only modal where the guide edits
-      // the note + warning level for THIS activation.
+      // Edit / Add note button (✎): tap → notes-only modal. Label adapts to
+      // whether a note already exists.
       const noteBtn = document.createElement('button');
       noteBtn.className = 'stop-row-note-btn';
-      noteBtn.textContent = '✎ Note';
-      noteBtn.title = 'Edit note + warning for passengers';
+      const meta = ACTIVATION_META.get(stop.id) || {};
+      const hasNote = !!(meta.notes && meta.notes.trim()) ||
+        (meta.warning_level && meta.warning_level !== 'none');
+      noteBtn.textContent = hasNote ? '✎ Edit note' : '✎ Add note';
+      noteBtn.title = hasNote
+        ? 'Edit note + warning for passengers'
+        : 'Add a note or warning for passengers';
       noteBtn.addEventListener('click', () => showEditNoteModal(stop));
       row.appendChild(noteBtn);
 
@@ -5515,11 +5529,50 @@ function onStopActivationUpdated(row) {
     notes: row.notes || null,
     warning_level: row.warning_level || 'none',
   });
-  // If we're currently showing this stop's modal, re-populate its content.
-  if (_arrivalStop && _arrivalStop.id === row.stop_id) {
-    populateArrivalModalContent(_arrivalStop);
-  }
   if (ROLE === 'guide') renderStopList();
+
+  // Sticky-modal logic (passenger side, but also a recap for second-device
+  // guides). Behavior:
+  //   - If both warning_level === 'none' AND notes empty → dismiss + ack
+  //     (the stop has no content to show; killing the popup is the right move).
+  //   - Else if content is present → clear ack and force-show the modal with
+  //     chime, regardless of whether the user previously tapped Got it.
+  //     "Adding warnings/notes pops up and stays on" — this is that logic.
+  const hasContent =
+    (row.warning_level && row.warning_level !== 'none') ||
+    (row.notes && row.notes.trim().length > 0);
+  const stop = TOUR ? TOUR.stops.find(s => s.id === row.stop_id) : null;
+
+  if (!hasContent) {
+    // Both cleared — if the modal is showing this stop, dismiss it. Mark as
+    // acked so maybeShow doesn't bring it back on next visibility change.
+    if (_arrivalStop && _arrivalStop.id === row.stop_id) {
+      dismissStopArrivalModal({ ack: true });
+    } else if (SESSION) {
+      // Modal not open, but make sure any future resume doesn't re-pop a
+      // content-less modal for this stop.
+      markStopAcked(SESSION.id, row.stop_id);
+    }
+    return;
+  }
+
+  // Content present. Update the modal in place if already showing this stop;
+  // otherwise pop it (overriding any previous ack the user tapped).
+  if (!stop) return;
+  if (_arrivalStop && _arrivalStop.id === stop.id) {
+    populateArrivalModalContent(stop);
+    return;
+  }
+  // Override prior ack: remove this stop_id from acked set, then force show.
+  if (SESSION) {
+    try {
+      const acked = getAckedStops(SESSION.id);
+      acked.delete(stop.id);
+      localStorage.setItem(ackKeyFor(SESSION.id), JSON.stringify([...acked]));
+    } catch {}
+  }
+  _arrivalStop = null;   // bypass the same-stop dedupe inside showStopArrivalModal
+  showStopArrivalModal(stop);
 }
 
 // Subscribe to UPDATEs on the sessions row for this session. Used today to
@@ -5691,34 +5744,78 @@ function populateArrivalModalContent(stop) {
   setArrivalInfoRow(1, departureAt ? formatHHMM(departureAt) : 'to be added', !departureAt);
   // Weather row defaults to "checking…" until refreshArrivalWeather completes.
   setArrivalInfoRow(2, 'checking…', true);
+  // Notes go inside the warning badge (or stand alone in a neutral badge when
+  // there's a note but no warning level). The standalone Notes row was removed
+  // because it was redundant with the badge content.
   const notes = (meta.notes || '').trim();
-  setArrivalInfoRow(3, notes || 'none yet', !notes);
-  // Warning badge — colored row above the joke when warning_level !== 'none'.
   updateArrivalWarning(meta.warning_level || 'none', notes);
 }
 
 // Render the warning badge in the arrival modal. Hidden when level === 'none';
 // otherwise shows a colored row with the level prefix and either the note
 // text (preferred — gives context) or a generic fallback.
+// Inline SVG icons for the three severity levels. Hand-tuned glyphs so they
+// render consistently across iOS/Android/desktop instead of relying on emoji
+// or system fonts. 18×18 keeps them readable inside the badge.
+function svgForLevel(level) {
+  if (level === 'info') {
+    return '<svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true">'
+         + '<circle cx="9" cy="9" r="8" fill="#2563eb" />'
+         + '<circle cx="9" cy="4.6" r="1.1" fill="#fff" />'
+         + '<rect x="7.7" y="7.2" width="2.6" height="7.0" rx="0.6" fill="#fff" />'
+         + '</svg>';
+  }
+  if (level === 'caution') {
+    return '<svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true">'
+         + '<polygon points="9,1 17,16 1,16" fill="#c79428" stroke="#1a1d1a" stroke-width="0.7" stroke-linejoin="round"/>'
+         + '<rect x="8.1" y="6.0" width="1.8" height="5.8" rx="0.5" fill="#1a1d1a"/>'
+         + '<circle cx="9" cy="13.7" r="0.95" fill="#1a1d1a"/>'
+         + '</svg>';
+  }
+  if (level === 'danger') {
+    return '<svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true">'
+         + '<polygon points="5.2,1 12.8,1 17,9 12.8,17 5.2,17 1,9" fill="#b8331d" stroke="#1a1d1a" stroke-width="0.5" stroke-linejoin="round"/>'
+         + '<rect x="6.5" y="5.0" width="1.6" height="6.6" rx="0.5" fill="#fff"/>'
+         + '<rect x="9.9" y="5.0" width="1.6" height="6.6" rx="0.5" fill="#fff"/>'
+         + '<circle cx="7.3" cy="13.3" r="0.85" fill="#fff"/>'
+         + '<circle cx="10.7" cy="13.3" r="0.85" fill="#fff"/>'
+         + '</svg>';
+  }
+  return '';
+}
+
 function updateArrivalWarning(level, notes) {
   const banner = document.getElementById('stop-arrival-warning');
   const prefix = document.getElementById('stop-arrival-warning-prefix');
   const text = document.getElementById('stop-arrival-warning-text');
   if (!banner || !prefix || !text) return;
-  if (!level || level === 'none') {
+  const hasNotes = !!(notes && notes.length);
+  const hasLevel = !!(level && level !== 'none');
+  if (!hasLevel && !hasNotes) {
+    // Nothing to show — hide the badge entirely.
     banner.classList.remove('show');
     banner.removeAttribute('data-level');
     return;
   }
+  if (!hasLevel && hasNotes) {
+    // Notes only, no warning level → neutral badge: just the note text.
+    banner.setAttribute('data-level', 'note');
+    prefix.innerHTML = '';
+    text.textContent = notes;
+    banner.classList.add('show');
+    return;
+  }
+  // Warning level set (with or without notes).
   const labelByLevel = { info: 'Info', caution: 'Caution', danger: 'Danger' };
   banner.setAttribute('data-level', level);
-  prefix.textContent = labelByLevel[level] || 'Note';
+  prefix.innerHTML = svgForLevel(level)
+    + '<span class="stop-arrival-warning-level">' + (labelByLevel[level] || 'Note') + '</span>';
   const fallback = {
     info:    'Heads up from your guide.',
     caution: 'Please take care.',
     danger:  'Take this seriously.',
   };
-  text.textContent = (notes && notes.length) ? notes : (fallback[level] || '');
+  text.textContent = hasNotes ? notes : (fallback[level] || '');
   banner.classList.add('show');
 }
 
