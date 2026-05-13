@@ -1168,7 +1168,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk C + session controls + persistent arrival modal · build 2026-05-13-2111';
+const BUILD_VERSION = '0.5 · arrival modal resume-fix · build 2026-05-13-2134';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2053,12 +2053,11 @@ async function loadSessionAndTour(sessionId) {
     return;
   }
 
-  // Passenger: check for any already-active stop the user hasn't acked yet
-  // (e.g. they closed the browser before tapping "Got it" on a previous
-  // session visit). Show the most recent one with sound.
-  if (ROLE === 'passenger') {
-    maybeShowPendingStopAnnouncement();
-  }
+  // Check for any already-active stop the user hasn't acked yet (e.g. they
+  // closed the browser before tapping "Got it"). Role-agnostic — guides get
+  // a useful recap when they refresh mid-tour, passengers get the announce
+  // they may have missed. Most recent unacked stop wins.
+  maybeShowPendingStopAnnouncement();
 }
 
 // ── PASSENGER NAMES (chunk G) ──
@@ -5250,13 +5249,12 @@ async function refetchSessionState() {
     }
   }
 
-  // 3. Passenger: re-prompt any arrival modal the user hasn't acked yet.
-  // Includes (a) brand-new activations realtime missed, (b) the same
-  // already-active stop the user dismissed by closing the browser before
-  // tapping "Got it."
-  if (ROLE === 'passenger') {
-    maybeShowPendingStopAnnouncement();
-  }
+  // 3. Re-prompt any arrival modal the user hasn't acked yet. Covers:
+  //    (a) brand-new activations realtime missed,
+  //    (b) the same already-active stop the user dismissed by closing the
+  //        browser / locking the phone before tapping "Got it",
+  //    (c) a guide refreshing mid-tour wanting the recap.
+  maybeShowPendingStopAnnouncement();
 }
 
 function startSessionPoll() {
@@ -5311,15 +5309,22 @@ function dismissStopArrivalModal(opts) {
   _arrivalStop = null;
 }
 
-// Scan ACTIVE_STOP_IDS for any stop the passenger hasn't acked yet, and
-// pop the most-recently-activated one. Cheap: we already have the active
-// set locally and the acked set is a 1-key localStorage read.
+// Scan ACTIVE_STOP_IDS for any stop the user hasn't acked yet, and pop the
+// most-recently-activated one. Cheap: we already have the active set locally
+// and the acked set is a 1-key localStorage read.
 //
 // "Most recent" = highest stop.ordinal among unacked. We don't carry
-// activated_at on the client side — using ordinal as a proxy is good
-// enough for v0 since stops are walked in order.
+// activated_at on the client side — using ordinal as a proxy is good enough
+// for v0 since stops are walked in order.
+//
+// Role-agnostic on purpose: passengers genuinely need this. Guides get it on
+// resume (e.g. they refreshed mid-tour) as a useful recap, and so testing
+// the modal doesn't require role-switching to passenger. The initial pop
+// right after activation is still passenger-only — guides skip it in
+// onStopActivated() because they just tapped through the activate-confirm
+// modal seconds before.
 function maybeShowPendingStopAnnouncement() {
-  if (ROLE !== 'passenger' || !TOUR || !SESSION) return;
+  if (!TOUR || !SESSION) return;
   if (_arrivalStop) return;          // a modal is already open
   const acked = getAckedStops(SESSION.id);
   let candidate = null;
@@ -5329,6 +5334,7 @@ function maybeShowPendingStopAnnouncement() {
     if (!candidate || stop.ordinal > candidate.ordinal) candidate = stop;
   }
   if (candidate) {
+    console.log('[arrival modal] showing pending stop on resume:', candidate.name);
     showStopArrivalModal(candidate);
   }
 }
