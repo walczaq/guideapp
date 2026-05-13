@@ -623,6 +623,152 @@
     color: var(--paper);
   }
   .stop-row-active-pill[disabled] { opacity: 0.5; cursor: progress; }
+  /* Small ✎ Note button that sits next to the Active pill in the stops list.
+     Tap → notes modal where the guide edits the note for this activation. */
+  .stop-row-note-btn {
+    flex: 0 0 auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.08em;
+    padding: 6px 10px;
+    background: var(--paper-2); color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 999px;
+    cursor: pointer;
+  }
+  .stop-row-note-btn:hover,
+  .stop-row-note-btn:active {
+    background: var(--ink); color: var(--paper); border-color: var(--ink);
+  }
+  /* Duration: small numeric text input (typed in, not pill-chosen) */
+  .stop-modal-duration {
+    padding: 8px 20px 0;
+  }
+  .stop-modal-duration-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule);
+    margin-bottom: 8px;
+  }
+  .stop-modal-duration-row {
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .stop-modal-duration-input {
+    width: 96px;
+    padding: 8px 12px;
+    background: var(--paper);
+    border: 1px solid var(--rule); border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: var(--ink);
+    text-align: center;
+    -moz-appearance: textfield;
+  }
+  .stop-modal-duration-input::-webkit-outer-spin-button,
+  .stop-modal-duration-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .stop-modal-duration-input:focus {
+    outline: none; border-color: var(--ink);
+  }
+  .stop-modal-duration-suffix {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em; color: var(--rule);
+  }
+
+  /* Warning level pills — None / Info / Caution / Danger. Each pill carries
+     a severity tint when active so the guide sees the level at a glance. */
+  .stop-modal-warning {
+    padding: 14px 20px 0;
+  }
+  .stop-modal-warning-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule);
+    margin-bottom: 8px;
+  }
+  .stop-modal-warning-row {
+    display: flex; gap: 6px;
+  }
+  .stop-modal-warning-pill {
+    flex: 1;
+    padding: 8px 4px;
+    background: var(--paper-2); color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .stop-modal-warning-pill.active[data-level="none"] {
+    background: var(--ink); color: var(--paper); border-color: var(--ink);
+  }
+  .stop-modal-warning-pill.active[data-level="info"] {
+    background: #2563eb; color: var(--paper); border-color: #2563eb;
+  }
+  .stop-modal-warning-pill.active[data-level="caution"] {
+    background: var(--armed); color: var(--ink); border-color: var(--armed);
+  }
+  .stop-modal-warning-pill.active[data-level="danger"] {
+    background: var(--mark); color: var(--paper); border-color: var(--mark);
+  }
+
+  /* Warning badge in the passenger arrival modal — colored row above notes
+     when warning_level !== 'none'. */
+  .stop-arrival-warning {
+    margin: 0 20px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em; line-height: 1.4;
+    display: none;
+  }
+  .stop-arrival-warning.show { display: block; }
+  .stop-arrival-warning[data-level="info"] {
+    background: rgba(37, 99, 235, 0.10);
+    border: 1px solid #2563eb;
+    color: #1e3a8a;
+  }
+  .stop-arrival-warning[data-level="caution"] {
+    background: rgba(199, 148, 40, 0.15);
+    border: 1px solid var(--armed);
+    color: #5a3a00;
+  }
+  .stop-arrival-warning[data-level="danger"] {
+    background: rgba(184, 51, 29, 0.12);
+    border: 1px solid var(--mark);
+    color: var(--mark);
+    font-weight: 700;
+  }
+  .stop-arrival-warning-prefix {
+    text-transform: uppercase; letter-spacing: 0.14em;
+    font-weight: 700;
+    margin-right: 6px;
+  }
+  /* Notes input area on the activate modal + notes-only modal */
+  .stop-modal-notes {
+    padding: 14px 20px 6px;
+  }
+  .stop-modal-notes-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule);
+    margin-bottom: 6px;
+  }
+  .stop-modal-notes textarea {
+    width: 100%;
+    min-height: 64px;
+    padding: 10px;
+    background: var(--paper);
+    border: 1px solid var(--rule); border-radius: 6px;
+    font-family: 'Fraunces', serif;
+    font-size: 14px; line-height: 1.4;
+    color: var(--ink);
+    resize: vertical;
+    box-sizing: border-box;
+  }
+  .stop-modal-notes textarea:focus {
+    outline: none; border-color: var(--ink);
+  }
 
   /* ── Stop arrival modal (passenger-side, replaces the top banner) ───────
      Centered, persistent modal that announces a new stop. Stays visible
@@ -1095,6 +1241,9 @@
         <div class="stop-arrival-stamp" id="stop-arrival-stamp">Stop № 01 · Now</div>
         <div class="stop-arrival-name" id="stop-arrival-name">…</div>
       </div>
+      <div class="stop-arrival-warning" id="stop-arrival-warning" data-level="none">
+        <span class="stop-arrival-warning-prefix" id="stop-arrival-warning-prefix">Info</span><span id="stop-arrival-warning-text">…</span>
+      </div>
       <div class="stop-arrival-joke" id="stop-arrival-joke">
         Watch out for the hidden people — they're somewhere around.
       </div>
@@ -1131,7 +1280,39 @@
     <div class="session-ended-sub">Your guide has ended this tour. Thanks for walking with us.</div>
   </div>
 
-  <!-- STOP ACTIVATION MODAL (chunk B) — shown in guide view when:
+  <!-- NOTES MODAL — edit notes for an already-active stop. Reachable by
+       tapping the ✎ Note button in the Stops list. -->
+  <div class="stop-modal-backdrop" id="notes-modal-backdrop">
+    <div class="stop-modal">
+      <div class="stop-modal-header">
+        <span class="stop-modal-stamp" id="notes-modal-stamp">Edit notes</span>
+      </div>
+      <div class="stop-modal-body">
+        <h2 id="notes-modal-title">…</h2>
+        <p id="notes-modal-sub">Update the note and warning passengers see for this stop. Changes appear instantly.</p>
+        <div class="stop-modal-error" id="notes-modal-error"></div>
+      </div>
+      <div class="stop-modal-warning">
+        <div class="stop-modal-warning-label">Warning</div>
+        <div class="stop-modal-warning-row" id="notes-modal-warning-row">
+          <button type="button" class="stop-modal-warning-pill active" data-level="none">None</button>
+          <button type="button" class="stop-modal-warning-pill" data-level="info">Info</button>
+          <button type="button" class="stop-modal-warning-pill" data-level="caution">Caution</button>
+          <button type="button" class="stop-modal-warning-pill" data-level="danger">Danger</button>
+        </div>
+      </div>
+      <div class="stop-modal-notes">
+        <div class="stop-modal-notes-label">Notes for passengers</div>
+        <textarea id="notes-modal-input" placeholder="e.g. Mind the geothermal pools — surface temp 80°C"></textarea>
+      </div>
+      <div class="stop-modal-actions">
+        <button class="stop-modal-btn secondary" id="notes-modal-cancel">Cancel</button>
+        <button class="stop-modal-btn primary" id="notes-modal-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+    <!-- STOP ACTIVATION MODAL (chunk B) — shown in guide view when:
        (a) the guide's GPS enters a stop's activation_radius_m and has stayed
            inside for STOP_DWELL_MS, OR
        (b) the guide tapped a manual "Activate" button in the bottom sheet.
@@ -1146,6 +1327,36 @@
         <h2 id="stop-modal-title">…</h2>
         <p id="stop-modal-sub">Start this stop? Pins will reveal on passengers' phones.</p>
         <div class="stop-modal-error" id="stop-modal-error"></div>
+      </div>
+      <!-- Duration text input + warning pills + notes textarea (polish).
+           All three blocks are shown only when the modal is in 'activate' mode;
+           hidden for deactivate/end-session. -->
+      <div class="stop-modal-duration" id="stop-modal-duration-block">
+        <div class="stop-modal-duration-label">Time at stop</div>
+        <div class="stop-modal-duration-row">
+          <input
+            type="number"
+            id="stop-modal-duration-input"
+            class="stop-modal-duration-input"
+            min="1" max="360" step="1"
+            inputmode="numeric"
+            value="30"
+          />
+          <span class="stop-modal-duration-suffix">minutes</span>
+        </div>
+      </div>
+      <div class="stop-modal-warning" id="stop-modal-warning-block">
+        <div class="stop-modal-warning-label">Warning</div>
+        <div class="stop-modal-warning-row" id="stop-modal-warning-row">
+          <button type="button" class="stop-modal-warning-pill active" data-level="none">None</button>
+          <button type="button" class="stop-modal-warning-pill" data-level="info">Info</button>
+          <button type="button" class="stop-modal-warning-pill" data-level="caution">Caution</button>
+          <button type="button" class="stop-modal-warning-pill" data-level="danger">Danger</button>
+        </div>
+      </div>
+      <div class="stop-modal-notes" id="stop-modal-notes-block">
+        <div class="stop-modal-notes-label">Notes for passengers (optional)</div>
+        <textarea id="stop-modal-notes-input" placeholder="e.g. Mind the geothermal pools — surface temp 80°C"></textarea>
       </div>
       <div class="stop-modal-actions">
         <button class="stop-modal-btn secondary" id="stop-modal-dismiss">Not yet</button>
@@ -1168,7 +1379,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · arrival v2 (guide auto-ack + diagnostics) · build 2026-05-13-2147';
+const BUILD_VERSION = '0.5 · polish v2: duration input + warning pills · build 2026-05-13-2247';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -1662,6 +1873,9 @@ let SESSION = null;
 //     added on session load for v0.4 parity. Chunk C will replace this with
 //     a catch-up query + realtime subscription on stop_activations.
 const ACTIVE_STOP_IDS = new Set();
+// Per-stop activation metadata, keyed by stop_id. Populated by catchUp,
+// onStopActivated, and onStopActivationUpdated. Shape: { activated_at, duration_minutes, notes }.
+const ACTIVATION_META = new Map();
 
 // ── 1e. GEOFENCE DWELL STATE (chunk B, guide only) ──
 // We don't fire the activation prompt the instant the guide crosses into a
@@ -4139,9 +4353,10 @@ function mountGuideBottomSheet() {
   }
 
   // Chunk B: render the stops section now that the sheet exists, and wire
-  // the activation modal's buttons (idempotent — safe to call multiple times).
+  // the activation/notes modal buttons (idempotent — safe to call repeatedly).
   renderStopList();
   wireStopModalHandlers();
+  wireNotesModalHandlers();
 
   // Session controls: end-session button at the bottom of the Control Center.
   const endBtn = document.getElementById('end-session-btn');
@@ -4749,13 +4964,21 @@ async function catchUpStopActivations() {
   if (!SESSION) return;
   const { data, error } = await supabaseClient
     .from('stop_activations')
-    .select('stop_id, activated_at')
+    .select('stop_id, activated_at, duration_minutes, notes, warning_level')
     .eq('session_id', SESSION.id);
   if (error) {
     console.warn('[chunk B] stop_activations catch-up failed', error);
     return;
   }
-  for (const row of (data || [])) ACTIVE_STOP_IDS.add(row.stop_id);
+  for (const row of (data || [])) {
+    ACTIVE_STOP_IDS.add(row.stop_id);
+    ACTIVATION_META.set(row.stop_id, {
+      activated_at: row.activated_at,
+      duration_minutes: row.duration_minutes ?? 20,
+      notes: row.notes || null,
+      warning_level: row.warning_level || 'none',
+    });
+  }
   console.log('[catch-up] stop_activations rows:', (data || []).length,
     'active set now:', [...ACTIVE_STOP_IDS]);
 }
@@ -4840,6 +5063,9 @@ function showActivateStopModal(stop, source) {
   activateBtn.textContent = 'Activate';
   activateBtn.classList.remove('danger');
   if (dismissBtn) dismissBtn.textContent = 'Not yet';
+  // Show duration + notes inputs (activate-only).
+  setActivateModalInputsVisible(true);
+  resetActivateModalInputs();
   backdrop.classList.add('show');
 }
 
@@ -4871,6 +5097,7 @@ function showDeactivateStopModal(stop) {
   activateBtn.textContent = 'Deactivate';
   activateBtn.classList.add('danger');
   if (dismissBtn) dismissBtn.textContent = 'Cancel';
+  setActivateModalInputsVisible(false);
   backdrop.classList.add('show');
 }
 
@@ -4891,15 +5118,21 @@ function dismissActivateStopModal(asNotYet) {
 // Calls the activate_stop RPC. On success, updates ACTIVE_STOP_IDS, re-renders
 // pins, re-renders the stops list. The realtime INSERT event will arrive
 // shortly after — dedupe handles that.
-async function activateStop(stop) {
+async function activateStop(stop, opts) {
   const token = getStoredGuideToken();
   if (!token) {
     return { error: 'You must be signed in as a guide to activate stops.' };
   }
+  const durationMinutes = (opts && opts.durationMinutes) || _selectedDurationMinutes || 30;
+  const notes = (opts && typeof opts.notes === 'string') ? opts.notes : (_notesInputValue || null);
+  const warningLevel = (opts && opts.warningLevel) || _selectedWarningLevel || 'none';
   const { data, error } = await supabaseClient.rpc('activate_stop', {
     p_session_id: SESSION.id,
     p_stop_id: stop.id,
     p_guide_token: token,
+    p_duration_minutes: durationMinutes,
+    p_notes: notes && notes.trim() ? notes.trim() : null,
+    p_warning_level: warningLevel,
   });
   if (error) {
     console.warn('[chunk B] activate_stop failed', error);
@@ -4990,6 +5223,7 @@ function showEndSessionModal() {
   activateBtn.textContent = 'End session';
   activateBtn.classList.add('danger');
   if (dismissBtn) dismissBtn.textContent = 'Cancel';
+  setActivateModalInputsVisible(false);
   backdrop.classList.add('show');
 }
 
@@ -5009,8 +5243,16 @@ function renderStopList() {
       <div class="stop-row-name">${(stop.name || '').replace(/</g, '&lt;')}</div>
     `;
     if (isActive) {
-      // Tap the pill to deactivate (with confirmation). Recovery path for
-      // mis-taps + a way to retest pin reveal during a session.
+      // Edit-note button (✎): tap → notes-only modal where the guide edits
+      // the note + warning level for THIS activation.
+      const noteBtn = document.createElement('button');
+      noteBtn.className = 'stop-row-note-btn';
+      noteBtn.textContent = '✎ Note';
+      noteBtn.title = 'Edit note + warning for passengers';
+      noteBtn.addEventListener('click', () => showEditNoteModal(stop));
+      row.appendChild(noteBtn);
+
+      // Tap the pill to deactivate (with confirmation).
       const pill = document.createElement('button');
       pill.className = 'stop-row-active-pill';
       pill.textContent = 'Active';
@@ -5028,6 +5270,29 @@ function renderStopList() {
   }
 }
 
+// Show/hide the duration + notes blocks. Activate mode shows them; the
+// deactivate and end-session confirm modes hide them (those are pure confirms).
+function setActivateModalInputsVisible(visible) {
+  const dur = document.getElementById('stop-modal-duration-block');
+  const nts = document.getElementById('stop-modal-notes-block');
+  if (dur) dur.style.display = visible ? '' : 'none';
+  if (nts) nts.style.display = visible ? '' : 'none';
+}
+
+// Reset to defaults (30 min, no warning, empty notes). Called each time the
+// activate modal opens so previous-session input doesn't leak in.
+function resetActivateModalInputs() {
+  _selectedDurationMinutes = 30;
+  _notesInputValue = '';
+  _selectedWarningLevel = 'none';
+  const input = document.getElementById('stop-modal-duration-input');
+  if (input) input.value = '30';
+  const pills = document.querySelectorAll('#stop-modal-warning-row .stop-modal-warning-pill');
+  pills.forEach(p => p.classList.toggle('active', p.dataset.level === 'none'));
+  const ta = document.getElementById('stop-modal-notes-input');
+  if (ta) ta.value = '';
+}
+
 // One-time wiring for the modal's "Not yet" and "Activate" buttons. Called
 // from boot/mountGuideBottomSheet — idempotent via the _stopModalWired flag.
 let _stopModalWired = false;
@@ -5038,6 +5303,27 @@ function wireStopModalHandlers() {
   const activateBtn = document.getElementById('stop-modal-activate');
   const errEl = document.getElementById('stop-modal-error');
   if (!dismissBtn || !activateBtn || !errEl) return;
+  // Duration input (numeric, typed in by guide). Parse + clamp 1..360.
+  const durInput = document.getElementById('stop-modal-duration-input');
+  if (durInput) durInput.addEventListener('input', (e) => {
+    const n = parseInt(e.target.value, 10);
+    _selectedDurationMinutes = (Number.isFinite(n) && n > 0) ? Math.min(360, n) : 30;
+  });
+  // Warning pills: click → set _selectedWarningLevel + toggle .active.
+  document.querySelectorAll('#stop-modal-warning-row .stop-modal-warning-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const level = pill.dataset.level || 'none';
+      _selectedWarningLevel = level;
+      document.querySelectorAll('#stop-modal-warning-row .stop-modal-warning-pill').forEach(p => {
+        p.classList.toggle('active', p === pill);
+      });
+    });
+  });
+  // Notes textarea: write-through to _notesInputValue.
+  const notesInput = document.getElementById('stop-modal-notes-input');
+  if (notesInput) notesInput.addEventListener('input', (e) => {
+    _notesInputValue = e.target.value;
+  });
   dismissBtn.addEventListener('click', () => dismissActivateStopModal(true));
   activateBtn.addEventListener('click', async () => {
     const mode = _modalMode;
@@ -5107,6 +5393,16 @@ function markStopAcked(sessionId, stopId) {
 // button is acknowledging.
 let _arrivalStop = null;
 
+// Guide-side activation modal scratch state. Reset each time
+// showActivateStopModal opens; harvested by activateStop().
+let _selectedDurationMinutes = 30;
+let _notesInputValue = '';
+let _selectedWarningLevel = 'none';
+
+// Edit-note modal: which stop is being edited + its scratch warning state.
+let _noteEditStop = null;
+let _editNoteWarningLevel = 'none';
+
 function subscribeStopActivations() {
   if (_stopActivationSubscribed) return;        // idempotent
   if (!SESSION) return;
@@ -5132,10 +5428,19 @@ function subscribeStopActivations() {
         table: 'stop_activations',
         filter: `session_id=eq.${SESSION.id}`,
       },
-      // payload.old has the deleted row's data (with REPLICA IDENTITY DEFAULT
-      // this includes at least the primary key; with FULL it'd include all
-      // columns. We only need stop_id, which is enough either way.)
+      // payload.old has the deleted row's data (REPLICA IDENTITY FULL is set
+      // in migration 004 so stop_id is reliably present).
       (payload) => onStopDeactivated(payload.old)
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'stop_activations',
+        filter: `session_id=eq.${SESSION.id}`,
+      },
+      (payload) => onStopActivationUpdated(payload.new)
     )
     .subscribe((status) => {
       // Status callback: 'SUBSCRIBED', 'CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'.
@@ -5159,6 +5464,14 @@ function subscribeStopActivations() {
 }
 
 function onStopActivated(row) {
+  // Capture the activation meta no matter what (we want it even on dedupe so
+  // the activator's local view reflects what the DB actually stored).
+  ACTIVATION_META.set(row.stop_id, {
+    activated_at: row.activated_at,
+    duration_minutes: row.duration_minutes ?? 20,
+    notes: row.notes || null,
+    warning_level: row.warning_level || 'none',
+  });
   // Idempotency: the activator's own device added the stop_id locally before
   // the realtime event came back. Any other client (passenger, second guide
   // device) hits this path with a fresh stop_id.
@@ -5185,9 +5498,27 @@ function onStopActivated(row) {
 // device already updated its own state in deactivateStop(); this dedupes.
 function onStopDeactivated(row) {
   if (!row || row.stop_id == null) return;
+  ACTIVATION_META.delete(row.stop_id);
   if (!ACTIVE_STOP_IDS.has(row.stop_id)) return;   // already in sync
   ACTIVE_STOP_IDS.delete(row.stop_id);
   renderPins();
+  if (ROLE === 'guide') renderStopList();
+}
+
+// UPDATE handler — fires when a guide edits notes via update_stop_activation_notes.
+// Refresh the modal in-place if it's currently showing this stop.
+function onStopActivationUpdated(row) {
+  if (!row || row.stop_id == null) return;
+  ACTIVATION_META.set(row.stop_id, {
+    activated_at: row.activated_at,
+    duration_minutes: row.duration_minutes ?? 20,
+    notes: row.notes || null,
+    warning_level: row.warning_level || 'none',
+  });
+  // If we're currently showing this stop's modal, re-populate its content.
+  if (_arrivalStop && _arrivalStop.id === row.stop_id) {
+    populateArrivalModalContent(_arrivalStop);
+  }
   if (ROLE === 'guide') renderStopList();
 }
 
@@ -5328,18 +5659,140 @@ function showStopArrivalModal(stop) {
     return;
   }
   _arrivalStop = stop;
-
+  populateArrivalModalContent(stop);
   const backdrop = document.getElementById('stop-arrival-backdrop');
-  const stamp = document.getElementById('stop-arrival-stamp');
-  const nameEl = document.getElementById('stop-arrival-name');
-  if (!backdrop || !stamp || !nameEl) return;
-
-  stamp.textContent = `Stop № ${String(stop.ordinal).padStart(2, '0')} · Now`;
-  nameEl.textContent = stop.name || '';
+  if (!backdrop) return;
   backdrop.classList.add('show');
+  // Kick off async weather fetch — updates the weather row in place when done.
+  refreshArrivalWeather(stop);
   // Chime: fire after the modal class flips so the audio is paired with
   // the visual reveal rather than the GPS or render path.
   playChime();
+}
+
+// Render the modal's stamp/name/joke/info rows from current state. Pulled out
+// so the realtime UPDATE handler (notes edited) can re-populate without
+// re-triggering show/animation/chime.
+function populateArrivalModalContent(stop) {
+  const stamp = document.getElementById('stop-arrival-stamp');
+  const nameEl = document.getElementById('stop-arrival-name');
+  if (!stamp || !nameEl) return;
+  stamp.textContent = `Stop № ${String(stop.ordinal).padStart(2, '0')} · Now`;
+  nameEl.textContent = stop.name || '';
+
+  const meta = ACTIVATION_META.get(stop.id) || {};
+  const duration = meta.duration_minutes ?? 20;
+  const activatedAt = meta.activated_at ? new Date(meta.activated_at) : null;
+  const departureAt = activatedAt
+    ? new Date(activatedAt.getTime() + duration * 60 * 1000)
+    : null;
+
+  setArrivalInfoRow(0, `${duration} min`, false);
+  setArrivalInfoRow(1, departureAt ? formatHHMM(departureAt) : 'to be added', !departureAt);
+  // Weather row defaults to "checking…" until refreshArrivalWeather completes.
+  setArrivalInfoRow(2, 'checking…', true);
+  const notes = (meta.notes || '').trim();
+  setArrivalInfoRow(3, notes || 'none yet', !notes);
+  // Warning badge — colored row above the joke when warning_level !== 'none'.
+  updateArrivalWarning(meta.warning_level || 'none', notes);
+}
+
+// Render the warning badge in the arrival modal. Hidden when level === 'none';
+// otherwise shows a colored row with the level prefix and either the note
+// text (preferred — gives context) or a generic fallback.
+function updateArrivalWarning(level, notes) {
+  const banner = document.getElementById('stop-arrival-warning');
+  const prefix = document.getElementById('stop-arrival-warning-prefix');
+  const text = document.getElementById('stop-arrival-warning-text');
+  if (!banner || !prefix || !text) return;
+  if (!level || level === 'none') {
+    banner.classList.remove('show');
+    banner.removeAttribute('data-level');
+    return;
+  }
+  const labelByLevel = { info: 'Info', caution: 'Caution', danger: 'Danger' };
+  banner.setAttribute('data-level', level);
+  prefix.textContent = labelByLevel[level] || 'Note';
+  const fallback = {
+    info:    'Heads up from your guide.',
+    caution: 'Please take care.',
+    danger:  'Take this seriously.',
+  };
+  text.textContent = (notes && notes.length) ? notes : (fallback[level] || '');
+  banner.classList.add('show');
+}
+
+// Set the value of the Nth info row in the arrival modal. n: 0..3 in source
+// order. placeholder = italicize and dim (matches the "to be added" style).
+function setArrivalInfoRow(n, value, placeholder) {
+  const rows = document.querySelectorAll('#stop-arrival-backdrop .stop-arrival-info-row');
+  const row = rows[n];
+  if (!row) return;
+  const valueEl = row.querySelector('.stop-arrival-info-value');
+  if (!valueEl) return;
+  valueEl.textContent = value;
+  valueEl.classList.toggle('placeholder', !!placeholder);
+}
+
+function formatHHMM(date) {
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+// Weather: fetch current observation from the Icelandic Met Office, via the
+// apis.is community JSON wrapper. Seed tours are in Reykjavík; we hardcode
+// station 1 for now. Future improvement: choose station by stop lat/lng.
+// Cached per stop_id for WEATHER_CACHE_MS to avoid hammering the API on
+// repeat shows or visibility flips.
+const WEATHER_CACHE_MS = 15 * 60 * 1000;
+const _weatherCache = new Map();    // stop_id → { fetchedAt, value }
+
+async function refreshArrivalWeather(stop) {
+  if (!stop) return;
+  const cached = _weatherCache.get(stop.id);
+  const now = Date.now();
+  if (cached && (now - cached.fetchedAt) < WEATHER_CACHE_MS) {
+    updateArrivalWeatherRow(stop, cached.value);
+    return;
+  }
+  try {
+    const resp = await fetch('https://apis.is/weather/observations/en?stations=1', {
+      cache: 'no-store',
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const json = await resp.json();
+    const obs = json && json.results && json.results[0];
+    if (!obs) throw new Error('empty observation');
+    // apis.is uses comma as decimal separator on numeric fields; normalize.
+    const numLike = (s) => (s == null || s === '') ? null
+      : parseFloat(String(s).replace(',', '.'));
+    const value = {
+      tempC: numLike(obs.T),
+      windMps: numLike(obs.F),
+      condition: obs.W || null,
+      observedAt: obs.atime || null,
+    };
+    _weatherCache.set(stop.id, { fetchedAt: now, value });
+    updateArrivalWeatherRow(stop, value);
+  } catch (e) {
+    console.warn('[weather] fetch failed', e);
+    updateArrivalWeatherRow(stop, null);
+  }
+}
+
+function updateArrivalWeatherRow(stop, w) {
+  // Only update if the modal is still showing the same stop we asked about.
+  if (!_arrivalStop || _arrivalStop.id !== stop.id) return;
+  if (!w || w.tempC == null) {
+    setArrivalInfoRow(2, 'unavailable', true);
+    return;
+  }
+  const parts = [];
+  parts.push(`${Math.round(w.tempC)}°C`);
+  if (w.condition) parts.push(w.condition);
+  if (w.windMps != null) parts.push(`wind ${w.windMps.toFixed(0)} m/s`);
+  setArrivalInfoRow(2, parts.join(' · '), false);
 }
 
 function dismissStopArrivalModal(opts) {
@@ -5387,6 +5840,102 @@ function maybeShowPendingStopAnnouncement() {
   } else {
     console.log('[maybeShow] no candidate (all active stops acked, or none active)');
   }
+}
+
+// Edit-Note modal: pre-fills notes + warning level for the stop, lets the
+// guide edit, saves via update_stop_activation_notes RPC. Realtime UPDATE
+// pushes the change to any open passenger arrival modal.
+function showEditNoteModal(stop) {
+  if (!stop) return;
+  if (!ACTIVE_STOP_IDS.has(stop.id)) return;
+  _noteEditStop = stop;
+  const backdrop = document.getElementById('notes-modal-backdrop');
+  const title = document.getElementById('notes-modal-title');
+  const errEl = document.getElementById('notes-modal-error');
+  const input = document.getElementById('notes-modal-input');
+  const saveBtn = document.getElementById('notes-modal-save');
+  if (!backdrop || !title || !errEl || !input || !saveBtn) return;
+  const meta = ACTIVATION_META.get(stop.id) || {};
+  title.textContent = stop.name || '';
+  errEl.textContent = '';
+  input.value = meta.notes || '';
+  _editNoteWarningLevel = meta.warning_level || 'none';
+  document.querySelectorAll('#notes-modal-warning-row .stop-modal-warning-pill').forEach(p => {
+    p.classList.toggle('active', p.dataset.level === _editNoteWarningLevel);
+  });
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Save';
+  backdrop.classList.add('show');
+  setTimeout(() => input.focus(), 200);
+}
+
+function dismissEditNoteModal() {
+  const backdrop = document.getElementById('notes-modal-backdrop');
+  if (backdrop) backdrop.classList.remove('show');
+  _noteEditStop = null;
+}
+
+async function saveEditedNote() {
+  const stop = _noteEditStop;
+  if (!stop || !SESSION) return;
+  const input = document.getElementById('notes-modal-input');
+  const errEl = document.getElementById('notes-modal-error');
+  const saveBtn = document.getElementById('notes-modal-save');
+  if (!input || !errEl || !saveBtn) return;
+  const token = getStoredGuideToken();
+  if (!token) {
+    errEl.textContent = 'You must be signed in as a guide.';
+    return;
+  }
+  const newNotes = (input.value || '').trim() || null;
+  const newWarning = _editNoteWarningLevel || 'none';
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+  errEl.textContent = '';
+  const { error } = await supabaseClient.rpc('update_stop_activation_notes', {
+    p_session_id: SESSION.id,
+    p_stop_id: stop.id,
+    p_guide_token: token,
+    p_notes: newNotes,
+    p_warning_level: newWarning,
+  });
+  if (error) {
+    console.warn('[notes] update failed', error);
+    errEl.textContent = error.message || 'Could not save note.';
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Try again';
+    return;
+  }
+  // Reflect locally so the guide's own view updates without waiting on the
+  // realtime round-trip; the UPDATE handler dedupes by overwriting with
+  // the same values.
+  const existing = ACTIVATION_META.get(stop.id) || {};
+  ACTIVATION_META.set(stop.id, Object.assign({}, existing, {
+    notes: newNotes,
+    warning_level: newWarning,
+  }));
+  if (ROLE === 'guide') renderStopList();
+  dismissEditNoteModal();
+}
+
+let _notesModalWired = false;
+function wireNotesModalHandlers() {
+  if (_notesModalWired) return;
+  const cancelBtn = document.getElementById('notes-modal-cancel');
+  const saveBtn = document.getElementById('notes-modal-save');
+  if (!cancelBtn || !saveBtn) return;
+  _notesModalWired = true;
+  cancelBtn.addEventListener('click', () => dismissEditNoteModal());
+  saveBtn.addEventListener('click', () => saveEditedNote());
+  document.querySelectorAll('#notes-modal-warning-row .stop-modal-warning-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const level = pill.dataset.level || 'none';
+      _editNoteWarningLevel = level;
+      document.querySelectorAll('#notes-modal-warning-row .stop-modal-warning-pill').forEach(p => {
+        p.classList.toggle('active', p === pill);
+      });
+    });
+  });
 }
 
 // One-time wiring for the arrival modal's "Got it" button.
