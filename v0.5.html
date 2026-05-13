@@ -541,6 +541,135 @@
   }
   .about-block.muted { color: #4a4a4a; }
   .about-block b { font-weight: 600; color: var(--ink); }
+
+  /* ── Chunk B: stops list in guide bottom sheet ──────────────────────────
+     Sits above the visibility-section. Each row is a stop, with an
+     "Activate now" button on inactive stops and an "Active" pill on
+     activated ones. Visually echoes the pill / row patterns already used
+     elsewhere in the sheet. */
+  .stops-section {
+    padding: 0 0 16px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .stops-section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule);
+    margin-bottom: 10px;
+  }
+  .stop-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .stop-row:last-child { border-bottom: none; }
+  .stop-row-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--rule);
+    width: 24px; flex-shrink: 0;
+  }
+  .stop-row-name {
+    flex: 1;
+    font-family: 'Fraunces', serif;
+    font-size: 16px; color: var(--ink);
+    line-height: 1.2;
+  }
+  .stop-row.active .stop-row-name { color: var(--rule); }
+  .stop-row-action {
+    flex: 0 0 auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 6px 12px;
+    background: var(--ink); color: var(--paper);
+    border: 1px solid var(--ink); border-radius: 999px;
+    cursor: pointer;
+  }
+  .stop-row-action:active { transform: scale(0.96); }
+  .stop-row-action[disabled] { opacity: 0.5; cursor: progress; }
+  .stop-row-active-pill {
+    flex: 0 0 auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 6px 12px;
+    background: transparent; color: var(--signal-good);
+    border: 1px solid var(--signal-good); border-radius: 999px;
+  }
+
+  /* ── Chunk B: "Activate this stop?" modal ──────────────────────────────
+     Full-screen-over-the-map prompt that fires when the guide enters a
+     stop's activation radius (after a brief dwell to dodge GPS jitter).
+     Also reachable as a confirm step from the manual "Activate" button.
+     Uses the same paper aesthetic as pin-popup but sits centered, full
+     width, with two big buttons. */
+  .stop-modal-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(26, 29, 26, 0.42);
+    opacity: 0; visibility: hidden;
+    transition: opacity 0.25s, visibility 0s linear 0.25s;
+    z-index: 40;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .stop-modal-backdrop.show {
+    opacity: 1; visibility: visible;
+    transition: opacity 0.25s, visibility 0s;
+  }
+  .stop-modal {
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 0 0 8px var(--paper-2);
+    max-width: 340px; width: 100%;
+    transform: translateY(20px);
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.1);
+  }
+  .stop-modal-backdrop.show .stop-modal { transform: translateY(0); }
+  .stop-modal-header {
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .stop-modal-stamp {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--mark);
+  }
+  .stop-modal-body { padding: 18px 20px 14px; }
+  .stop-modal-body h2 {
+    font-family: 'Fraunces', serif; font-weight: 400;
+    font-size: 26px; line-height: 1.15;
+    margin-bottom: 8px;
+    font-variation-settings: "opsz" 90;
+  }
+  .stop-modal-body p {
+    font-size: 14px; line-height: 1.5; color: #2a2e2a;
+  }
+  .stop-modal-error {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--mark);
+    margin-top: 10px; min-height: 0;
+  }
+  .stop-modal-actions {
+    display: flex; gap: 8px;
+    padding: 0 20px 20px;
+  }
+  .stop-modal-btn {
+    flex: 1;
+    padding: 12px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid var(--ink);
+    transition: transform 0.1s;
+  }
+  .stop-modal-btn:active { transform: scale(0.97); }
+  .stop-modal-btn[disabled] { opacity: 0.5; cursor: progress; }
+  .stop-modal-btn.secondary {
+    background: var(--paper); color: var(--ink);
+  }
+  .stop-modal-btn.primary {
+    background: var(--ink); color: var(--paper);
+  }
 </style>
 </head>
 <body>
@@ -732,13 +861,35 @@
         Tours now have a stop → pin hierarchy. Guides activate stops; passengers see pins reveal as stops activate. Activated stops stay on for the rest of the session.
       </div>
       <div class="about-block muted">
-        Chunk A done: stops + pins tables, seed-tour migration, code reads pins via stops. All stops auto-activate on session join for parity — guide-controlled activation lands in chunk B. Future chunks: activation prompt + manual button (B), realtime fan-out + passenger reveal (C), Service Worker + Web Push (D), iOS-foreground lobby copy (E).
+        Chunks A + B done: stops + pins tables, seed-tour migration, guide-side activation flow. Guides see a Stops list in the bottom sheet, get a geofenced "Activate this stop?" prompt on arrival, and can manually activate from the list. Activations call the activate_stop RPC and persist to stop_activations. Passengers still see all pins by default — chunk C swaps that for realtime reveal driven by stop_activations. Future: realtime fan-out + passenger reveal (C), Service Worker + Web Push (D), iOS-foreground lobby copy (E).
       </div>
       <div class="about-block muted">
         v0.4 still works: invite-code auth, live guide view, realtime passenger dots, breadcrumb trails. v0.3 still works: GPS fixes captured locally, queued in IndexedDB, synced to Supabase when network is available.
       </div>
       <div class="about-block muted" id="about-debug">
         <!-- populated at runtime with session + passenger info -->
+      </div>
+    </div>
+  </div>
+
+  <!-- STOP ACTIVATION MODAL (chunk B) — shown in guide view when:
+       (a) the guide's GPS enters a stop's activation_radius_m and has stayed
+           inside for STOP_DWELL_MS, OR
+       (b) the guide tapped a manual "Activate" button in the bottom sheet.
+       Dismissed via "Not yet" or auto-dismissed after successful activation. -->
+  <div class="stop-modal-backdrop" id="stop-modal-backdrop">
+    <div class="stop-modal">
+      <div class="stop-modal-header">
+        <span class="stop-modal-stamp" id="stop-modal-stamp">Approaching</span>
+      </div>
+      <div class="stop-modal-body">
+        <h2 id="stop-modal-title">…</h2>
+        <p id="stop-modal-sub">Start this stop? Pins will reveal on passengers' phones.</p>
+        <div class="stop-modal-error" id="stop-modal-error"></div>
+      </div>
+      <div class="stop-modal-actions">
+        <button class="stop-modal-btn secondary" id="stop-modal-dismiss">Not yet</button>
+        <button class="stop-modal-btn primary" id="stop-modal-activate">Activate</button>
       </div>
     </div>
   </div>
@@ -1238,12 +1389,31 @@ let SESSION = null;
 // Stops that have been activated this session. Pins are only rendered and
 // triggerable for activated stops.
 //
-// In chunk A this is populated with ALL stops on session load (parity with
-// v0.4 — every pin is visible the moment the passenger joins). Chunk C
-// replaces this with a catch-up query that loads only stops whose
-// stop_activations row exists. Chunk B adds the guide-side flow to insert
-// new activation rows.
+// Population depends on role:
+//   - guide (chunk B+): seeded from the stop_activations catch-up query on
+//     session join. New activations (geofence prompt or manual button) call
+//     the activate_stop RPC and add to this Set on success.
+//   - passenger (chunk A — still in effect until chunk C): all stops are
+//     added on session load for v0.4 parity. Chunk C will replace this with
+//     a catch-up query + realtime subscription on stop_activations.
 const ACTIVE_STOP_IDS = new Set();
+
+// ── 1e. GEOFENCE DWELL STATE (chunk B, guide only) ──
+// We don't fire the activation prompt the instant the guide crosses into a
+// stop's radius — GPS jitter near the boundary would flutter the modal in
+// and out. Instead, the guide must dwell inside for STOP_DWELL_MS before the
+// prompt appears. _stopInRadius tracks which stop (if any) we're currently
+// inside; _stopInRadiusSince is the ms timestamp when entry was detected;
+// _stopPromptDismissedFor is the stop_id the guide just dismissed ("not yet")
+// so we don't immediately reprompt while they're still inside.
+let _stopInRadius = null;
+let _stopInRadiusSince = null;
+let _stopPromptDismissedFor = null;
+const STOP_DWELL_MS = 3000;
+
+// Currently-displayed stop in the activation modal (or null if dismissed).
+let _modalStop = null;
+let _modalSource = null;  // 'geofence' | 'manual' — for stamp text + telemetry later
 
 // Reshape a Supabase-returned tour row (with nested stops and pins from a
 // foreign-key select) into the in-memory TOUR shape documented above.
@@ -1564,10 +1734,17 @@ async function loadSessionAndTour(sessionId) {
   SESSION = session;
   TOUR = reshapeTour(tour);
 
-  // Chunk A parity: activate every stop on session join. This keeps v0.4
-  // behavior (all pins visible immediately) while the new schema lands.
-  // Chunk C replaces this with a stop_activations catch-up query.
-  for (const stop of TOUR.stops) ACTIVE_STOP_IDS.add(stop.id);
+  // Seed ACTIVE_STOP_IDS based on role:
+  //   - guide (chunk B): catch up from stop_activations — guides see only
+  //     stops they (or a previous guide-device for this session) have
+  //     activated. Lets a refresh restore the guide's mid-tour state.
+  //   - passenger: still on the chunk A parity path (activate-all). Chunk C
+  //     replaces this with the passenger-side catch-up + realtime subscribe.
+  if (ROLE === 'guide') {
+    await catchUpStopActivations();
+  } else {
+    for (const stop of TOUR.stops) ACTIVE_STOP_IDS.add(stop.id);
+  }
 
   applyTourMetadata();
   hideLoading();
@@ -3484,6 +3661,15 @@ function mountGuideBottomSheet() {
       </div>
     </div>
     <div class="guide-sheet-body" id="guide-sheet-body">
+      <!-- Stops list (chunk B) — populated by renderStopList() once TOUR loads.
+           Each row has a manual "Activate" button on inactive stops and a
+           muted "Active" pill on activated ones. -->
+      <div class="stops-section" id="stops-section">
+        <div class="stops-section-label">Stops</div>
+        <div id="stops-list">
+          <!-- rows populated by renderStopList() -->
+        </div>
+      </div>
       <!-- Visibility control (chunk F) — two independent pills. -->
       <div class="visibility-section" id="visibility-section">
         <div class="visibility-section-label">Visible to passengers</div>
@@ -3590,6 +3776,11 @@ function mountGuideBottomSheet() {
       namesBtn.textContent = NAMES_VISIBLE ? 'On' : 'Off';
     });
   }
+
+  // Chunk B: render the stops section now that the sheet exists, and wire
+  // the activation modal's buttons (idempotent — safe to call multiple times).
+  renderStopList();
+  wireStopModalHandlers();
 }
 
 function applySheetState() {
@@ -3703,6 +3894,12 @@ function onGpsSuccess(pos) {
   // by their own tour pins. They're observers, not participants.
   if (ROLE === 'passenger') {
     checkTriggers();
+  }
+
+  // Stop geofence (chunk B, guide only) — prompts "Activate this stop?"
+  // after the guide dwells inside a stop's activation_radius_m.
+  if (ROLE === 'guide' && SESSION) {
+    checkStopGeofences();
   }
 
   // Persist to local queue, throttled. Only queues when:
@@ -4145,6 +4342,203 @@ function openShareScreen() {
   }
 
   openScreen('screen-share');
+}
+
+// ╭──────────────────────────────────────────────────────╮
+// │  v0.5 CHUNK B — STOP ACTIVATION                      │
+// │                                                       │
+// │  Guide-side flow: arrive at a stop → prompted →       │
+// │  confirm → RPC activate_stop → pins go live.          │
+// │  Manual "Activate" button in the bottom sheet does    │
+// │  the same thing without the geofence step.            │
+// ╰──────────────────────────────────────────────────────╯
+
+// Catch-up: load already-activated stops for this session and seed
+// ACTIVE_STOP_IDS. Called from loadSessionAndTour for the guide role only
+// (passengers still get auto-activate-all until chunk C lands).
+async function catchUpStopActivations() {
+  if (!SESSION) return;
+  const { data, error } = await supabaseClient
+    .from('stop_activations')
+    .select('stop_id, activated_at')
+    .eq('session_id', SESSION.id);
+  if (error) {
+    console.warn('[chunk B] stop_activations catch-up failed', error);
+    return;
+  }
+  for (const row of (data || [])) ACTIVE_STOP_IDS.add(row.stop_id);
+}
+
+// Geofence dwell check — called from onGpsSuccess on every fix when
+// ROLE === 'guide'. The flow:
+//   1. Find the nearest stop the guide is INSIDE the activation radius of
+//      and which is not already activated (and not the one they just
+//      dismissed while still inside).
+//   2. If found and it's NEW (we weren't inside it last fix): note the
+//      entry time. If we WERE inside it: check whether dwell ≥ STOP_DWELL_MS
+//      and the modal isn't already up.
+//   3. If we're inside no stop: clear state, including the dismiss memo
+//      (re-entering later will reprompt).
+function checkStopGeofences() {
+  if (!TOUR || state.youLng == null) return;
+
+  // Find candidate stop. Pick the closest match in case radii overlap —
+  // typical hand-authored tours shouldn't overlap, but we handle it.
+  let nearest = null;
+  let nearestDist = Infinity;
+  for (const stop of TOUR.stops) {
+    if (ACTIVE_STOP_IDS.has(stop.id)) continue;
+    const d = metersBetween(state.youLng, state.youLat, stop.lng, stop.lat);
+    if (d <= stop.activation_radius_m && d < nearestDist) {
+      nearest = stop;
+      nearestDist = d;
+    }
+  }
+
+  const now = Date.now();
+
+  if (!nearest) {
+    // Outside every inactive stop's radius. Reset entry tracking + clear the
+    // dismiss memo so a fresh entry later will reprompt.
+    _stopInRadius = null;
+    _stopInRadiusSince = null;
+    _stopPromptDismissedFor = null;
+    return;
+  }
+
+  if (!_stopInRadius || _stopInRadius.id !== nearest.id) {
+    // Just entered (or switched to) this stop's radius.
+    _stopInRadius = nearest;
+    _stopInRadiusSince = now;
+    return;
+  }
+
+  // Still inside the same stop's radius. Check dwell.
+  if (_stopPromptDismissedFor === nearest.id) return;       // user said "not yet"
+  if (_modalStop) return;                                    // modal already up
+  if (now - _stopInRadiusSince < STOP_DWELL_MS) return;     // not dwelled long enough
+
+  showActivateStopModal(nearest, 'geofence');
+}
+
+// Show the activation modal. Two callers:
+//   - checkStopGeofences (source='geofence') when dwell completes
+//   - renderStopList's manual button (source='manual') from the bottom sheet
+function showActivateStopModal(stop, source) {
+  if (ACTIVE_STOP_IDS.has(stop.id)) return;  // belt and suspenders
+
+  _modalStop = stop;
+  _modalSource = source || 'geofence';
+
+  const backdrop = document.getElementById('stop-modal-backdrop');
+  const stamp = document.getElementById('stop-modal-stamp');
+  const title = document.getElementById('stop-modal-title');
+  const errEl = document.getElementById('stop-modal-error');
+  const activateBtn = document.getElementById('stop-modal-activate');
+
+  if (!backdrop || !stamp || !title || !errEl || !activateBtn) return;
+
+  stamp.textContent = _modalSource === 'geofence' ? 'Approaching' : 'Manual';
+  title.textContent = stop.name;
+  errEl.textContent = '';
+  activateBtn.disabled = false;
+  activateBtn.textContent = 'Activate';
+  backdrop.classList.add('show');
+}
+
+function dismissActivateStopModal(asNotYet) {
+  const backdrop = document.getElementById('stop-modal-backdrop');
+  if (backdrop) backdrop.classList.remove('show');
+  // If the dismissal was "Not yet" via the secondary button, suppress
+  // reprompts for this stop while the guide remains inside its radius.
+  // (Auto-dismiss after successful activation should NOT set this memo —
+  // the stop is now activated and won't be a candidate anyway.)
+  if (asNotYet && _modalStop) {
+    _stopPromptDismissedFor = _modalStop.id;
+  }
+  _modalStop = null;
+  _modalSource = null;
+}
+
+// Calls the activate_stop RPC. On success, updates ACTIVE_STOP_IDS, re-renders
+// pins (in case future chunks have the passenger view active in this window
+// too), re-renders the stops list, and closes the modal.
+async function activateStop(stop) {
+  const token = getStoredGuideToken();
+  if (!token) {
+    return { error: 'You must be signed in as a guide to activate stops.' };
+  }
+  const { data, error } = await supabaseClient.rpc('activate_stop', {
+    p_session_id: SESSION.id,
+    p_stop_id: stop.id,
+    p_guide_token: token,
+  });
+  if (error) {
+    console.warn('[chunk B] activate_stop failed', error);
+    return { error: error.message || 'Could not activate stop.' };
+  }
+  ACTIVE_STOP_IDS.add(stop.id);
+  renderPins();
+  renderStopList();
+  return { ok: true, row: data };
+}
+
+// Render the stops section in the guide bottom sheet. Re-rendered after
+// session load (initial), after every successful activation, and any time
+// ACTIVE_STOP_IDS changes from below.
+function renderStopList() {
+  const container = document.getElementById('stops-list');
+  if (!container || !TOUR) return;
+  container.innerHTML = '';
+  for (const stop of TOUR.stops) {
+    const row = document.createElement('div');
+    const isActive = ACTIVE_STOP_IDS.has(stop.id);
+    row.className = 'stop-row' + (isActive ? ' active' : '');
+    row.innerHTML = `
+      <div class="stop-row-num">${String(stop.ordinal).padStart(2, '0')}</div>
+      <div class="stop-row-name">${(stop.name || '').replace(/</g, '&lt;')}</div>
+    `;
+    if (isActive) {
+      const pill = document.createElement('div');
+      pill.className = 'stop-row-active-pill';
+      pill.textContent = 'Active';
+      row.appendChild(pill);
+    } else {
+      const btn = document.createElement('button');
+      btn.className = 'stop-row-action';
+      btn.textContent = 'Activate';
+      btn.addEventListener('click', () => showActivateStopModal(stop, 'manual'));
+      row.appendChild(btn);
+    }
+    container.appendChild(row);
+  }
+}
+
+// One-time wiring for the modal's "Not yet" and "Activate" buttons. Called
+// from boot/mountGuideBottomSheet — idempotent via the _stopModalWired flag.
+let _stopModalWired = false;
+function wireStopModalHandlers() {
+  if (_stopModalWired) return;
+  _stopModalWired = true;
+  const dismissBtn = document.getElementById('stop-modal-dismiss');
+  const activateBtn = document.getElementById('stop-modal-activate');
+  const errEl = document.getElementById('stop-modal-error');
+  if (!dismissBtn || !activateBtn || !errEl) return;
+  dismissBtn.addEventListener('click', () => dismissActivateStopModal(true));
+  activateBtn.addEventListener('click', async () => {
+    if (!_modalStop) return;
+    activateBtn.disabled = true;
+    activateBtn.textContent = 'Activating…';
+    errEl.textContent = '';
+    const result = await activateStop(_modalStop);
+    if (result && result.ok) {
+      dismissActivateStopModal(false);
+    } else {
+      activateBtn.disabled = false;
+      activateBtn.textContent = 'Try again';
+      errEl.textContent = (result && result.error) || 'Could not activate.';
+    }
+  });
 }
 </script>
 </body>
