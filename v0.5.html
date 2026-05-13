@@ -624,45 +624,93 @@
   }
   .stop-row-active-pill[disabled] { opacity: 0.5; cursor: progress; }
 
-  /* ── Chunk C: stop activation banner ───────────────────────────────────
-     Slides down from the top of the map when a new stop activates. Shows
-     the stop name. Auto-dismisses after STOP_BANNER_DURATION_MS. Positioned
-     below the map-hud (burger + signal) so it doesn't overlap them.
-     Sits at z-index 7 — below the modal (40) and above the regular HUD. */
-  .stop-banner {
-    position: absolute;
-    left: 16px; right: 16px;
-    top: calc(env(safe-area-inset-top, 0) + 76px);
-    padding: 12px 16px;
+  /* ── Stop arrival modal (passenger-side, replaces the top banner) ───────
+     Centered, persistent modal that announces a new stop. Stays visible
+     until the user taps "Got it" — at which point we record the
+     acknowledgement so we don't re-prompt for the same stop unnecessarily.
+     If the user closes their browser / locks their phone without acking,
+     the next time they come back the modal re-shows with sound. */
+  .stop-arrival-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(26, 29, 26, 0.42);
+    opacity: 0; visibility: hidden;
+    transition: opacity 0.3s, visibility 0s linear 0.3s;
+    z-index: 35;     /* below the activate-stop modal (40), above HUD */
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .stop-arrival-backdrop.show {
+    opacity: 1; visibility: visible;
+    transition: opacity 0.3s, visibility 0s;
+  }
+  .stop-arrival-modal {
     background: var(--paper);
-    color: var(--ink);
     border: 1px solid var(--ink);
-    border-radius: 10px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.18), 0 0 0 4px var(--paper-2);
-    z-index: 7;
-    transform: translateY(-200px);
-    opacity: 0;
-    transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.3, 1.1), opacity 0.35s;
-    pointer-events: none;
-    visibility: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 0 0 8px var(--paper-2);
+    max-width: 360px; width: 100%;
+    transform: translateY(24px);
+    transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.3, 1.1);
+    display: flex; flex-direction: column;
   }
-  .stop-banner.show {
-    transform: translateY(0);
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
+  .stop-arrival-backdrop.show .stop-arrival-modal { transform: translateY(0); }
+  .stop-arrival-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--rule);
   }
-  .stop-banner-stamp {
+  .stop-arrival-stamp {
     font-family: 'JetBrains Mono', monospace;
     font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
     color: var(--mark);
-    margin-bottom: 4px;
+    margin-bottom: 6px;
   }
-  .stop-banner-name {
+  .stop-arrival-name {
     font-family: 'Fraunces', serif; font-weight: 400;
-    font-size: 20px; line-height: 1.15;
+    font-size: 26px; line-height: 1.15;
     font-variation-settings: "opsz" 90;
   }
+  .stop-arrival-joke {
+    padding: 14px 20px 6px;
+    font-family: 'Fraunces', serif; font-style: italic;
+    font-size: 15px; line-height: 1.45; color: #4a4a4a;
+  }
+  .stop-arrival-info {
+    padding: 10px 20px 16px;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .stop-arrival-info-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 6px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; color: var(--ink);
+  }
+  .stop-arrival-info-row + .stop-arrival-info-row {
+    border-top: 1px solid var(--rule-soft);
+  }
+  .stop-arrival-info-label {
+    color: var(--rule); letter-spacing: 0.08em; text-transform: uppercase;
+    font-size: 10px;
+  }
+  .stop-arrival-info-value {
+    color: var(--ink);
+    font-feature-settings: "tnum";
+  }
+  .stop-arrival-info-value.placeholder {
+    color: var(--rule); opacity: 0.55; font-style: italic; font-family: 'Fraunces', serif; font-size: 13px;
+  }
+  .stop-arrival-actions {
+    display: flex; padding: 14px 20px 18px;
+  }
+  .stop-arrival-ok {
+    flex: 1;
+    padding: 12px 16px;
+    background: var(--ink); color: var(--paper);
+    border: 1px solid var(--ink); border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .stop-arrival-ok:active { transform: scale(0.97); }
 
   /* ── Touchscreen joystick (dev simulator) ──────────────────────────────
      Hidden by default. When the user enables "Simulator" from the About
@@ -864,13 +912,8 @@
         <span id="gps-banner-msg">Checking…</span>
       </div>
 
-      <!-- Stop activation banner (chunk C) — slides down when a new stop
-           activates, auto-dismisses after a few seconds. Mostly for passengers
-           to know what's happening; also visible to guides as confirmation. -->
-      <div class="stop-banner" id="stop-banner">
-        <div class="stop-banner-stamp" id="stop-banner-stamp">Stop № 01</div>
-        <div class="stop-banner-name" id="stop-banner-name">…</div>
-      </div>
+      <!-- (The old slide-down stop-banner was removed in favor of the
+           centered persistent stop-arrival-modal below.) -->
 
       <!-- Broadcasting banner (chunk F) — shown to guides when visibility ≠ off.
            Sits below the map-hud, full-width, slim. Color shifts by mode. -->
@@ -1029,13 +1072,52 @@
         Tours have a stop → pin hierarchy. Guides activate stops; passengers see pins reveal as stops activate. Activated stops stay on for the rest of the session.
       </div>
       <div class="about-block muted">
-        Chunks A + B + C done, plus session controls. Chunk A: stops + pins tables, seed migration. Chunk B: guide-side activation (geofence prompt + manual button + RPC). Chunk C: realtime fan-out — passengers subscribe to stop_activations and reveal pins in real time with a chime and a top banner. Session controls: tap the Active pill to deactivate a stop (with confirm); "End session" button at the bottom of the Control Center closes the session for everyone and returns the guide to the create-session form; passengers see a "Tour ended" screen via realtime UPDATE on sessions. Future: Web Push for closed-app passengers (D), iOS-foreground lobby copy (E).
+        Chunks A + B + C done, plus session controls and a persistent arrival modal. Chunk A: stops + pins tables. Chunk B: guide-side activation. Chunk C: realtime fan-out to passengers. Session controls: deactivate a stop (tap Active pill), end the session (button at bottom of Control Center). Arrival modal: when the guide activates a stop, the passenger sees a centered modal with the stop name, an Icelandic huldufólk warning, and placeholder rows for time-at-stop, departure, weather, and guide notes. The modal stays up until the passenger taps "Got it" — and if they close the browser or lock the phone first, the modal re-shows with sound the next time they come back. Polling + visibilitychange backstop catches any realtime events that go missing. Future: Web Push for closed-app passengers (D), iOS-foreground lobby copy (E).
       </div>
       <div class="about-block muted">
         v0.4 still works: invite-code auth, live guide view, realtime passenger dots, breadcrumb trails. v0.3 still works: GPS fixes captured locally, queued in IndexedDB, synced to Supabase when network is available.
       </div>
       <div class="about-block muted" id="about-debug">
         <!-- populated at runtime with session + passenger info -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Stop arrival modal (passenger-side) — centered, persistent until OK.
+       Shown whenever a new stop activates (realtime INSERT) OR when the
+       passenger returns to the tab/PWA with an unacknowledged active stop
+       (visibilitychange / page load). Plays the chime on show.
+       Placeholder info rows reserve space for stop duration, departure
+       time, weather, and guide-added alerts; we'll wire those later. -->
+  <div class="stop-arrival-backdrop" id="stop-arrival-backdrop">
+    <div class="stop-arrival-modal">
+      <div class="stop-arrival-header">
+        <div class="stop-arrival-stamp" id="stop-arrival-stamp">Stop № 01 · Now</div>
+        <div class="stop-arrival-name" id="stop-arrival-name">…</div>
+      </div>
+      <div class="stop-arrival-joke" id="stop-arrival-joke">
+        Watch out for the hidden people — they're somewhere around.
+      </div>
+      <div class="stop-arrival-info">
+        <div class="stop-arrival-info-row">
+          <span class="stop-arrival-info-label">Time at stop</span>
+          <span class="stop-arrival-info-value placeholder">to be added</span>
+        </div>
+        <div class="stop-arrival-info-row">
+          <span class="stop-arrival-info-label">Departure</span>
+          <span class="stop-arrival-info-value placeholder">to be added</span>
+        </div>
+        <div class="stop-arrival-info-row">
+          <span class="stop-arrival-info-label">Weather</span>
+          <span class="stop-arrival-info-value placeholder">to be added</span>
+        </div>
+        <div class="stop-arrival-info-row">
+          <span class="stop-arrival-info-label">Notes from guide</span>
+          <span class="stop-arrival-info-value placeholder">none yet</span>
+        </div>
+      </div>
+      <div class="stop-arrival-actions">
+        <button class="stop-arrival-ok" id="stop-arrival-ok">Got it</button>
       </div>
     </div>
   </div>
@@ -1086,7 +1168,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk C + session controls · build 2026-05-13-2043';
+const BUILD_VERSION = '0.5 · chunk C + session controls + persistent arrival modal · build 2026-05-13-2111';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -1942,9 +2024,14 @@ async function loadSessionAndTour(sessionId) {
   // leftover rows from a previous page-load and stream new fixes to Supabase.
   startSyncWorker();
 
+  // Wire the persistent stop-arrival modal once (passenger-only on use,
+  // but the DOM element exists for both roles — idempotent flag protects
+  // re-wiring on hot navigation).
+  wireStopArrivalModal();
+
   // Chunk C: subscribe to live stop_activation INSERTs for this session.
   // Both guide and passenger views subscribe — guide for multi-device
-  // consistency, passenger for pin reveal + chime + banner on activation.
+  // consistency, passenger for pin reveal + chime + modal on activation.
   subscribeStopActivations();
 
   // Session controls: subscribe to UPDATEs on sessions so passengers (and
@@ -1952,11 +2039,25 @@ async function loadSessionAndTour(sessionId) {
   // the active guide ends the session.
   subscribeSession();
 
+  // Backstop: poll session state every 15s + on visibilitychange. Catches
+  // missed realtime events (network blips, throttled backgrounds, etc.)
+  // and is the trigger for re-prompting unacknowledged stop arrivals
+  // when the passenger unlocks their phone or refocuses the tab.
+  startSessionPoll();
+
   // If the session is ALREADY ended when we joined, jump straight to the
   // ended screen so we don't show a stale active map while waiting on
   // a realtime event that won't come.
   if (SESSION && SESSION.ended_at) {
     showSessionEnded();
+    return;
+  }
+
+  // Passenger: check for any already-active stop the user hasn't acked yet
+  // (e.g. they closed the browser before tapping "Got it" on a previous
+  // session visit). Show the most recent one with sound.
+  if (ROLE === 'passenger') {
+    maybeShowPendingStopAnnouncement();
   }
 }
 
@@ -4943,10 +5044,31 @@ function wireStopModalHandlers() {
 // │      ACTIVE_STOP_IDS → render pins → chime + banner   │
 // ╰──────────────────────────────────────────────────────╯
 
-const STOP_BANNER_DURATION_MS = 4000;
 let _stopActivationChannel = null;
 let _stopActivationSubscribed = false;
-let _stopBannerTimer = null;
+
+// Acknowledgement tracking — per (session, stop) — kept in localStorage so
+// closing the browser doesn't lose what the user already dismissed. The
+// shape is `fieldnote_ack_stops:<session_id>` → JSON array of stop ids.
+const ACK_KEY_PREFIX = 'fieldnote_ack_stops:';
+function ackKeyFor(sessionId) { return ACK_KEY_PREFIX + sessionId; }
+function getAckedStops(sessionId) {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(ackKeyFor(sessionId)) || '[]'));
+  } catch { return new Set(); }
+}
+function markStopAcked(sessionId, stopId) {
+  try {
+    const set = getAckedStops(sessionId);
+    set.add(stopId);
+    localStorage.setItem(ackKeyFor(sessionId), JSON.stringify([...set]));
+  } catch {}
+}
+
+// Currently-displayed stop in the arrival modal, if any. Used to avoid
+// double-popping the same modal and to know which stop the "Got it"
+// button is acknowledging.
+let _arrivalStop = null;
 
 function subscribeStopActivations() {
   if (_stopActivationSubscribed) return;        // idempotent
@@ -5005,9 +5127,13 @@ function onStopActivated(row) {
   renderPins();
   if (ROLE === 'guide') renderStopList();
 
-  if (stop) {
+  // Passenger-side arrival announcement: chime + center modal. If the user
+  // closes their browser or locks their phone before tapping "Got it",
+  // the resume backstop (visibilitychange / poll / fresh page load) will
+  // re-show the same modal.
+  if (stop && ROLE === 'passenger') {
     playChime();
-    showStopActivationBanner(stop);
+    showStopArrivalModal(stop);
   }
 }
 
@@ -5065,35 +5191,156 @@ function showSessionEnded() {
   // Stop any further realtime work on this page — the session is over.
   try { if (_stopActivationChannel) _stopActivationChannel.unsubscribe(); } catch {}
   try { if (_sessionChannel) _sessionChannel.unsubscribe(); } catch {}
+  // Stop the polling backstop too.
+  if (_sessionPollTimer) {
+    clearInterval(_sessionPollTimer);
+    _sessionPollTimer = null;
+  }
 }
 
-// Slide-down banner at the top of the map. Auto-dismisses after
-// STOP_BANNER_DURATION_MS. If another activation fires before the timer
-// expires, the new banner replaces the old one immediately.
-function showStopActivationBanner(stop) {
-  const banner = document.getElementById('stop-banner');
-  const stamp = document.getElementById('stop-banner-stamp');
-  const name = document.getElementById('stop-banner-name');
-  if (!banner || !stamp || !name) return;
+// ── Polling + visibilitychange backstop ───────────────────────────────────
+// Realtime delivery is best-effort. If a passenger's phone misses the
+// UPDATE (intermittent WiFi, browser-throttled background, channel hiccup),
+// they'd stay on a "live" map after the guide ended the session. To prevent
+// that we also poll the session row every SESSION_POLL_MS, and re-poll
+// whenever the page comes back to foreground.
+//
+// The polling also reconciles ACTIVE_STOP_IDS — catches any activation or
+// deactivation realtime missed — and (passenger only) re-prompts any
+// arrival modal the user hasn't acknowledged yet.
+const SESSION_POLL_MS = 15000;
+let _sessionPollTimer = null;
 
-  stamp.textContent = `Stop № ${String(stop.ordinal).padStart(2, '0')} · Starting`;
-  name.textContent = stop.name || '';
-  banner.classList.add('show');
+async function refetchSessionState() {
+  if (!SESSION) return;
 
-  if (_stopBannerTimer) clearTimeout(_stopBannerTimer);
-  _stopBannerTimer = setTimeout(() => {
-    banner.classList.remove('show');
-    _stopBannerTimer = null;
-  }, STOP_BANNER_DURATION_MS);
+  // 1. Latest session row — primarily to detect ended_at.
+  const { data: session, error: sessErr } = await supabaseClient
+    .from('sessions')
+    .select('id, label, tour_slug, guide_name, started_at, ended_at')
+    .eq('id', SESSION.id)
+    .single();
+  if (sessErr || !session) return;
+  SESSION = Object.assign({}, SESSION, session);
+  if (session.ended_at) {
+    showSessionEnded();
+    return;                       // no point reconciling further
+  }
 
-  // Tap to dismiss early.
-  banner.onclick = () => {
-    banner.classList.remove('show');
-    if (_stopBannerTimer) {
-      clearTimeout(_stopBannerTimer);
-      _stopBannerTimer = null;
+  // 2. Reconcile ACTIVE_STOP_IDS from the source of truth. Cheap; the table
+  // has at most one row per (session, stop). Rebuild from scratch so we
+  // detect deactivations as well as missed activations.
+  if (TOUR) {
+    const prevActive = new Set(ACTIVE_STOP_IDS);
+    const { data: rows, error: rowsErr } = await supabaseClient
+      .from('stop_activations')
+      .select('stop_id')
+      .eq('session_id', SESSION.id);
+    if (!rowsErr) {
+      ACTIVE_STOP_IDS.clear();
+      for (const r of (rows || [])) ACTIVE_STOP_IDS.add(r.stop_id);
+
+      // If anything changed, re-render.
+      const changed = ACTIVE_STOP_IDS.size !== prevActive.size
+        || [...ACTIVE_STOP_IDS].some(id => !prevActive.has(id));
+      if (changed) {
+        renderPins();
+        if (ROLE === 'guide') renderStopList();
+      }
     }
-  };
+  }
+
+  // 3. Passenger: re-prompt any arrival modal the user hasn't acked yet.
+  // Includes (a) brand-new activations realtime missed, (b) the same
+  // already-active stop the user dismissed by closing the browser before
+  // tapping "Got it."
+  if (ROLE === 'passenger') {
+    maybeShowPendingStopAnnouncement();
+  }
+}
+
+function startSessionPoll() {
+  if (_sessionPollTimer) return;
+  _sessionPollTimer = setInterval(() => {
+    refetchSessionState().catch(err => console.warn('[poll] refetch failed', err));
+  }, SESSION_POLL_MS);
+  // Visibilitychange: when the tab/PWA returns to foreground (passenger
+  // unlocked their phone, switched back from another app), immediately
+  // refetch. This is the trigger for "re-show pop-up after lock screen."
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      refetchSessionState().catch(err => console.warn('[visibilitychange] refetch failed', err));
+    }
+  });
+}
+
+// Centered, persistent arrival modal. Stays up until the passenger taps
+// "Got it" (which records ack in localStorage). Plays the chime on each
+// show — including the resume re-show — so the user gets an audible cue
+// when they come back to a phone that had the screen locked.
+function showStopArrivalModal(stop) {
+  if (!stop) return;
+  // If we're already showing this stop, don't restart the animation.
+  if (_arrivalStop && _arrivalStop.id === stop.id) {
+    // But still chime, so a re-show from resume is audible.
+    playChime();
+    return;
+  }
+  _arrivalStop = stop;
+
+  const backdrop = document.getElementById('stop-arrival-backdrop');
+  const stamp = document.getElementById('stop-arrival-stamp');
+  const nameEl = document.getElementById('stop-arrival-name');
+  if (!backdrop || !stamp || !nameEl) return;
+
+  stamp.textContent = `Stop № ${String(stop.ordinal).padStart(2, '0')} · Now`;
+  nameEl.textContent = stop.name || '';
+  backdrop.classList.add('show');
+  // Chime: fire after the modal class flips so the audio is paired with
+  // the visual reveal rather than the GPS or render path.
+  playChime();
+}
+
+function dismissStopArrivalModal(opts) {
+  const ack = !opts || opts.ack !== false;   // default = treat as acked
+  const backdrop = document.getElementById('stop-arrival-backdrop');
+  if (backdrop) backdrop.classList.remove('show');
+  if (ack && _arrivalStop && SESSION) {
+    markStopAcked(SESSION.id, _arrivalStop.id);
+  }
+  _arrivalStop = null;
+}
+
+// Scan ACTIVE_STOP_IDS for any stop the passenger hasn't acked yet, and
+// pop the most-recently-activated one. Cheap: we already have the active
+// set locally and the acked set is a 1-key localStorage read.
+//
+// "Most recent" = highest stop.ordinal among unacked. We don't carry
+// activated_at on the client side — using ordinal as a proxy is good
+// enough for v0 since stops are walked in order.
+function maybeShowPendingStopAnnouncement() {
+  if (ROLE !== 'passenger' || !TOUR || !SESSION) return;
+  if (_arrivalStop) return;          // a modal is already open
+  const acked = getAckedStops(SESSION.id);
+  let candidate = null;
+  for (const stop of TOUR.stops) {
+    if (!ACTIVE_STOP_IDS.has(stop.id)) continue;
+    if (acked.has(stop.id)) continue;
+    if (!candidate || stop.ordinal > candidate.ordinal) candidate = stop;
+  }
+  if (candidate) {
+    showStopArrivalModal(candidate);
+  }
+}
+
+// One-time wiring for the arrival modal's "Got it" button.
+let _arrivalModalWired = false;
+function wireStopArrivalModal() {
+  if (_arrivalModalWired) return;
+  const ok = document.getElementById('stop-arrival-ok');
+  if (!ok) return;
+  _arrivalModalWired = true;
+  ok.addEventListener('click', () => dismissStopArrivalModal({ ack: true }));
 }
 
 // ╭──────────────────────────────────────────────────────╮
