@@ -752,9 +752,21 @@
     font-weight: 700;
   }
   .stop-arrival-warning-prefix {
+    display: inline-flex; align-items: center; gap: 6px;
     text-transform: uppercase; letter-spacing: 0.14em;
     font-weight: 700;
     margin-right: 6px;
+    line-height: 1;
+    vertical-align: middle;
+  }
+  .stop-arrival-warning-prefix svg {
+    flex-shrink: 0;
+    display: block;
+    width: 1.25em; height: 1.25em;
+  }
+  .stop-arrival-warning-level {
+    line-height: 1;
+    display: inline-block;
   }
   /* Notes input area on the activate modal + notes-only modal */
   .stop-modal-notes {
@@ -870,7 +882,86 @@
   }
   .stop-arrival-ok:active { transform: scale(0.97); }
 
-  /* ── Touchscreen joystick (dev simulator) ──────────────────────────────
+  /* ── Top warning banner ─────────────────────────────────────────────
+     Slim banner pinned at the top of the map (below burger/signal HUD).
+     Shows active warnings as separate rows, each with × to dismiss the
+     line. Persists across full-modal dismissal until guide clears notes
+     OR passenger × everything. */
+  .top-warning {
+    position: absolute;
+    left: 16px; right: 16px;
+    top: calc(env(safe-area-inset-top, 0) + 72px);
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.16), 0 0 0 3px var(--paper-2);
+    z-index: 8;
+    display: none;
+    overflow: hidden;
+  }
+  .top-warning.show { display: block; }
+  .top-warning[data-level="info"] {
+    border-color: #2563eb;
+    box-shadow: 0 4px 14px rgba(37,99,235,0.18), 0 0 0 3px rgba(37,99,235,0.12);
+  }
+  .top-warning[data-level="caution"] {
+    border-color: var(--armed);
+    box-shadow: 0 4px 14px rgba(199,148,40,0.20), 0 0 0 3px rgba(199,148,40,0.15);
+  }
+  .top-warning[data-level="danger"] {
+    border-color: var(--mark);
+    box-shadow: 0 4px 14px rgba(184,51,29,0.20), 0 0 0 3px rgba(184,51,29,0.15);
+  }
+  .top-warning-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--rule-soft);
+    font-family: 'Fraunces', serif;
+    font-size: 14px; line-height: 1.4; color: var(--ink);
+  }
+  .top-warning-row:last-child { border-bottom: none; }
+  .top-warning-row[data-level="info"] {
+    background: rgba(37, 99, 235, 0.07);
+    color: #1e3a8a;
+  }
+  .top-warning-row[data-level="caution"] {
+    background: rgba(199, 148, 40, 0.10);
+    color: #5a3a00;
+  }
+  .top-warning-row[data-level="danger"] {
+    background: rgba(184, 51, 29, 0.10);
+    color: var(--mark);
+    font-weight: 700;
+  }
+  .top-warning-icon {
+    flex: 0 0 auto;
+    width: 18px; height: 18px;
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-top: 1px;
+  }
+  .top-warning-icon svg { width: 18px; height: 18px; display: block; }
+  .top-warning-text {
+    flex: 1;
+    word-break: break-word;
+  }
+  .top-warning-close {
+    flex: 0 0 auto;
+    width: 26px; height: 26px;
+    margin-top: -2px;
+    background: transparent; color: inherit;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    opacity: 0.7;
+  }
+  .top-warning-close:hover,
+  .top-warning-close:active { opacity: 1; }
+
+    /* ── Touchscreen joystick (dev simulator) ──────────────────────────────
      Hidden by default. When the user enables "Simulator" from the About
      screen, the joystick appears in the bottom-left of the map and real
      GPS is suppressed. Drag the knob in any direction → the walker dot
@@ -1073,6 +1164,11 @@
       <!-- (The old slide-down stop-banner was removed in favor of the
            centered persistent stop-arrival-modal below.) -->
 
+      <!-- Top warning banner — slim persistent indicator with the active
+           note(s) for the current stop. Multi-line: one row per warning,
+           each with × to dismiss. -->
+      <div class="top-warning" id="top-warning"></div>
+
       <!-- Broadcasting banner (chunk F) — shown to guides when visibility ≠ off.
            Sits below the map-hud, full-width, slim. Color shifts by mode. -->
       <div class="broadcast-banner" id="broadcast-banner" style="display:none;">
@@ -1269,6 +1365,10 @@
           <span class="stop-arrival-info-value placeholder">to be added</span>
         </div>
         <div class="stop-arrival-info-row">
+          <span class="stop-arrival-info-label">Time left</span>
+          <span class="stop-arrival-info-value placeholder">to be added</span>
+        </div>
+        <div class="stop-arrival-info-row">
           <span class="stop-arrival-info-label">Weather</span>
           <span class="stop-arrival-info-value placeholder">to be added</span>
         </div>
@@ -1388,7 +1488,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · polish v4: sticky modal + note-in-badge · build 2026-05-13-2340';
+const BUILD_VERSION = '0.5 · polish v6: open-meteo + countdown + 5-min alarm · build 2026-05-14-0015';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2267,6 +2367,9 @@ async function loadSessionAndTour(sessionId) {
   // and is the trigger for re-prompting unacknowledged stop arrivals
   // when the passenger unlocks their phone or refocuses the tab.
   startSessionPoll();
+
+  // Countdown ticker — drives the "Time left" row and the 5-min alarm.
+  startCountdownTicker();
 
   // If the session is ALREADY ended when we joined, jump straight to the
   // ended screen so we don't show a stale active map while waiting on
@@ -5252,17 +5355,11 @@ function renderStopList() {
       <div class="stop-row-name">${(stop.name || '').replace(/</g, '&lt;')}</div>
     `;
     if (isActive) {
-      // Edit / Add note button (✎): tap → notes-only modal. Label adapts to
-      // whether a note already exists.
+      // ✎ Edit-or-add-note button. Static label regardless of current state.
       const noteBtn = document.createElement('button');
       noteBtn.className = 'stop-row-note-btn';
-      const meta = ACTIVATION_META.get(stop.id) || {};
-      const hasNote = !!(meta.notes && meta.notes.trim()) ||
-        (meta.warning_level && meta.warning_level !== 'none');
-      noteBtn.textContent = hasNote ? '✎ Edit note' : '✎ Add note';
-      noteBtn.title = hasNote
-        ? 'Edit note + warning for passengers'
-        : 'Add a note or warning for passengers';
+      noteBtn.textContent = '✎ Edit or add note';
+      noteBtn.title = 'Edit or add a note for passengers';
       noteBtn.addEventListener('click', () => showEditNoteModal(stop));
       row.appendChild(noteBtn);
 
@@ -5513,7 +5610,13 @@ function onStopActivated(row) {
 function onStopDeactivated(row) {
   if (!row || row.stop_id == null) return;
   ACTIVATION_META.delete(row.stop_id);
-  if (!ACTIVE_STOP_IDS.has(row.stop_id)) return;   // already in sync
+  _topBannerDismissedTexts.delete(row.stop_id);
+  _alarmFiredFor.delete(row.stop_id);
+  if (_arrivalStop_lastShown && _arrivalStop_lastShown.id === row.stop_id) {
+    hideTopWarningBanner();
+    _arrivalStop_lastShown = null;
+  }
+  if (!ACTIVE_STOP_IDS.has(row.stop_id)) return;
   ACTIVE_STOP_IDS.delete(row.stop_id);
   renderPins();
   if (ROLE === 'guide') renderStopList();
@@ -5523,6 +5626,15 @@ function onStopDeactivated(row) {
 // Refresh the modal in-place if it's currently showing this stop.
 function onStopActivationUpdated(row) {
   if (!row || row.stop_id == null) return;
+  // The content may have changed — wipe any per-line dismissed state so
+  // refreshed lines surface again.
+  _topBannerDismissedTexts.delete(row.stop_id);
+  // If the duration_minutes changed, the alarm should be re-evaluated on
+  // the new schedule — drop the fired flag so the next tick re-checks.
+  const prev = ACTIVATION_META.get(row.stop_id);
+  if (!prev || prev.duration_minutes !== (row.duration_minutes ?? 20)) {
+    _alarmFiredFor.delete(row.stop_id);
+  }
   ACTIVATION_META.set(row.stop_id, {
     activated_at: row.activated_at,
     duration_minutes: row.duration_minutes ?? 20,
@@ -5531,48 +5643,27 @@ function onStopActivationUpdated(row) {
   });
   if (ROLE === 'guide') renderStopList();
 
-  // Sticky-modal logic (passenger side, but also a recap for second-device
-  // guides). Behavior:
-  //   - If both warning_level === 'none' AND notes empty → dismiss + ack
-  //     (the stop has no content to show; killing the popup is the right move).
-  //   - Else if content is present → clear ack and force-show the modal with
-  //     chime, regardless of whether the user previously tapped Got it.
-  //     "Adding warnings/notes pops up and stays on" — this is that logic.
   const hasContent =
     (row.warning_level && row.warning_level !== 'none') ||
     (row.notes && row.notes.trim().length > 0);
   const stop = TOUR ? TOUR.stops.find(s => s.id === row.stop_id) : null;
 
-  if (!hasContent) {
-    // Both cleared — if the modal is showing this stop, dismiss it. Mark as
-    // acked so maybeShow doesn't bring it back on next visibility change.
-    if (_arrivalStop && _arrivalStop.id === row.stop_id) {
-      dismissStopArrivalModal({ ack: true });
-    } else if (SESSION) {
-      // Modal not open, but make sure any future resume doesn't re-pop a
-      // content-less modal for this stop.
-      markStopAcked(SESSION.id, row.stop_id);
-    }
-    return;
+  // If the full modal is currently showing this stop, refresh its content
+  // in place (no chime, no animation — just updated values inside the badge).
+  if (_arrivalStop && _arrivalStop.id === row.stop_id) {
+    populateArrivalModalContent(_arrivalStop);
   }
 
-  // Content present. Update the modal in place if already showing this stop;
-  // otherwise pop it (overriding any previous ack the user tapped).
   if (!stop) return;
-  if (_arrivalStop && _arrivalStop.id === stop.id) {
-    populateArrivalModalContent(stop);
+  if (!hasContent) {
+    // Both cleared — hide the slim banner.
+    hideTopWarningBanner();
     return;
   }
-  // Override prior ack: remove this stop_id from acked set, then force show.
-  if (SESSION) {
-    try {
-      const acked = getAckedStops(SESSION.id);
-      acked.delete(stop.id);
-      localStorage.setItem(ackKeyFor(SESSION.id), JSON.stringify([...acked]));
-    } catch {}
-  }
-  _arrivalStop = null;   // bypass the same-stop dedupe inside showStopArrivalModal
-  showStopArrivalModal(stop);
+  // Content present — refresh the slim banner. We deliberately DO NOT re-pop
+  // the full arrival modal on an UPDATE (intrusive). The first activation's
+  // full modal is enough; subsequent edits only refresh the slim banner.
+  refreshTopWarningBanner(stop);
 }
 
 // Subscribe to UPDATEs on the sessions row for this session. Used today to
@@ -5712,10 +5803,14 @@ function showStopArrivalModal(stop) {
     return;
   }
   _arrivalStop = stop;
+  _arrivalStop_lastShown = stop;
   populateArrivalModalContent(stop);
   const backdrop = document.getElementById('stop-arrival-backdrop');
   if (!backdrop) return;
   backdrop.classList.add('show');
+  // Prime the slim top banner so it's already populated when the passenger
+  // taps Got it.
+  refreshTopWarningBanner(stop);
   // Kick off async weather fetch — updates the weather row in place when done.
   refreshArrivalWeather(stop);
   // Chime: fire after the modal class flips so the audio is paired with
@@ -5742,8 +5837,10 @@ function populateArrivalModalContent(stop) {
 
   setArrivalInfoRow(0, `${duration} min`, false);
   setArrivalInfoRow(1, departureAt ? formatHHMM(departureAt) : 'to be added', !departureAt);
+  // Time-left row: live-updates via the countdown ticker.
+  setArrivalInfoRow(2, departureAt ? formatTimeLeft(departureAt) : 'to be added', !departureAt);
   // Weather row defaults to "checking…" until refreshArrivalWeather completes.
-  setArrivalInfoRow(2, 'checking…', true);
+  setArrivalInfoRow(3, 'checking…', true);
   // Notes go inside the warning badge (or stand alone in a neutral badge when
   // there's a note but no warning level). The standalone Notes row was removed
   // because it was redundant with the badge content.
@@ -5837,13 +5934,149 @@ function formatHHMM(date) {
   return `${hh}:${mm}`;
 }
 
-// Weather: fetch current observation from the Icelandic Met Office, via the
-// apis.is community JSON wrapper. Seed tours are in Reykjavík; we hardcode
-// station 1 for now. Future improvement: choose station by stop lat/lng.
-// Cached per stop_id for WEATHER_CACHE_MS to avoid hammering the API on
-// repeat shows or visibility flips.
+// Format remaining-time text from a departure Date. Returns "12 min",
+// "1 min", "Departing now", or "Departed N min ago".
+function formatTimeLeft(departureAt) {
+  if (!departureAt) return 'to be added';
+  const diffMs = departureAt.getTime() - Date.now();
+  const sign = diffMs >= 0 ? 1 : -1;
+  const absMin = Math.round(Math.abs(diffMs) / 60000);
+  if (sign === 1) {
+    if (absMin === 0) return 'Departing now';
+    if (absMin === 1) return '1 min';
+    return `${absMin} min`;
+  }
+  if (absMin === 0) return 'Departing now';
+  return `Departed ${absMin} min ago`;
+}
+
+function departureMsForStop(stopId) {
+  const meta = ACTIVATION_META.get(stopId);
+  if (!meta || !meta.activated_at) return null;
+  const activated = new Date(meta.activated_at).getTime();
+  const minutes = meta.duration_minutes ?? 20;
+  return activated + minutes * 60 * 1000;
+}
+
+// ── Countdown ticker + 5-min departure alarm ────────────────────────────
+// One setInterval rules them both:
+//   - refreshes the "Time left" row in the open arrival modal
+//   - checks each active stop's remaining time; at ≤5 min, fires chime +
+//     (if permission granted) a browser Notification ONCE per stop.
+
+const COUNTDOWN_INTERVAL_MS = 15000;
+const ALARM_THRESHOLD_MS = 5 * 60 * 1000;
+const _alarmFiredFor = new Set();   // stop_id values whose alarm fired
+let _countdownTimer = null;
+
+function startCountdownTicker() {
+  if (_countdownTimer) return;
+  _countdownTimer = setInterval(tickCountdown, COUNTDOWN_INTERVAL_MS);
+  tickCountdown();   // immediate first run
+}
+
+function tickCountdown() {
+  if (_arrivalStop) {
+    const dep = departureMsForStop(_arrivalStop.id);
+    if (dep) {
+      setArrivalInfoRow(2, formatTimeLeft(new Date(dep)), false);
+    }
+  }
+  if (!TOUR || !SESSION) return;
+  const now = Date.now();
+  for (const stopId of ACTIVE_STOP_IDS) {
+    if (_alarmFiredFor.has(stopId)) continue;
+    const dep = departureMsForStop(stopId);
+    if (dep == null) continue;
+    const remaining = dep - now;
+    if (remaining <= ALARM_THRESHOLD_MS && remaining > 0) {
+      _alarmFiredFor.add(stopId);
+      fire5MinAlarm(stopId, remaining);
+    }
+  }
+}
+
+function fire5MinAlarm(stopId, remainingMs) {
+  playChime();
+  try {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const stop = TOUR && TOUR.stops.find(s => s.id === stopId);
+      const stopName = stop ? stop.name : 'this stop';
+      const minutes = Math.max(1, Math.round(remainingMs / 60000));
+      new Notification(`${minutes} min until departure`, {
+        body: `Departure from ${stopName} is coming up.`,
+        tag: `dep-alarm-${stopId}`,
+        renotify: true,
+      });
+    }
+  } catch (e) {
+    console.warn('[alarm] notification failed', e);
+  }
+}
+
+// Weather: fetched from Open-Meteo (free, no key, CORS-friendly) using the
+// stop's actual lat/lng. The data is interpolated from several models
+// including the Icelandic Met Office's HARMONIE, so it's accurate for
+// Iceland but works globally. We display the closest Iceland region as
+// the "station" label.
+//
+// Cached per stop_id for WEATHER_CACHE_MS to avoid hammering on repeat
+// shows or visibility flips.
+
 const WEATHER_CACHE_MS = 15 * 60 * 1000;
 const _weatherCache = new Map();    // stop_id → { fetchedAt, value }
+
+// Iceland regions used as the display label for "closest weather station".
+// Open-Meteo doesn't return a place name; we pick the closest from this list
+// by Haversine. Add more entries as new tour regions come online.
+const ICELAND_REGIONS = [
+  { name: 'Reykjavík',     lat: 64.135, lng: -21.895 },
+  { name: 'Kópavogur',     lat: 64.111, lng: -21.911 },
+  { name: 'Hafnarfjörður', lat: 64.067, lng: -21.957 },
+  { name: 'Keflavík',      lat: 64.001, lng: -22.564 },
+  { name: 'Akranes',       lat: 64.323, lng: -22.080 },
+  { name: 'Borgarnes',     lat: 64.540, lng: -21.918 },
+  { name: 'Stykkishólmur', lat: 65.075, lng: -22.728 },
+  { name: 'Ísafjörður',    lat: 66.075, lng: -23.130 },
+  { name: 'Akureyri',      lat: 65.685, lng: -18.090 },
+  { name: 'Húsavík',       lat: 66.045, lng: -17.341 },
+  { name: 'Egilsstaðir',   lat: 65.265, lng: -14.405 },
+  { name: 'Höfn',          lat: 64.255, lng: -15.207 },
+  { name: 'Vík',           lat: 63.420, lng: -19.005 },
+  { name: 'Vestmannaeyjar',lat: 63.443, lng: -20.272 },
+  { name: 'Selfoss',       lat: 63.937, lng: -21.000 },
+  { name: 'Þingvellir',    lat: 64.258, lng: -21.130 },
+  { name: 'Geysir',        lat: 64.310, lng: -20.300 },
+  { name: 'Gullfoss',      lat: 64.327, lng: -20.123 },
+];
+
+function closestIcelandRegion(lat, lng) {
+  if (lat == null || lng == null) return null;
+  let best = null;
+  let bestD = Infinity;
+  for (const r of ICELAND_REGIONS) {
+    const d = metersBetween(lng, lat, r.lng, r.lat);
+    if (d < bestD) { bestD = d; best = r; }
+  }
+  return best;
+}
+
+function describeWmoCode(code) {
+  if (code == null) return null;
+  if (code === 0) return 'Clear';
+  if (code === 1) return 'Mostly clear';
+  if (code === 2) return 'Partly cloudy';
+  if (code === 3) return 'Overcast';
+  if (code === 45 || code === 48) return 'Fog';
+  if (code >= 51 && code <= 57) return 'Drizzle';
+  if (code >= 61 && code <= 65) return 'Rain';
+  if (code === 66 || code === 67) return 'Freezing rain';
+  if (code >= 71 && code <= 77) return 'Snow';
+  if (code >= 80 && code <= 82) return 'Showers';
+  if (code === 85 || code === 86) return 'Snow showers';
+  if (code >= 95) return 'Thunderstorm';
+  return null;
+}
 
 async function refreshArrivalWeather(stop) {
   if (!stop) return;
@@ -5854,21 +6087,19 @@ async function refreshArrivalWeather(stop) {
     return;
   }
   try {
-    const resp = await fetch('https://apis.is/weather/observations/en?stations=1', {
-      cache: 'no-store',
-    });
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${stop.lat}&longitude=${stop.lng}&current=temperature_2m,wind_speed_10m,weather_code&wind_speed_unit=ms&timezone=auto`;
+    const resp = await fetch(url, { cache: 'no-store' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const json = await resp.json();
-    const obs = json && json.results && json.results[0];
-    if (!obs) throw new Error('empty observation');
-    // apis.is uses comma as decimal separator on numeric fields; normalize.
-    const numLike = (s) => (s == null || s === '') ? null
-      : parseFloat(String(s).replace(',', '.'));
+    const cur = json && json.current;
+    if (!cur) throw new Error('empty current block');
+    const region = closestIcelandRegion(stop.lat, stop.lng);
     const value = {
-      tempC: numLike(obs.T),
-      windMps: numLike(obs.F),
-      condition: obs.W || null,
-      observedAt: obs.atime || null,
+      tempC: typeof cur.temperature_2m === 'number' ? cur.temperature_2m : null,
+      windMps: typeof cur.wind_speed_10m === 'number' ? cur.wind_speed_10m : null,
+      condition: describeWmoCode(cur.weather_code),
+      regionName: region ? region.name : null,
+      observedAt: cur.time || null,
     };
     _weatherCache.set(stop.id, { fetchedAt: now, value });
     updateArrivalWeatherRow(stop, value);
@@ -5882,14 +6113,15 @@ function updateArrivalWeatherRow(stop, w) {
   // Only update if the modal is still showing the same stop we asked about.
   if (!_arrivalStop || _arrivalStop.id !== stop.id) return;
   if (!w || w.tempC == null) {
-    setArrivalInfoRow(2, 'unavailable', true);
+    setArrivalInfoRow(3, 'unavailable', true);
     return;
   }
   const parts = [];
+  if (w.regionName) parts.push(w.regionName);
   parts.push(`${Math.round(w.tempC)}°C`);
   if (w.condition) parts.push(w.condition);
   if (w.windMps != null) parts.push(`wind ${w.windMps.toFixed(0)} m/s`);
-  setArrivalInfoRow(2, parts.join(' · '), false);
+  setArrivalInfoRow(3, parts.join(' · '), false);
 }
 
 function dismissStopArrivalModal(opts) {
@@ -6042,7 +6274,91 @@ function wireStopArrivalModal() {
   const ok = document.getElementById('stop-arrival-ok');
   if (!ok) return;
   _arrivalModalWired = true;
-  ok.addEventListener('click', () => dismissStopArrivalModal({ ack: true }));
+  ok.addEventListener('click', () => {
+    const stop = _arrivalStop_lastShown;
+    dismissStopArrivalModal({ ack: true });
+    // After the full modal closes, surface remaining warnings as the slim
+    // top banner so the passenger keeps the information at hand.
+    if (stop) refreshTopWarningBanner(stop);
+  });
+}
+
+// ── Top warning banner ───────────────────────────────────────────────────
+// Slim banner pinned at the top of the map. Shows the current stop's
+// warnings as multiple rows split by newline, each with × to dismiss.
+// Persists across full-modal dismissal until the guide clears all notes
+// OR the passenger ×s every line. Per-line dismiss state is in-memory
+// (resets on refresh, which is fine for v0).
+
+let _arrivalStop_lastShown = null;  // last stop the full modal showed
+const _topBannerDismissedTexts = new Map();  // stop_id → Set<line text>
+
+function getDismissedSet(stopId) {
+  let s = _topBannerDismissedTexts.get(stopId);
+  if (!s) { s = new Set(); _topBannerDismissedTexts.set(stopId, s); }
+  return s;
+}
+
+function refreshTopWarningBanner(stop) {
+  const banner = document.getElementById('top-warning');
+  if (!banner || !stop) return;
+  const meta = ACTIVATION_META.get(stop.id) || {};
+  const level = meta.warning_level || 'none';
+  const notes = (meta.notes || '').trim();
+  const lines = notes ? notes.split(/\r?\n/).map(s => s.trim()).filter(Boolean) : [];
+  // When level is set but no notes, synthesize a single generic line so the
+  // banner still surfaces the warning.
+  if (level !== 'none' && lines.length === 0) {
+    const fallback = {
+      info: 'Heads up from your guide.',
+      caution: 'Please take care.',
+      danger: 'Take this seriously.',
+    };
+    if (fallback[level]) lines.push(fallback[level]);
+  }
+  const dismissed = getDismissedSet(stop.id);
+  const visible = lines.filter(line => !dismissed.has(line));
+  if (visible.length === 0) {
+    banner.classList.remove('show');
+    banner.removeAttribute('data-level');
+    banner.innerHTML = '';
+    return;
+  }
+  banner.setAttribute('data-level', level === 'none' ? 'note' : level);
+  banner.innerHTML = '';
+  for (const line of visible) {
+    const row = document.createElement('div');
+    row.className = 'top-warning-row';
+    if (level !== 'none') row.setAttribute('data-level', level);
+    const iconWrap = document.createElement('span');
+    iconWrap.className = 'top-warning-icon';
+    iconWrap.innerHTML = (level !== 'none') ? svgForLevel(level) : '';
+    row.appendChild(iconWrap);
+    const text = document.createElement('span');
+    text.className = 'top-warning-text';
+    text.textContent = line;
+    row.appendChild(text);
+    const close = document.createElement('button');
+    close.className = 'top-warning-close';
+    close.textContent = '×';
+    close.setAttribute('aria-label', 'Dismiss this warning');
+    close.addEventListener('click', () => {
+      dismissed.add(line);
+      refreshTopWarningBanner(stop);
+    });
+    row.appendChild(close);
+    banner.appendChild(row);
+  }
+  banner.classList.add('show');
+}
+
+function hideTopWarningBanner() {
+  const banner = document.getElementById('top-warning');
+  if (banner) {
+    banner.classList.remove('show');
+    banner.removeAttribute('data-level');
+    banner.innerHTML = '';
+  }
 }
 
 // ╭──────────────────────────────────────────────────────╮
