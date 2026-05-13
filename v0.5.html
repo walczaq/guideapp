@@ -558,6 +558,26 @@
     color: var(--rule);
     margin-bottom: 10px;
   }
+
+  /* ── Passengers section (relabel pass) ─────────────────────────────────
+     Wraps the empty-state share-link card AND the populated list under a
+     single "Passengers" label. Count badge sits inline with the label so
+     it's always visible regardless of empty/list state. */
+  .passengers-section {
+    padding-top: 4px;
+  }
+  .passengers-section-label {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule);
+    margin-bottom: 10px;
+  }
+  .passengers-count-badge {
+    background: var(--ink); color: var(--paper);
+    padding: 2px 8px; border-radius: 10px;
+    font-size: 10px; letter-spacing: 0;
+  }
   .stop-row {
     display: flex; align-items: center; gap: 10px;
     padding: 10px 0;
@@ -595,6 +615,38 @@
     background: transparent; color: var(--signal-good);
     border: 1px solid var(--signal-good); border-radius: 999px;
   }
+
+  /* ── Touchscreen joystick (dev simulator) ──────────────────────────────
+     Hidden by default. When the user enables "Simulator" from the About
+     screen, the joystick appears in the bottom-left of the map and real
+     GPS is suppressed. Drag the knob in any direction → the walker dot
+     moves at a speed proportional to the deflection. Release → stops. */
+  .joystick {
+    position: absolute;
+    left: 16px; bottom: 30px;
+    width: 100px; height: 100px;
+    background: rgba(235, 229, 215, 0.78);
+    border: 1px solid var(--rule);
+    border-radius: 50%;
+    z-index: 6;
+    touch-action: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    display: none;
+  }
+  .joystick.on { display: block; }
+  .joystick-knob {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 44px; height: 44px;
+    background: var(--ink);
+    border: 2px solid var(--paper);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    cursor: grab;
+    touch-action: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  }
+  .joystick-knob:active { cursor: grabbing; }
 
   /* ── Chunk B: "Activate this stop?" modal ──────────────────────────────
      Full-screen-over-the-map prompt that fires when the guide enters a
@@ -713,6 +765,11 @@
            Sits below the map-hud, full-width, slim. Color shifts by mode. -->
       <div class="broadcast-banner" id="broadcast-banner" style="display:none;">
         <span id="broadcast-banner-text">Broadcasting your location</span>
+      </div>
+
+      <!-- Joystick simulator (dev). Hidden until toggled on from About. -->
+      <div class="joystick" id="joystick">
+        <div class="joystick-knob" id="joystick-knob"></div>
       </div>
 
       <div class="zoom-controls">
@@ -2242,7 +2299,9 @@ function applyTourMetadata() {
       <button id="debug-force-sync" style="margin-left:4px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 8px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">sync now</button>
       <br>
       <span id="debug-sync-stats" style="opacity:0.7;">Sync: idle</span><br>
-      <span id="debug-passengers" style="opacity:0.7;">Passengers: idle</span>
+      <span id="debug-passengers" style="opacity:0.7;">Passengers: idle</span><br>
+      <span style="display:inline-block; margin-top:10px;">Simulator (joystick):</span>
+      <button id="joystick-toggle-btn" style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Enable</button>
     `;
     if (GUIDE) {
       const logoutBtn = document.getElementById('debug-logout');
@@ -2280,6 +2339,8 @@ function applyTourMetadata() {
     setInterval(updateDebugPassengers, 2000);
     updateDebugSyncStats();
     updateDebugPassengers();
+    // Joystick toggle button in the same debug block (dev simulator).
+    wireJoystickToggle();
   }
 }
 
@@ -2882,14 +2943,28 @@ function renderPassengers() {
 }
 
 // Toggle selection: if this passenger is already selected, deselect; otherwise
-// select them. Re-render to apply visual state.
+// select them. When selecting, also pan the map to center on the passenger's
+// last known position (if they have one). Deselecting doesn't pan — the
+// previous map view is preserved.
 function togglePassengerSelection(passengerId) {
   if (SELECTED_PASSENGER === passengerId) {
     SELECTED_PASSENGER = null;
   } else {
     SELECTED_PASSENGER = passengerId;
+    // Center on the passenger's last fix, if we have one. Use easeTo so it
+    // animates smoothly rather than snapping. Breaks follow-me if it was on.
+    const p = PASSENGERS.get(passengerId);
+    if (p && p.lng != null && p.lat != null && map) {
+      if (state.following) {
+        state.following = false;
+        const recenter = document.getElementById('recenter');
+        if (recenter) recenter.classList.remove('active');
+      }
+      map.easeTo({ center: [p.lng, p.lat], duration: 400 });
+    }
   }
   renderPassengers();
+  renderPassengerList();
 }
 
 // Tap empty map = deselect. Wire up on map init.
@@ -3640,7 +3715,7 @@ function bindVisibilityCatchUp() {
 const SHEET_STATES = {
   collapsed: 60,
   half: 240,
-  full: 0.85,
+  full: 0.70,   // leaves 30% of the map visible above the sheet
 };
 let _sheetState = 'half';
 let _sheetEl = null;
@@ -3656,8 +3731,7 @@ function mountGuideBottomSheet() {
     <div class="guide-sheet-handle" id="guide-sheet-handle">
       <div class="guide-sheet-grip"></div>
       <div class="guide-sheet-title">
-        <span class="guide-sheet-title-main">Passengers</span>
-        <span class="guide-sheet-title-count" id="guide-sheet-count">0</span>
+        <span class="guide-sheet-title-main">Control center</span>
       </div>
     </div>
     <div class="guide-sheet-body" id="guide-sheet-body">
@@ -3688,23 +3762,32 @@ function mountGuideBottomSheet() {
         </div>
         <button id="names-toggle-btn" class="vis-btn active" style="flex:0 0 auto; padding:6px 14px;">On</button>
       </div>
-      <div class="guide-sheet-empty" id="guide-sheet-empty">
-        <div style="font-family:'Fraunces',serif; font-style:italic; font-size:18px; color:var(--ink); margin-bottom:8px;">
-          No passengers yet.
+      <!-- Passengers section — wraps the empty-state share-link card AND
+           the populated list. The label sits above both; the count badge
+           lives in the label so it's always visible regardless of state. -->
+      <div class="passengers-section">
+        <div class="passengers-section-label">
+          <span>Passengers</span>
+          <span class="passengers-count-badge" id="guide-sheet-count">0</span>
         </div>
-        <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); line-height:1.5;">
-          Share this link to start:
+        <div class="guide-sheet-empty" id="guide-sheet-empty">
+          <div style="font-family:'Fraunces',serif; font-style:italic; font-size:18px; color:var(--ink); margin-bottom:8px;">
+            No passengers yet.
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); line-height:1.5;">
+            Share this link to start:
+          </div>
+          <div id="guide-share-link" style="margin-top:10px; padding:10px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:10px; word-break:break-all; user-select:all;">
+            ${SESSION ? `${window.location.origin}${window.location.pathname}?session=${SESSION.id}` : '—'}
+          </div>
+          <button
+            id="guide-share-copy"
+            style="margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:10px 18px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+          >Copy link</button>
         </div>
-        <div id="guide-share-link" style="margin-top:10px; padding:10px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:10px; word-break:break-all; user-select:all;">
-          ${SESSION ? `${window.location.origin}${window.location.pathname}?session=${SESSION.id}` : '—'}
+        <div class="guide-sheet-list" id="guide-sheet-list" style="display:none;">
+          <!-- passenger rows populate here -->
         </div>
-        <button
-          id="guide-share-copy"
-          style="margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:10px 18px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
-        >Copy link</button>
-      </div>
-      <div class="guide-sheet-list" id="guide-sheet-list" style="display:none;">
-        <!-- passenger rows populate here in chunk C onward -->
       </div>
     </div>
   `;
@@ -3796,6 +3879,19 @@ function applySheetState() {
   // Plus a small margin so the bottom button isn't flush with the handle.
   const zoomCtrl = document.querySelector('.zoom-controls');
   if (zoomCtrl) zoomCtrl.style.bottom = (h + 12) + 'px';
+  // Push the joystick above the sheet too, for the same reason.
+  const joy = document.getElementById('joystick');
+  if (joy) joy.style.bottom = (h + 30) + 'px';
+  // Apply the sheet height as Mapbox bottom padding so the camera's "center"
+  // refers to the visible map area, not the geographic center of the canvas.
+  // After the snap, ease the camera to the user's current location so the
+  // you-dot lands in the middle of the visible map rather than under the sheet.
+  if (map) {
+    map.setPadding({ top: 0, right: 0, bottom: h, left: 0 });
+    if (state.youLng != null) {
+      map.easeTo({ center: [state.youLng, state.youLat], duration: 300 });
+    }
+  }
 }
 
 function bindSheetDrag() {
@@ -3818,9 +3914,15 @@ function bindSheetDrag() {
     let h = _sheetDrag.startHeight - dy;
     h = Math.max(SHEET_STATES.collapsed, Math.min(phoneHeight * SHEET_STATES.full, h));
     _sheetEl.style.height = h + 'px';
-    // Keep zoom controls above the sheet during drag.
+    // Keep zoom controls + joystick above the sheet during drag.
     const zoomCtrl = document.querySelector('.zoom-controls');
     if (zoomCtrl) zoomCtrl.style.bottom = (h + 12) + 'px';
+    const joy = document.getElementById('joystick');
+    if (joy) joy.style.bottom = (h + 30) + 'px';
+    // Live-update map padding so the visible-area center tracks the drag.
+    // We don't easeTo here (would fight the user's finger); the snap on
+    // pointerup will recenter the user dot.
+    if (map) map.setPadding({ top: 0, right: 0, bottom: h, left: 0 });
   });
   handle.addEventListener('pointerup', () => {
     if (!_sheetDrag) return;
@@ -3880,6 +3982,9 @@ const QUEUE_INTERVAL_MS = 5000;
 let _lastQueuedAt = 0;
 
 function onGpsSuccess(pos) {
+  // Joystick simulator takes over when on — real GPS is ignored so the
+  // simulated walker isn't overwritten by the device's actual position.
+  if (JOYSTICK_MODE) return;
   // First fix? Hide any "searching" banner.
   hideGpsBanner();
   state.gpsMode = 'real';
@@ -4539,6 +4644,194 @@ function wireStopModalHandlers() {
       errEl.textContent = (result && result.error) || 'Could not activate.';
     }
   });
+}
+
+// ╭──────────────────────────────────────────────────────╮
+// │  JOYSTICK SIMULATOR (dev tool)                       │
+// │                                                       │
+// │  Lets us walk around the map without actually walking.│
+// │  Suppresses real GPS while on. Available for both     │
+// │  guide and passenger views. Toggle from the About     │
+// │  screen — adds/removes the .on class on the widget    │
+// │  and flips JOYSTICK_MODE.                             │
+// ╰──────────────────────────────────────────────────────╯
+
+let JOYSTICK_MODE = false;     // when true, suppress real GPS and drive walker from knob
+let _joyVecX = 0, _joyVecY = 0;// unit vector × strength of current deflection
+let _joyLoopRunning = false;
+let _joyWired = false;
+const JOY_MAX_SPEED_MPS = 6;   // meters per second at full knob deflection (~jog pace)
+const JOY_MAX_R_PX = 36;        // knob travel radius in px (matches widget visuals)
+
+// Turn the simulator on. If we have no fix yet, seed the walker at the tour
+// home so there's somewhere visible to start from. Set the GPS state to
+// 'simulated' so the signal indicator reflects what's happening.
+function enableJoystick() {
+  JOYSTICK_MODE = true;
+  if (state.youLng == null && TOUR) {
+    state.youLng = TOUR.home.lng;
+    state.youLat = TOUR.home.lat;
+  }
+  state.gpsMode = 'simulated';
+  state.accuracy = 5;
+  state.heading = null;
+  hideGpsBanner();
+  updateSignal();
+  if (map && state.youLng != null) {
+    map.easeTo({ center: [state.youLng, state.youLat], duration: 400 });
+  }
+  renderYou();
+  const joy = document.getElementById('joystick');
+  if (joy) joy.classList.add('on');
+}
+
+// Turn the simulator off. The next real GPS fix will repopulate state.
+function disableJoystick() {
+  JOYSTICK_MODE = false;
+  _joyVecX = 0;
+  _joyVecY = 0;
+  const knob = document.getElementById('joystick-knob');
+  if (knob) knob.style.transform = 'translate(-50%, -50%)';
+  const joy = document.getElementById('joystick');
+  if (joy) joy.classList.remove('on');
+}
+
+// Drive the walker each animation frame while the knob is deflected. Same
+// downstream side-effects as onGpsSuccess: triggers, geofences, render, and
+// (for passengers in a session) queue + sync to Supabase so other clients
+// see the simulated movement.
+function startJoystickLoop() {
+  if (_joyLoopRunning) return;
+  _joyLoopRunning = true;
+  let lastT = performance.now();
+  function step(now) {
+    if (!JOYSTICK_MODE || (_joyVecX === 0 && _joyVecY === 0)) {
+      _joyLoopRunning = false;
+      return;
+    }
+    const dt = (now - lastT) / 1000;
+    lastT = now;
+    const strength = Math.min(1, Math.hypot(_joyVecX, _joyVecY));
+    const distM = JOY_MAX_SPEED_MPS * strength * dt;
+    // _joyVecX > 0 = right (east). _joyVecY > 0 = down (south).
+    // Convert screen vector → compass heading clockwise from north.
+    const headingRad = Math.atan2(_joyVecX, -_joyVecY);
+    const dLat = (distM * Math.cos(headingRad)) / 111000;
+    const cosLat = Math.cos((state.youLat || 0) * Math.PI / 180);
+    const dLng = (distM * Math.sin(headingRad)) / (111000 * (cosLat || 1e-6));
+
+    state.youLat += dLat;
+    state.youLng += dLng;
+    state.heading = (headingRad * 180 / Math.PI + 360) % 360;
+    state.gpsMode = 'simulated';
+
+    // Mirror the onGpsSuccess side-effects (minus the queue, which we do
+    // separately at a throttled cadence).
+    if (ROLE === 'passenger') checkTriggers();
+    if (ROLE === 'guide' && SESSION) checkStopGeofences();
+    updateSignal();
+    renderYou();
+    if (state.following && map) {
+      map.setCenter([state.youLng, state.youLat]);
+    }
+
+    // Throttled queue write — same shape onGpsSuccess uses, so simulated
+    // movement also flows through v0.3's offline-queue + sync worker. Lets
+    // a second device (real or sim) see this passenger walking.
+    const nowMs = Date.now();
+    if (SESSION && ROLE === 'passenger' && nowMs - _lastQueuedAt >= QUEUE_INTERVAL_MS) {
+      _lastQueuedAt = nowMs;
+      queueLocation({
+        lng: state.youLng,
+        lat: state.youLat,
+        accuracy: 5,
+        client_recorded_at: new Date(nowMs).toISOString(),
+      }).catch(err => console.warn('queueLocation (joystick) failed', err));
+    }
+
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// Pointer wiring on the knob. Drag from center, clamp to JOY_MAX_R_PX radius.
+// Strength = (deflection / max). Direction = compass-style.
+function wireJoystick() {
+  if (_joyWired) return;
+  const joy = document.getElementById('joystick');
+  const knob = document.getElementById('joystick-knob');
+  if (!joy || !knob) return;
+  _joyWired = true;
+
+  let dragging = false;
+  let center = null;
+
+  function pointToVec(clientX, clientY) {
+    let dx = clientX - center.x;
+    let dy = clientY - center.y;
+    const r = Math.hypot(dx, dy);
+    if (r > JOY_MAX_R_PX) {
+      dx = dx * JOY_MAX_R_PX / r;
+      dy = dy * JOY_MAX_R_PX / r;
+    }
+    return { dx, dy };
+  }
+
+  function applyKnob(dx, dy) {
+    knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    _joyVecX = dx / JOY_MAX_R_PX;
+    _joyVecY = dy / JOY_MAX_R_PX;
+  }
+
+  function onDown(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    dragging = true;
+    const r = joy.getBoundingClientRect();
+    center = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    try { knob.setPointerCapture(e.pointerId); } catch {}
+    const { dx, dy } = pointToVec(e.clientX, e.clientY);
+    applyKnob(dx, dy);
+    startJoystickLoop();
+  }
+  function onMove(e) {
+    if (!dragging) return;
+    e.preventDefault();
+    const { dx, dy } = pointToVec(e.clientX, e.clientY);
+    applyKnob(dx, dy);
+    startJoystickLoop();
+  }
+  function onUp(e) {
+    if (!dragging) return;
+    dragging = false;
+    try { knob.releasePointerCapture(e.pointerId); } catch {}
+    applyKnob(0, 0);
+  }
+
+  knob.addEventListener('pointerdown', onDown);
+  knob.addEventListener('pointermove', onMove);
+  knob.addEventListener('pointerup', onUp);
+  knob.addEventListener('pointercancel', onUp);
+  knob.addEventListener('pointerleave', () => { /* keep dragging via capture */ });
+}
+
+// Wire the About-screen toggle button. Called from applyTourMetadata after
+// the About debug block is populated (so the joystick toggle row is appended
+// to the same area).
+function wireJoystickToggle() {
+  const btn = document.getElementById('joystick-toggle-btn');
+  if (!btn) return;
+  btn.textContent = JOYSTICK_MODE ? 'Disable' : 'Enable';
+  btn.onclick = () => {
+    if (JOYSTICK_MODE) {
+      disableJoystick();
+      btn.textContent = 'Enable';
+    } else {
+      wireJoystick();
+      enableJoystick();
+      btn.textContent = 'Disable';
+    }
+  };
 }
 </script>
 </body>
