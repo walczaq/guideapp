@@ -116,61 +116,10 @@
     position: absolute;
     top: env(safe-area-inset-top, 0);
     left: 0; right: 0;
-    padding: 8px 16px; pointer-events: none; z-index: 5;
-    display: flex; flex-direction: column; align-items: stretch;
-    gap: 6px;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 12px 16px; pointer-events: none; z-index: 5;
   }
   .map-hud > * { pointer-events: auto; }
-  .hud-guide-name {
-    align-self: center;
-    max-width: 70%;
-    padding: 4px 12px;
-    background: var(--paper);
-    border: 1px solid var(--rule);
-    border-radius: 10px;
-    box-shadow: 0 1px 5px rgba(0,0,0,0.10);
-    font-family: 'Fraunces', serif;
-    font-size: 13px; line-height: 1.2;
-    color: var(--ink);
-    text-align: center;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    display: none;
-  }
-  .hud-guide-name.show { display: block; }
-  .hud-row {
-    display: flex; justify-content: space-between; align-items: flex-start;
-    gap: 8px;
-  }
-  .hud-row > * { pointer-events: auto; }
-  .hud-left {
-    display: flex; align-items: center; gap: 8px;
-    flex: 0 0 auto;
-    min-width: 0;
-  }
-  .hud-active-stop {
-    display: none;
-    max-width: 180px;
-    padding: 6px 10px;
-    background: var(--paper);
-    border: 1px solid var(--rule);
-    border-radius: 10px;
-    box-shadow: 0 1px 5px rgba(0,0,0,0.10);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--ink);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    line-height: 1.2;
-  }
-  .hud-active-stop.show { display: block; }
-  .hud-active-stop b {
-    display: block;
-    font-family: 'Fraunces', serif;
-    font-size: 12px;
-    letter-spacing: 0;
-    text-transform: none;
-    font-weight: 700;
-  }
   .icon-btn {
     width: 48px; height: 48px;
     background: var(--paper); border: 1px solid var(--rule); border-radius: 14px;
@@ -333,6 +282,98 @@
   }
 
   /* menu */
+  /* Session info block at the top of the burger menu — guide name, current
+     active stop, and the warning list (read-only here). Each child hides
+     itself when its data is empty, so the whole block collapses to nothing
+     before a session is loaded. */
+  .menu-session-info {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 4px 4px 18px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .menu-session-info:empty { display: none; }
+  .menu-session-guide {
+    display: none;
+    font-family: 'Fraunces', serif;
+    font-size: 15px; line-height: 1.3;
+    color: var(--ink);
+  }
+  .menu-session-guide.show { display: block; }
+  .menu-session-guide-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule);
+    display: block; margin-bottom: 2px;
+  }
+  .menu-session-stop {
+    display: none;
+    padding: 10px 12px;
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+  }
+  .menu-session-stop.show { display: block; }
+  .menu-session-stop-stamp {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule); margin-bottom: 4px;
+  }
+  .menu-session-stop-name {
+    font-family: 'Fraunces', serif;
+    font-size: 18px; font-weight: 700; line-height: 1.2;
+    color: var(--ink);
+  }
+  .menu-session-warnings {
+    display: none;
+    flex-direction: column; gap: 6px;
+  }
+  .menu-session-warnings.show { display: flex; }
+  .menu-session-warnings-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule);
+  }
+  .menu-session-warning-row {
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-family: 'Fraunces', serif;
+    font-size: 14px; line-height: 1.35;
+    display: flex; align-items: flex-start; gap: 8px;
+  }
+  .menu-session-warning-row[data-level="note"] {
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    color: var(--ink);
+    font-style: italic;
+  }
+  .menu-session-warning-row[data-level="info"] {
+    background: rgba(37, 99, 235, 0.10);
+    border: 1px solid #2563eb;
+    color: #1e3a8a;
+  }
+  .menu-session-warning-row[data-level="caution"] {
+    background: rgba(199, 148, 40, 0.15);
+    border: 1px solid var(--armed);
+    color: #5a3a00;
+  }
+  .menu-session-warning-row[data-level="danger"] {
+    background: rgba(184, 51, 29, 0.12);
+    border: 1px solid var(--mark);
+    color: var(--mark);
+    font-weight: 700;
+  }
+  .menu-session-warning-row[data-level="bus"] {
+    background: var(--ink);
+    border: 1px solid var(--ink);
+    color: var(--paper);
+    font-weight: 700;
+  }
+  .menu-session-warning-row svg {
+    flex-shrink: 0;
+    width: 18px; height: 18px;
+    display: block;
+  }
   .menu-masthead {
     padding: 8px 4px 24px; margin-bottom: 8px;
     border-bottom: 1px solid var(--rule-soft);
@@ -1349,22 +1390,13 @@
       </svg>
 
       <div class="map-hud">
-        <!-- Guide name (row 1) — shown above the burger/timer row when a
-             session is active. Updated by renderHudGuideName(). -->
-        <div class="hud-guide-name" id="hud-guide-name"></div>
-        <div class="hud-row">
-        <div class="hud-left">
-          <button class="icon-btn" id="burger-btn" aria-label="Menu">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <line x1="4" y1="7" x2="20" y2="7"/>
-              <line x1="4" y1="12" x2="20" y2="12"/>
-              <line x1="4" y1="17" x2="20" y2="17"/>
-            </svg>
-          </button>
-          <!-- Active stop chip — sits next to the burger when a stop is
-               active. Updated by renderHudActiveStop(). -->
-          <div class="hud-active-stop" id="hud-active-stop"></div>
-        </div>
+        <button class="icon-btn" id="burger-btn" aria-label="Menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="4" y1="7" x2="20" y2="7"/>
+            <line x1="4" y1="12" x2="20" y2="12"/>
+            <line x1="4" y1="17" x2="20" y2="17"/>
+          </svg>
+        </button>
         <!-- Top warning banner — sits BETWEEN burger and signal in the HUD.
              Active warnings shown as stacked rows with × to dismiss. -->
         <div class="top-warning" id="top-warning"></div>
@@ -1392,7 +1424,6 @@
             <span id="signal-text">Searching</span>
           </div>
         </div>
-        </div>  <!-- /.hud-row -->
       </div>
 
       <!-- GPS error banner -->
@@ -1457,6 +1488,13 @@
       <div class="screen-title">Menu</div>
     </div>
     <div class="screen-body">
+      <!-- Live session info: guide name, active stop, current warnings.
+           Populated each time the menu opens by renderMenuSessionInfo(). -->
+      <div class="menu-session-info" id="menu-session-info">
+        <div class="menu-session-guide" id="menu-session-guide"></div>
+        <div class="menu-session-stop" id="menu-session-stop"></div>
+        <div class="menu-session-warnings" id="menu-session-warnings"></div>
+      </div>
       <div class="menu-masthead">
         <div class="menu-masthead-stamp">Tour № 001 · Hardcoded</div>
         <h1>Fossvogs<em>dalur</em></h1>
@@ -1707,7 +1745,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · polish v10: re-show warnings + bus tap + guide name + active stop chip · build 2026-05-16-1945';
+const BUILD_VERSION = '0.5 · polish v11: guide name + stop + warnings moved into burger menu · build 2026-05-16-2100';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2573,10 +2611,6 @@ async function loadSessionAndTour(sessionId) {
   // HUD timer card click handler (guide-only effect — wires for both roles
   // since the element exists everywhere; renderHudTimer toggles .clickable).
   wireHudTimerHandlers();
-  // Render the HUD guide name + active-stop chip from current state.
-  // (The active-stop chip is also kept up-to-date via the countdown ticker.)
-  renderHudGuideName();
-  renderHudActiveStop();
 
   // Chunk C: subscribe to live stop_activation INSERTs for this session.
   // Both guide and passenger views subscribe — guide for multi-device
@@ -5186,6 +5220,9 @@ document.getElementById('burger-btn').addEventListener('click', () => {
     const labelEl = document.getElementById('menu-edit-name-label');
     if (labelEl) labelEl.textContent = MY_NAME ? `Your name · ${MY_NAME}` : 'Your name';
   }
+  // Populate guide name, active stop, and current warnings at the top of
+  // the menu from whatever state we have right now.
+  renderMenuSessionInfo();
   openScreen('screen-menu');
 });
 
@@ -6257,7 +6294,6 @@ function startCountdownTicker() {
 
 function tickCountdown() {
   renderHudTimer();
-  renderHudActiveStop();
   if (_arrivalStop) {
     const dep = departureMsForStop(_arrivalStop.id);
     if (dep) {
@@ -6360,40 +6396,90 @@ async function sendDepartureSignal() {
   refreshTopWarningBanner(stop);
 }
 
-// HUD guide-name chip — shows the session's guide name above the burger
-// row when a session is active. Both guide and passenger views see it.
-function renderHudGuideName() {
-  const el = document.getElementById('hud-guide-name');
+// Populates the session-info block at the top of the burger menu — guide
+// name, current active stop, and the live list of warnings. Called each
+// time the menu opens; each child hides itself when its data is empty.
+function renderMenuSessionInfo() {
+  renderMenuGuideName();
+  renderMenuActiveStop();
+  renderMenuWarnings();
+}
+
+function renderMenuGuideName() {
+  const el = document.getElementById('menu-session-guide');
   if (!el) return;
   const name = (SESSION && SESSION.guide_name) ? String(SESSION.guide_name).trim() : '';
   if (!name) {
     el.classList.remove('show');
-    el.textContent = '';
+    el.innerHTML = '';
     return;
   }
-  el.textContent = (ROLE === 'passenger') ? `Your guide · ${name}` : name;
+  const label = (ROLE === 'passenger') ? 'Your guide' : 'Guide';
+  const safeName = name.replace(/</g, '&lt;');
+  el.innerHTML = `<span class="menu-session-guide-label">${label}</span>${safeName}`;
   el.classList.add('show');
 }
 
-// HUD active-stop chip — shown next to the burger when a stop is active.
-// "Stop 02 · Reykjavík". Hidden when no stop is active.
-function renderHudActiveStop() {
-  const el = document.getElementById('hud-active-stop');
+function renderMenuActiveStop() {
+  const el = document.getElementById('menu-session-stop');
   if (!el) return;
   const stopId = Array.from(ACTIVE_STOP_IDS)[0];
   if (stopId == null || !TOUR) {
     el.classList.remove('show');
-    el.textContent = '';
+    el.innerHTML = '';
     return;
   }
   const stop = TOUR.stops.find(s => s.id === stopId);
   if (!stop) {
     el.classList.remove('show');
-    el.textContent = '';
+    el.innerHTML = '';
     return;
   }
   const ord = String(stop.ordinal).padStart(2, '0');
-  el.innerHTML = `Stop ${ord}<b>${(stop.name || '').replace(/</g, '&lt;')}</b>`;
+  const safeName = (stop.name || '').replace(/</g, '&lt;');
+  el.innerHTML = `<div class="menu-session-stop-stamp">Active stop № ${ord}</div>`
+    + `<div class="menu-session-stop-name">${safeName}</div>`;
+  el.classList.add('show');
+}
+
+function renderMenuWarnings() {
+  const el = document.getElementById('menu-session-warnings');
+  if (!el) return;
+  el.innerHTML = '';
+  const stopId = Array.from(ACTIVE_STOP_IDS)[0];
+  if (stopId == null) {
+    el.classList.remove('show');
+    return;
+  }
+  const meta = ACTIVATION_META.get(stopId) || {};
+  const overallLevel = meta.warning_level || 'none';
+  const entries = parseNotesText(meta.notes || '').map(e => ({
+    level: e.level === 'none' ? overallLevel : e.level,
+    text: e.text,
+  }));
+  if (entries.length === 0) {
+    el.classList.remove('show');
+    return;
+  }
+  const label = document.createElement('div');
+  label.className = 'menu-session-warnings-label';
+  label.textContent = 'Current warnings';
+  el.appendChild(label);
+  for (const entry of entries) {
+    const row = document.createElement('div');
+    row.className = 'menu-session-warning-row';
+    const dataLevel = (entry.level && entry.level !== 'none') ? entry.level : 'note';
+    row.setAttribute('data-level', dataLevel);
+    if (dataLevel !== 'note') {
+      const icon = document.createElement('span');
+      icon.innerHTML = svgForLevel(entry.level);
+      row.appendChild(icon);
+    }
+    const text = document.createElement('span');
+    text.textContent = entry.text;
+    row.appendChild(text);
+    el.appendChild(row);
+  }
   el.classList.add('show');
 }
 
