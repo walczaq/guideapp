@@ -793,6 +793,46 @@
   .stop-modal-notes textarea:focus {
     outline: none; border-color: var(--ink);
   }
+  /* Multi-note editor inside the notes modal */
+  .notes-row {
+    display: flex; align-items: stretch; gap: 6px;
+    margin-bottom: 8px;
+  }
+  .notes-row input.notes-input {
+    flex: 1 1 auto;
+    padding: 10px 12px;
+    background: var(--paper);
+    border: 1px solid var(--rule); border-radius: 6px;
+    font-family: 'Fraunces', serif;
+    font-size: 14px; line-height: 1.4;
+    color: var(--ink);
+    box-sizing: border-box;
+  }
+  .notes-row input.notes-input:focus {
+    outline: none; border-color: var(--ink);
+  }
+  .notes-row-remove {
+    flex: 0 0 auto;
+    width: 36px;
+    background: transparent; color: var(--rule);
+    border: 1px solid var(--rule); border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px; line-height: 1; cursor: pointer;
+  }
+  .notes-row-remove:hover { background: var(--paper-2); color: var(--ink); }
+  .notes-add-btn {
+    width: 100%;
+    margin-top: 4px;
+    padding: 10px;
+    background: var(--paper-2); color: var(--ink);
+    border: 1px dashed var(--rule); border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .notes-add-btn:hover { background: var(--paper); border-color: var(--ink); }
+  .notes-add-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
 
   /* ── Stop arrival modal (passenger-side, replaces the top banner) ───────
      Centered, persistent modal that announces a new stop. Stays visible
@@ -883,23 +923,23 @@
   .stop-arrival-ok:active { transform: scale(0.97); }
 
   /* ── Top warning banner ─────────────────────────────────────────────
-     Slim banner pinned at the top of the map (below burger/signal HUD).
-     Shows active warnings as separate rows, each with × to dismiss the
-     line. Persists across full-modal dismissal until guide clears notes
-     OR passenger × everything. */
+     Sits INSIDE the .map-hud row as a flex item between burger and signal.
+     Active warnings (max 3) shown as compact rows; each row has × to
+     dismiss for this passenger. */
   .top-warning {
-    position: absolute;
-    left: 16px; right: 16px;
-    top: calc(env(safe-area-inset-top, 0) + 72px);
+    flex: 1 1 auto;
+    margin: 0 10px;
     background: var(--paper);
     border: 1px solid var(--rule);
-    border-radius: 8px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.16), 0 0 0 3px var(--paper-2);
-    z-index: 8;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.14), 0 0 0 2px var(--paper-2);
     display: none;
     overflow: hidden;
+    max-height: 48px;       /* matches the HUD button height for collapsed view */
+    pointer-events: auto;
   }
   .top-warning.show { display: block; }
+  .top-warning.expanded { max-height: 196px; overflow-y: auto; }
   .top-warning[data-level="info"] {
     border-color: #2563eb;
     box-shadow: 0 4px 14px rgba(37,99,235,0.18), 0 0 0 3px rgba(37,99,235,0.12);
@@ -913,11 +953,13 @@
     box-shadow: 0 4px 14px rgba(184,51,29,0.20), 0 0 0 3px rgba(184,51,29,0.15);
   }
   .top-warning-row {
-    display: flex; align-items: flex-start; gap: 10px;
-    padding: 10px 12px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px;
     border-bottom: 1px solid var(--rule-soft);
     font-family: 'Fraunces', serif;
-    font-size: 14px; line-height: 1.4; color: var(--ink);
+    font-size: 13px; line-height: 1.3; color: var(--ink);
+    min-height: 48px;
+    box-sizing: border-box;
   }
   .top-warning-row:last-child { border-bottom: none; }
   .top-warning-row[data-level="info"] {
@@ -935,24 +977,28 @@
   }
   .top-warning-icon {
     flex: 0 0 auto;
-    width: 18px; height: 18px;
+    width: 16px; height: 16px;
     display: inline-flex; align-items: center; justify-content: center;
-    margin-top: 1px;
   }
-  .top-warning-icon svg { width: 18px; height: 18px; display: block; }
+  .top-warning-icon svg { width: 16px; height: 16px; display: block; }
   .top-warning-text {
     flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .top-warning.expanded .top-warning-text {
+    white-space: normal;
     word-break: break-word;
   }
   .top-warning-close {
     flex: 0 0 auto;
-    width: 26px; height: 26px;
-    margin-top: -2px;
+    width: 22px; height: 22px;
     background: transparent; color: inherit;
     border: 1px solid currentColor;
     border-radius: 50%;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1;
     cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center;
@@ -960,6 +1006,10 @@
   }
   .top-warning-close:hover,
   .top-warning-close:active { opacity: 1; }
+  /* Tap the row itself (not the close button) to toggle expanded view. */
+  .top-warning-row {
+    cursor: pointer;
+  }
 
     /* ── Touchscreen joystick (dev simulator) ──────────────────────────────
      Hidden by default. When the user enables "Simulator" from the About
@@ -1149,6 +1199,9 @@
             <line x1="4" y1="17" x2="20" y2="17"/>
           </svg>
         </button>
+        <!-- Top warning banner — sits BETWEEN burger and signal in the HUD.
+             Active warnings (max 3) shown as compact rows with × to dismiss. -->
+        <div class="top-warning" id="top-warning"></div>
         <div class="signal" id="signal">
           <span class="signal-dot searching" id="signal-dot"></span>
           <span id="signal-text">Searching</span>
@@ -1164,10 +1217,7 @@
       <!-- (The old slide-down stop-banner was removed in favor of the
            centered persistent stop-arrival-modal below.) -->
 
-      <!-- Top warning banner — slim persistent indicator with the active
-           note(s) for the current stop. Multi-line: one row per warning,
-           each with × to dismiss. -->
-      <div class="top-warning" id="top-warning"></div>
+
 
       <!-- Broadcasting banner (chunk F) — shown to guides when visibility ≠ off.
            Sits below the map-hud, full-width, slim. Color shifts by mode. -->
@@ -1411,8 +1461,9 @@
         </div>
       </div>
       <div class="stop-modal-notes">
-        <div class="stop-modal-notes-label">Notes for passengers</div>
-        <textarea id="notes-modal-input" placeholder="e.g. Mind the geothermal pools — surface temp 80°C"></textarea>
+        <div class="stop-modal-notes-label">Notes for passengers (max 3)</div>
+        <div id="notes-modal-list"></div>
+        <button type="button" id="notes-modal-add" class="notes-add-btn">+ Add note</button>
       </div>
       <div class="stop-modal-actions">
         <button class="stop-modal-btn secondary" id="notes-modal-cancel">Cancel</button>
@@ -1488,7 +1539,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · polish v6: open-meteo + countdown + 5-min alarm · build 2026-05-14-0015';
+const BUILD_VERSION = '0.5 · polish v7: hud banner + multi-note (max 3) · build 2026-05-14-0040';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -5825,6 +5876,7 @@ function populateArrivalModalContent(stop) {
   const stamp = document.getElementById('stop-arrival-stamp');
   const nameEl = document.getElementById('stop-arrival-name');
   if (!stamp || !nameEl) return;
+  console.log('[arrival populate]', stop.name, 'meta:', ACTIVATION_META.get(stop.id));
   stamp.textContent = `Stop № ${String(stop.ordinal).padStart(2, '0')} · Now`;
   nameEl.textContent = stop.name || '';
 
@@ -6174,6 +6226,8 @@ function maybeShowPendingStopAnnouncement() {
 // Edit-Note modal: pre-fills notes + warning level for the stop, lets the
 // guide edit, saves via update_stop_activation_notes RPC. Realtime UPDATE
 // pushes the change to any open passenger arrival modal.
+const MAX_NOTES = 3;
+
 function showEditNoteModal(stop) {
   if (!stop) return;
   if (!ACTIVE_STOP_IDS.has(stop.id)) return;
@@ -6181,13 +6235,23 @@ function showEditNoteModal(stop) {
   const backdrop = document.getElementById('notes-modal-backdrop');
   const title = document.getElementById('notes-modal-title');
   const errEl = document.getElementById('notes-modal-error');
-  const input = document.getElementById('notes-modal-input');
+  const list = document.getElementById('notes-modal-list');
+  const addBtn = document.getElementById('notes-modal-add');
   const saveBtn = document.getElementById('notes-modal-save');
-  if (!backdrop || !title || !errEl || !input || !saveBtn) return;
+  if (!backdrop || !title || !errEl || !list || !addBtn || !saveBtn) return;
   const meta = ACTIVATION_META.get(stop.id) || {};
   title.textContent = stop.name || '';
   errEl.textContent = '';
-  input.value = meta.notes || '';
+  // Parse existing notes from newline-separated string.
+  const existing = (meta.notes || '')
+    .split(/\r?\n/)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .slice(0, MAX_NOTES);
+  // If no existing notes, start with one empty row so the user has something
+  // to type into immediately.
+  const initial = existing.length ? existing : [''];
+  renderNotesList(initial);
   _editNoteWarningLevel = meta.warning_level || 'none';
   document.querySelectorAll('#notes-modal-warning-row .stop-modal-warning-pill').forEach(p => {
     p.classList.toggle('active', p.dataset.level === _editNoteWarningLevel);
@@ -6195,7 +6259,52 @@ function showEditNoteModal(stop) {
   saveBtn.disabled = false;
   saveBtn.textContent = 'Save';
   backdrop.classList.add('show');
-  setTimeout(() => input.focus(), 200);
+  setTimeout(() => {
+    const first = list.querySelector('input.notes-input');
+    if (first) first.focus();
+  }, 200);
+}
+
+// Render the dynamic list of note inputs. Each entry gets an input + × remove.
+// "+ Add note" button is enabled while count < MAX_NOTES.
+function renderNotesList(values) {
+  const list = document.getElementById('notes-modal-list');
+  const addBtn = document.getElementById('notes-modal-add');
+  if (!list || !addBtn) return;
+  list.innerHTML = '';
+  values.forEach((val, idx) => {
+    const row = document.createElement('div');
+    row.className = 'notes-row';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'notes-input';
+    input.placeholder = idx === 0
+      ? 'e.g. Mind the geothermal pools — surface temp 80°C'
+      : 'Another note (optional)';
+    input.value = val;
+    input.maxLength = 200;
+    row.appendChild(input);
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'notes-row-remove';
+    remove.textContent = '×';
+    remove.title = 'Remove this note';
+    remove.addEventListener('click', () => {
+      // Capture current values and drop the index that was clicked.
+      const current = collectNotesListValues();
+      current.splice(idx, 1);
+      if (current.length === 0) current.push('');   // always keep one input visible
+      renderNotesList(current);
+    });
+    row.appendChild(remove);
+    list.appendChild(row);
+  });
+  addBtn.disabled = values.length >= MAX_NOTES;
+}
+
+function collectNotesListValues() {
+  const inputs = document.querySelectorAll('#notes-modal-list input.notes-input');
+  return Array.from(inputs).map(i => i.value);
 }
 
 function dismissEditNoteModal() {
@@ -6207,16 +6316,21 @@ function dismissEditNoteModal() {
 async function saveEditedNote() {
   const stop = _noteEditStop;
   if (!stop || !SESSION) return;
-  const input = document.getElementById('notes-modal-input');
   const errEl = document.getElementById('notes-modal-error');
   const saveBtn = document.getElementById('notes-modal-save');
-  if (!input || !errEl || !saveBtn) return;
+  if (!errEl || !saveBtn) return;
   const token = getStoredGuideToken();
   if (!token) {
     errEl.textContent = 'You must be signed in as a guide.';
     return;
   }
-  const newNotes = (input.value || '').trim() || null;
+  // Assemble the multi-note list into a newline-separated string. Empty
+  // trims become NULL so the badge knows there are no notes.
+  const lines = collectNotesListValues()
+    .map(s => (s || '').trim())
+    .filter(Boolean)
+    .slice(0, MAX_NOTES);
+  const newNotes = lines.length ? lines.join('\n') : null;
   const newWarning = _editNoteWarningLevel || 'none';
   saveBtn.disabled = true;
   saveBtn.textContent = 'Saving…';
@@ -6252,10 +6366,23 @@ function wireNotesModalHandlers() {
   if (_notesModalWired) return;
   const cancelBtn = document.getElementById('notes-modal-cancel');
   const saveBtn = document.getElementById('notes-modal-save');
-  if (!cancelBtn || !saveBtn) return;
+  const addBtn = document.getElementById('notes-modal-add');
+  if (!cancelBtn || !saveBtn || !addBtn) return;
   _notesModalWired = true;
   cancelBtn.addEventListener('click', () => dismissEditNoteModal());
   saveBtn.addEventListener('click', () => saveEditedNote());
+  addBtn.addEventListener('click', () => {
+    const current = collectNotesListValues();
+    if (current.length >= MAX_NOTES) return;
+    current.push('');
+    renderNotesList(current);
+    // Focus the newly added empty input.
+    setTimeout(() => {
+      const inputs = document.querySelectorAll('#notes-modal-list input.notes-input');
+      const last = inputs[inputs.length - 1];
+      if (last) last.focus();
+    }, 0);
+  });
   document.querySelectorAll('#notes-modal-warning-row .stop-modal-warning-pill').forEach(pill => {
     pill.addEventListener('click', () => {
       const level = pill.dataset.level || 'none';
@@ -6342,11 +6469,16 @@ function refreshTopWarningBanner(stop) {
     close.className = 'top-warning-close';
     close.textContent = '×';
     close.setAttribute('aria-label', 'Dismiss this warning');
-    close.addEventListener('click', () => {
+    close.addEventListener('click', (e) => {
+      e.stopPropagation();   // don't trigger the row's expand-toggle
       dismissed.add(line);
       refreshTopWarningBanner(stop);
     });
     row.appendChild(close);
+    // Tap the row to toggle expanded view (multi-line scroll vs collapsed).
+    row.addEventListener('click', () => {
+      banner.classList.toggle('expanded');
+    });
     banner.appendChild(row);
   }
   banner.classList.add('show');
