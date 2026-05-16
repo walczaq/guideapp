@@ -922,10 +922,55 @@
   }
   .stop-arrival-ok:active { transform: scale(0.97); }
 
+  /* ── HUD right column + persistent departure timer ──────────────────
+     Right-side stack inside .map-hud. The timer card sits ABOVE the
+     signal pill and is only shown when an active stop has a departure.
+     Shows the HH:MM departure (soonest if multiple) on top, with a live
+     m:ss countdown below it. Urgent (≤5 min) → red; past departure →
+     muted with a leading minus. */
+  .hud-right {
+    display: flex; flex-direction: column; align-items: flex-end;
+    gap: 8px;
+  }
+  .stop-timer {
+    display: none;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 6px 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.14);
+    text-align: right;
+    min-width: 88px;
+    pointer-events: auto;
+  }
+  .stop-timer.show { display: block; }
+  .stop-timer-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.12em;
+    color: var(--muted); text-transform: uppercase;
+    line-height: 1;
+  }
+  .stop-timer-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px; font-weight: 700;
+    color: var(--ink); line-height: 1.15;
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+  .stop-timer-countdown {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--ink); line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  .stop-timer-countdown.urgent { color: var(--mark); font-weight: 700; }
+  .stop-timer-countdown.past   { color: var(--muted); }
+
   /* ── Top warning banner ─────────────────────────────────────────────
      Sits INSIDE the .map-hud row as a flex item between burger and signal.
-     Active warnings (max 3) shown as compact rows; each row has × to
-     dismiss for this passenger. */
+     Active warnings shown as stacked rows (one per warning); each row has
+     × to dismiss for this passenger. Box grows downward as warnings stack.
+     Tap a row to expand long text on that row only. */
   .top-warning {
     flex: 1 1 auto;
     margin: 0 10px;
@@ -934,12 +979,10 @@
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.14), 0 0 0 2px var(--paper-2);
     display: none;
-    overflow: hidden;
-    max-height: 48px;       /* matches the HUD button height for collapsed view */
+    overflow: hidden;          /* keeps rounded corners; height is content-driven */
     pointer-events: auto;
   }
   .top-warning.show { display: block; }
-  .top-warning.expanded { max-height: 196px; overflow-y: auto; }
   .top-warning[data-level="info"] {
     border-color: #2563eb;
     box-shadow: 0 4px 14px rgba(37,99,235,0.18), 0 0 0 3px rgba(37,99,235,0.12);
@@ -987,7 +1030,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .top-warning.expanded .top-warning-text {
+  .top-warning-row.expanded .top-warning-text {
     white-space: normal;
     word-break: break-word;
   }
@@ -1200,11 +1243,21 @@
           </svg>
         </button>
         <!-- Top warning banner — sits BETWEEN burger and signal in the HUD.
-             Active warnings (max 3) shown as compact rows with × to dismiss. -->
+             Active warnings shown as stacked rows with × to dismiss. -->
         <div class="top-warning" id="top-warning"></div>
-        <div class="signal" id="signal">
-          <span class="signal-dot searching" id="signal-dot"></span>
-          <span id="signal-text">Searching</span>
+        <!-- Right column: persistent departure timer above the signal pill.
+             Timer is shown whenever there's an active stop with a departure;
+             the signal pill is always there. -->
+        <div class="hud-right">
+          <div class="stop-timer" id="stop-timer">
+            <div class="stop-timer-label">Departure</div>
+            <div class="stop-timer-time" id="stop-timer-time">—:—</div>
+            <div class="stop-timer-countdown" id="stop-timer-countdown">—:—</div>
+          </div>
+          <div class="signal" id="signal">
+            <span class="signal-dot searching" id="signal-dot"></span>
+            <span id="signal-text">Searching</span>
+          </div>
         </div>
       </div>
 
@@ -1539,7 +1592,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · polish v7: hud banner + multi-note (max 3) · build 2026-05-14-0040';
+const BUILD_VERSION = '0.5 · polish v8: top-right timer + expanding warnings · build 2026-05-16-1700';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -6016,7 +6069,10 @@ function departureMsForStop(stopId) {
 //   - checks each active stop's remaining time; at ≤5 min, fires chime +
 //     (if permission granted) a browser Notification ONCE per stop.
 
-const COUNTDOWN_INTERVAL_MS = 15000;
+// 1 Hz so the HUD timer's m:ss reads smoothly. The 5-min alarm and modal
+// "Time left" row are both idempotent — they don't mind being checked
+// every second.
+const COUNTDOWN_INTERVAL_MS = 1000;
 const ALARM_THRESHOLD_MS = 5 * 60 * 1000;
 const _alarmFiredFor = new Set();   // stop_id values whose alarm fired
 let _countdownTimer = null;
@@ -6028,6 +6084,7 @@ function startCountdownTicker() {
 }
 
 function tickCountdown() {
+  renderHudTimer();
   if (_arrivalStop) {
     const dep = departureMsForStop(_arrivalStop.id);
     if (dep) {
@@ -6046,6 +6103,39 @@ function tickCountdown() {
       fire5MinAlarm(stopId, remaining);
     }
   }
+}
+
+// Persistent top-right HUD timer. Picks the soonest-departing active stop
+// and renders its HH:MM departure on top with a live m:ss countdown below.
+// Hidden when no active stop has a departure.
+function renderHudTimer() {
+  const el = document.getElementById('stop-timer');
+  if (!el) return;
+  let soonestMs = Infinity;
+  for (const stopId of ACTIVE_STOP_IDS) {
+    const dep = departureMsForStop(stopId);
+    if (dep == null) continue;
+    if (dep < soonestMs) soonestMs = dep;
+  }
+  if (soonestMs === Infinity) {
+    el.classList.remove('show');
+    return;
+  }
+  const timeEl = document.getElementById('stop-timer-time');
+  const cdEl = document.getElementById('stop-timer-countdown');
+  if (timeEl) timeEl.textContent = formatHHMM(new Date(soonestMs));
+  if (cdEl) {
+    const diffMs = soonestMs - Date.now();
+    const past = diffMs < 0;
+    const absSec = Math.max(0, Math.floor(Math.abs(diffMs) / 1000));
+    const mm = Math.floor(absSec / 60);
+    const ss = absSec % 60;
+    const text = `${mm}:${String(ss).padStart(2, '0')}`;
+    cdEl.textContent = past ? `-${text}` : text;
+    cdEl.classList.toggle('urgent', !past && diffMs <= ALARM_THRESHOLD_MS);
+    cdEl.classList.toggle('past', past);
+  }
+  el.classList.add('show');
 }
 
 function fire5MinAlarm(stopId, remainingMs) {
@@ -6475,9 +6565,9 @@ function refreshTopWarningBanner(stop) {
       refreshTopWarningBanner(stop);
     });
     row.appendChild(close);
-    // Tap the row to toggle expanded view (multi-line scroll vs collapsed).
+    // Tap the row to expand THIS row's text to wrap (long warnings).
     row.addEventListener('click', () => {
-      banner.classList.toggle('expanded');
+      row.classList.toggle('expanded');
     });
     banner.appendChild(row);
   }
