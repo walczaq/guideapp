@@ -133,16 +133,16 @@
 
   /* signal indicator (top-right) */
   .signal {
-    background: var(--paper); border: 1px solid var(--rule); border-radius: 14px;
-    padding: 0 14px; height: 48px;
-    display: flex; align-items: center; gap: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 0 9px; height: 28px;
+    display: flex; align-items: center; gap: 6px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.10);
     font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing: 0.08em;
+    font-size: 9px; letter-spacing: 0.06em;
     color: var(--rule);
   }
   .signal-dot {
-    width: 8px; height: 8px; border-radius: 50%;
+    width: 6px; height: 6px; border-radius: 50%;
     background: var(--signal-bad);
     transition: background 0.3s;
   }
@@ -712,20 +712,23 @@
     background: var(--mark); color: var(--paper); border-color: var(--mark);
   }
 
-  /* Warning badge in the passenger arrival modal — colored row above notes
-     when warning_level !== 'none'. */
+  /* Warning area in the passenger arrival modal — container holds one
+     row per warning, each with its own level/color/icon. */
   .stop-arrival-warning {
-    /* Vertical margin gives breathing room from the joke + info-rows. */
     margin: 14px 20px 16px;
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .stop-arrival-warning.show { display: flex; }
+  .stop-arrival-warning-row {
     padding: 12px 14px;
     border-radius: 6px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px; letter-spacing: 0.08em; line-height: 1.45;
-    display: none;
   }
-  .stop-arrival-warning.show { display: block; }
   /* Neutral state — note present without an explicit warning level. */
-  .stop-arrival-warning[data-level="note"] {
+  .stop-arrival-warning-row[data-level="note"] {
     background: var(--paper-2);
     border: 1px solid var(--rule);
     color: var(--ink);
@@ -735,17 +738,17 @@
     letter-spacing: 0;
     text-transform: none;
   }
-  .stop-arrival-warning[data-level="info"] {
+  .stop-arrival-warning-row[data-level="info"] {
     background: rgba(37, 99, 235, 0.10);
     border: 1px solid #2563eb;
     color: #1e3a8a;
   }
-  .stop-arrival-warning[data-level="caution"] {
+  .stop-arrival-warning-row[data-level="caution"] {
     background: rgba(199, 148, 40, 0.15);
     border: 1px solid var(--armed);
     color: #5a3a00;
   }
-  .stop-arrival-warning[data-level="danger"] {
+  .stop-arrival-warning-row[data-level="danger"] {
     background: rgba(184, 51, 29, 0.12);
     border: 1px solid var(--mark);
     color: var(--mark);
@@ -820,6 +823,36 @@
     font-size: 16px; line-height: 1; cursor: pointer;
   }
   .notes-row-remove:hover { background: var(--paper-2); color: var(--ink); }
+  /* Per-note level cycle button. Tapping cycles none → info → caution →
+     danger → none. The icon + background color reflect the current level. */
+  .notes-level-btn {
+    flex: 0 0 auto;
+    width: 44px; height: auto;
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    padding: 0;
+  }
+  .notes-level-btn:hover { background: var(--paper); }
+  .notes-level-btn svg { width: 18px; height: 18px; display: block; }
+  .notes-level-btn[data-level="none"] .notes-level-icon-none {
+    width: 16px; height: 2px; background: var(--rule); border-radius: 1px;
+  }
+  .notes-level-btn[data-level="info"] {
+    background: rgba(37, 99, 235, 0.10);
+    border-color: rgba(37, 99, 235, 0.55);
+  }
+  .notes-level-btn[data-level="caution"] {
+    background: rgba(199, 148, 40, 0.12);
+    border-color: rgba(199, 148, 40, 0.60);
+  }
+  .notes-level-btn[data-level="danger"] {
+    background: rgba(184, 51, 29, 0.12);
+    border-color: rgba(184, 51, 29, 0.60);
+  }
   .notes-add-btn {
     width: 100%;
     margin-top: 4px;
@@ -1452,9 +1485,7 @@
         <div class="stop-arrival-stamp" id="stop-arrival-stamp">Stop № 01 · Now</div>
         <div class="stop-arrival-name" id="stop-arrival-name">…</div>
       </div>
-      <div class="stop-arrival-warning" id="stop-arrival-warning" data-level="none">
-        <span class="stop-arrival-warning-prefix" id="stop-arrival-warning-prefix">Info</span><span id="stop-arrival-warning-text">…</span>
-      </div>
+      <div class="stop-arrival-warning" id="stop-arrival-warning"></div>
       <div class="stop-arrival-joke" id="stop-arrival-joke">
         Watch out for the hidden people — they're somewhere around.
       </div>
@@ -1501,26 +1532,17 @@
       </div>
       <div class="stop-modal-body">
         <h2 id="notes-modal-title">…</h2>
-        <p id="notes-modal-sub">Update the note and warning passengers see for this stop. Changes appear instantly.</p>
+        <p id="notes-modal-sub">Tap the icon on each warning to cycle its category. Up to 3 warnings.</p>
         <div class="stop-modal-error" id="notes-modal-error"></div>
       </div>
-      <div class="stop-modal-warning">
-        <div class="stop-modal-warning-label">Warning</div>
-        <div class="stop-modal-warning-row" id="notes-modal-warning-row">
-          <button type="button" class="stop-modal-warning-pill active" data-level="none">None</button>
-          <button type="button" class="stop-modal-warning-pill" data-level="info">Info</button>
-          <button type="button" class="stop-modal-warning-pill" data-level="caution">Caution</button>
-          <button type="button" class="stop-modal-warning-pill" data-level="danger">Danger</button>
-        </div>
-      </div>
       <div class="stop-modal-notes">
-        <div class="stop-modal-notes-label">Notes for passengers (max 3)</div>
+        <div class="stop-modal-notes-label">Warnings for passengers (max 3)</div>
         <div id="notes-modal-list"></div>
-        <button type="button" id="notes-modal-add" class="notes-add-btn">+ Add note</button>
+        <button type="button" id="notes-modal-add" class="notes-add-btn">+ Add warning</button>
       </div>
       <div class="stop-modal-actions">
         <button class="stop-modal-btn secondary" id="notes-modal-cancel">Cancel</button>
-        <button class="stop-modal-btn primary" id="notes-modal-save">Save</button>
+        <button class="stop-modal-btn primary" id="notes-modal-save">Send to group</button>
       </div>
     </div>
   </div>
@@ -1558,18 +1580,10 @@
           <span class="stop-modal-duration-suffix">minutes</span>
         </div>
       </div>
-      <div class="stop-modal-warning" id="stop-modal-warning-block">
-        <div class="stop-modal-warning-label">Warning</div>
-        <div class="stop-modal-warning-row" id="stop-modal-warning-row">
-          <button type="button" class="stop-modal-warning-pill active" data-level="none">None</button>
-          <button type="button" class="stop-modal-warning-pill" data-level="info">Info</button>
-          <button type="button" class="stop-modal-warning-pill" data-level="caution">Caution</button>
-          <button type="button" class="stop-modal-warning-pill" data-level="danger">Danger</button>
-        </div>
-      </div>
       <div class="stop-modal-notes" id="stop-modal-notes-block">
-        <div class="stop-modal-notes-label">Notes for passengers (optional)</div>
-        <textarea id="stop-modal-notes-input" placeholder="e.g. Mind the geothermal pools — surface temp 80°C"></textarea>
+        <div class="stop-modal-notes-label">Warnings for passengers (max 3, optional)</div>
+        <div id="stop-modal-notes-list"></div>
+        <button type="button" id="stop-modal-notes-add" class="notes-add-btn">+ Add warning</button>
       </div>
       <div class="stop-modal-actions">
         <button class="stop-modal-btn secondary" id="stop-modal-dismiss">Not yet</button>
@@ -1592,7 +1606,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · polish v8: top-right timer + expanding warnings · build 2026-05-16-1700';
+const BUILD_VERSION = '0.5 · polish v9: one-stop + small signal + per-note category · build 2026-05-16-1830';
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -5340,8 +5354,22 @@ async function activateStop(stop, opts) {
     return { error: 'You must be signed in as a guide to activate stops.' };
   }
   const durationMinutes = (opts && opts.durationMinutes) || _selectedDurationMinutes || 30;
-  const notes = (opts && typeof opts.notes === 'string') ? opts.notes : (_notesInputValue || null);
-  const warningLevel = (opts && opts.warningLevel) || _selectedWarningLevel || 'none';
+  // Read the multi-row notes editor: each row → {level, text}. Encode lines
+  // as "[level] text" (or plain text for none), set warning_level to max
+  // severity. opts.notes / opts.warningLevel can still override (used by
+  // legacy/test paths).
+  let notes, warningLevel;
+  if (opts && typeof opts.notes === 'string') {
+    notes = opts.notes;
+    warningLevel = (opts && opts.warningLevel) || 'none';
+  } else {
+    const entries = collectNotesEditorValues('stop-modal-notes-list')
+      .map(e => ({ level: e.level || 'none', text: (e.text || '').trim() }))
+      .filter(e => e.text.length > 0)
+      .slice(0, MAX_NOTES);
+    notes = entries.length ? entries.map(e => encodeNoteLine(e.level, e.text)).join('\n') : null;
+    warningLevel = entries.length ? maxSeverityLevel(entries) : 'none';
+  }
   const { data, error } = await supabaseClient.rpc('activate_stop', {
     p_session_id: SESSION.id,
     p_stop_id: stop.id,
@@ -5359,6 +5387,15 @@ async function activateStop(stop, opts) {
   // recap with the arrival modal on refresh. Mark as locally acked so
   // maybeShowPendingStopAnnouncement() skips it for this device.
   if (SESSION) markStopAcked(SESSION.id, stop.id);
+  // Enforce "only one stop active at a time" — any previously-active stops
+  // get deactivated server-side too. Fire-and-forget; realtime DELETEs will
+  // fan out to all clients. Errors are logged but don't block the activation.
+  const others = Array.from(ACTIVE_STOP_IDS).filter(id => id !== stop.id);
+  for (const otherId of others) {
+    const otherStop = TOUR ? TOUR.stops.find(s => s.id === otherId) : null;
+    if (!otherStop) { ACTIVE_STOP_IDS.delete(otherId); continue; }
+    deactivateStop(otherStop).catch(err => console.warn('[one-active] supersede deactivate failed', err));
+  }
   renderPins();
   renderStopList();
   return { ok: true, row: data };
@@ -5494,18 +5531,13 @@ function setActivateModalInputsVisible(visible) {
   if (nts) nts.style.display = visible ? '' : 'none';
 }
 
-// Reset to defaults (30 min, no warning, empty notes). Called each time the
+// Reset to defaults (30 min, one empty warning row). Called each time the
 // activate modal opens so previous-session input doesn't leak in.
 function resetActivateModalInputs() {
   _selectedDurationMinutes = 30;
-  _notesInputValue = '';
-  _selectedWarningLevel = 'none';
   const input = document.getElementById('stop-modal-duration-input');
   if (input) input.value = '30';
-  const pills = document.querySelectorAll('#stop-modal-warning-row .stop-modal-warning-pill');
-  pills.forEach(p => p.classList.toggle('active', p.dataset.level === 'none'));
-  const ta = document.getElementById('stop-modal-notes-input');
-  if (ta) ta.value = '';
+  renderNotesEditorList('stop-modal-notes-list', [{ level: 'none', text: '' }]);
 }
 
 // One-time wiring for the modal's "Not yet" and "Activate" buttons. Called
@@ -5524,20 +5556,18 @@ function wireStopModalHandlers() {
     const n = parseInt(e.target.value, 10);
     _selectedDurationMinutes = (Number.isFinite(n) && n > 0) ? Math.min(360, n) : 30;
   });
-  // Warning pills: click → set _selectedWarningLevel + toggle .active.
-  document.querySelectorAll('#stop-modal-warning-row .stop-modal-warning-pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      const level = pill.dataset.level || 'none';
-      _selectedWarningLevel = level;
-      document.querySelectorAll('#stop-modal-warning-row .stop-modal-warning-pill').forEach(p => {
-        p.classList.toggle('active', p === pill);
-      });
-    });
-  });
-  // Notes textarea: write-through to _notesInputValue.
-  const notesInput = document.getElementById('stop-modal-notes-input');
-  if (notesInput) notesInput.addEventListener('input', (e) => {
-    _notesInputValue = e.target.value;
+  // "+ Add warning" inside the activate modal — mirrors the edit-notes modal.
+  const addNotesBtn = document.getElementById('stop-modal-notes-add');
+  if (addNotesBtn) addNotesBtn.addEventListener('click', () => {
+    const current = collectNotesEditorValues('stop-modal-notes-list');
+    if (current.length >= MAX_NOTES) return;
+    current.push({ level: 'none', text: '' });
+    renderNotesEditorList('stop-modal-notes-list', current);
+    setTimeout(() => {
+      const inputs = document.querySelectorAll('#stop-modal-notes-list input.notes-input');
+      const last = inputs[inputs.length - 1];
+      if (last) last.focus();
+    }, 0);
   });
   dismissBtn.addEventListener('click', () => dismissActivateStopModal(true));
   activateBtn.addEventListener('click', async () => {
@@ -5611,12 +5641,9 @@ let _arrivalStop = null;
 // Guide-side activation modal scratch state. Reset each time
 // showActivateStopModal opens; harvested by activateStop().
 let _selectedDurationMinutes = 30;
-let _notesInputValue = '';
-let _selectedWarningLevel = 'none';
 
-// Edit-note modal: which stop is being edited + its scratch warning state.
+// Edit-note modal: which stop is being edited.
 let _noteEditStop = null;
-let _editNoteWarningLevel = 'none';
 
 function subscribeStopActivations() {
   if (_stopActivationSubscribed) return;        // idempotent
@@ -5691,6 +5718,17 @@ function onStopActivated(row) {
   // the realtime event came back. Any other client (passenger, second guide
   // device) hits this path with a fresh stop_id.
   if (ACTIVE_STOP_IDS.has(row.stop_id)) return;
+  // Enforce "only one stop active at a time" on the receiver too — a new
+  // activation supersedes any locally-active stops. The matching DELETE
+  // events will arrive shortly; clearing here just avoids a visible
+  // double-active window.
+  for (const otherId of Array.from(ACTIVE_STOP_IDS)) {
+    if (otherId === row.stop_id) continue;
+    ACTIVE_STOP_IDS.delete(otherId);
+    ACTIVATION_META.delete(otherId);
+    _topBannerDismissedTexts.delete(otherId);
+    _alarmFiredFor.delete(otherId);
+  }
   ACTIVE_STOP_IDS.add(row.stop_id);
 
   const stop = TOUR ? TOUR.stops.find(s => s.id === row.stop_id) : null;
@@ -5946,11 +5984,8 @@ function populateArrivalModalContent(stop) {
   setArrivalInfoRow(2, departureAt ? formatTimeLeft(departureAt) : 'to be added', !departureAt);
   // Weather row defaults to "checking…" until refreshArrivalWeather completes.
   setArrivalInfoRow(3, 'checking…', true);
-  // Notes go inside the warning badge (or stand alone in a neutral badge when
-  // there's a note but no warning level). The standalone Notes row was removed
-  // because it was redundant with the badge content.
-  const notes = (meta.notes || '').trim();
-  updateArrivalWarning(meta.warning_level || 'none', notes);
+  // Each note line carries its own level — render one badge per line.
+  updateArrivalWarning(meta.warning_level || 'none', meta.notes || '');
 }
 
 // Render the warning badge in the arrival modal. Hidden when level === 'none';
@@ -5986,38 +6021,48 @@ function svgForLevel(level) {
   return '';
 }
 
-function updateArrivalWarning(level, notes) {
+function updateArrivalWarning(overallLevel, notesText) {
   const banner = document.getElementById('stop-arrival-warning');
-  const prefix = document.getElementById('stop-arrival-warning-prefix');
-  const text = document.getElementById('stop-arrival-warning-text');
-  if (!banner || !prefix || !text) return;
-  const hasNotes = !!(notes && notes.length);
-  const hasLevel = !!(level && level !== 'none');
-  if (!hasLevel && !hasNotes) {
-    // Nothing to show — hide the badge entirely.
+  if (!banner) return;
+  banner.innerHTML = '';
+  let entries = parseNotesText(notesText || '').map(e => ({
+    level: e.level === 'none' ? overallLevel : e.level,
+    text: e.text,
+  }));
+  // Fallback: an overall warning set with no notes → synthesize a single
+  // generic line in that level's badge.
+  if (entries.length === 0 && overallLevel && overallLevel !== 'none') {
+    const fallback = {
+      info:    'Heads up from your guide.',
+      caution: 'Please take care.',
+      danger:  'Take this seriously.',
+    };
+    entries = [{ level: overallLevel, text: fallback[overallLevel] || '' }];
+  }
+  if (entries.length === 0) {
     banner.classList.remove('show');
-    banner.removeAttribute('data-level');
     return;
   }
-  if (!hasLevel && hasNotes) {
-    // Notes only, no warning level → neutral badge: just the note text.
-    banner.setAttribute('data-level', 'note');
-    prefix.innerHTML = '';
-    text.textContent = notes;
-    banner.classList.add('show');
-    return;
-  }
-  // Warning level set (with or without notes).
   const labelByLevel = { info: 'Info', caution: 'Caution', danger: 'Danger' };
-  banner.setAttribute('data-level', level);
-  prefix.innerHTML = svgForLevel(level)
-    + '<span class="stop-arrival-warning-level">' + (labelByLevel[level] || 'Note') + '</span>';
-  const fallback = {
-    info:    'Heads up from your guide.',
-    caution: 'Please take care.',
-    danger:  'Take this seriously.',
-  };
-  text.textContent = hasNotes ? notes : (fallback[level] || '');
+  for (const entry of entries) {
+    const row = document.createElement('div');
+    row.className = 'stop-arrival-warning-row';
+    const dataLevel = (entry.level && entry.level !== 'none') ? entry.level : 'note';
+    row.setAttribute('data-level', dataLevel);
+    if (dataLevel === 'note') {
+      row.textContent = entry.text;
+    } else {
+      const prefix = document.createElement('span');
+      prefix.className = 'stop-arrival-warning-prefix';
+      prefix.innerHTML = svgForLevel(entry.level)
+        + '<span class="stop-arrival-warning-level">' + (labelByLevel[entry.level] || 'Note') + '</span>';
+      row.appendChild(prefix);
+      const textEl = document.createElement('span');
+      textEl.textContent = entry.text;
+      row.appendChild(textEl);
+    }
+    banner.appendChild(row);
+  }
   banner.classList.add('show');
 }
 
@@ -6317,6 +6362,41 @@ function maybeShowPendingStopAnnouncement() {
 // guide edit, saves via update_stop_activation_notes RPC. Realtime UPDATE
 // pushes the change to any open passenger arrival modal.
 const MAX_NOTES = 3;
+const NOTE_LEVELS = ['none', 'info', 'caution', 'danger'];
+const NOTE_SEVERITY = { none: 0, info: 1, caution: 2, danger: 3 };
+
+// Each notes line can carry its own warning level encoded as a "[level] " prefix.
+// "[info] mind the rocks" → {level: 'info', text: 'mind the rocks'}.
+// Lines without a prefix are level "none" — plain notes with no badge.
+function parseNoteLine(line) {
+  if (!line) return { level: 'none', text: '' };
+  const m = /^\[(info|caution|danger)\]\s*(.*)$/.exec(line);
+  if (m) return { level: m[1], text: m[2] };
+  return { level: 'none', text: line };
+}
+function encodeNoteLine(level, text) {
+  const t = (text || '').trim();
+  if (!t) return '';
+  if (level === 'none' || !level) return t;
+  return `[${level}] ${t}`;
+}
+function parseNotesText(notes) {
+  if (!notes) return [];
+  return notes.split(/\r?\n/).map(s => s.trim()).filter(Boolean).map(parseNoteLine);
+}
+function maxSeverityLevel(entries) {
+  let bestLevel = 'none';
+  let bestRank = 0;
+  for (const e of entries) {
+    const r = NOTE_SEVERITY[e.level] || 0;
+    if (r > bestRank) { bestRank = r; bestLevel = e.level; }
+  }
+  return bestLevel;
+}
+function nextNoteLevel(level) {
+  const i = NOTE_LEVELS.indexOf(level || 'none');
+  return NOTE_LEVELS[(i + 1) % NOTE_LEVELS.length];
+}
 
 function showEditNoteModal(stop) {
   if (!stop) return;
@@ -6332,22 +6412,17 @@ function showEditNoteModal(stop) {
   const meta = ACTIVATION_META.get(stop.id) || {};
   title.textContent = stop.name || '';
   errEl.textContent = '';
-  // Parse existing notes from newline-separated string.
-  const existing = (meta.notes || '')
-    .split(/\r?\n/)
-    .map(s => s.trim())
-    .filter(Boolean)
-    .slice(0, MAX_NOTES);
+  // Parse existing notes from newline-separated string with optional level prefix.
+  const existing = parseNotesText(meta.notes || '').slice(0, MAX_NOTES);
   // If no existing notes, start with one empty row so the user has something
-  // to type into immediately.
-  const initial = existing.length ? existing : [''];
-  renderNotesList(initial);
-  _editNoteWarningLevel = meta.warning_level || 'none';
-  document.querySelectorAll('#notes-modal-warning-row .stop-modal-warning-pill').forEach(p => {
-    p.classList.toggle('active', p.dataset.level === _editNoteWarningLevel);
-  });
+  // to type into immediately. Default the row's level to the stop's saved
+  // warning_level so previously-set color carries over to the first add.
+  const initial = existing.length
+    ? existing
+    : [{ level: meta.warning_level || 'none', text: '' }];
+  renderNotesEditorList('notes-modal-list', initial);
   saveBtn.disabled = false;
-  saveBtn.textContent = 'Save';
+  saveBtn.textContent = 'Send to group';
   backdrop.classList.add('show');
   setTimeout(() => {
     const first = list.querySelector('input.notes-input');
@@ -6355,46 +6430,79 @@ function showEditNoteModal(stop) {
   }, 200);
 }
 
-// Render the dynamic list of note inputs. Each entry gets an input + × remove.
-// "+ Add note" button is enabled while count < MAX_NOTES.
-function renderNotesList(values) {
-  const list = document.getElementById('notes-modal-list');
-  const addBtn = document.getElementById('notes-modal-add');
-  if (!list || !addBtn) return;
+// Inline SVG used inside the level cycle button. The "none" state shows a
+// muted dash so the button still has a visible glyph.
+function svgForNoteLevel(level) {
+  if (level === 'info' || level === 'caution' || level === 'danger') {
+    return svgForLevel(level);
+  }
+  return '<span class="notes-level-icon-none" aria-hidden="true"></span>';
+}
+
+// Render a notes editor list (shared between the edit-notes modal and the
+// activate-stop modal). Each row: [level cycle button] [text input] [× remove].
+// Tapping the cycle button advances none → info → caution → danger → none.
+function renderNotesEditorList(listId, entries) {
+  const list = document.getElementById(listId);
+  if (!list) return;
+  const addBtnId = (listId === 'notes-modal-list') ? 'notes-modal-add' : 'stop-modal-notes-add';
+  const addBtn = document.getElementById(addBtnId);
   list.innerHTML = '';
-  values.forEach((val, idx) => {
+  entries.forEach((entry, idx) => {
     const row = document.createElement('div');
     row.className = 'notes-row';
+
+    const lvlBtn = document.createElement('button');
+    lvlBtn.type = 'button';
+    lvlBtn.className = 'notes-level-btn';
+    lvlBtn.setAttribute('data-level', entry.level || 'none');
+    lvlBtn.setAttribute('aria-label', 'Cycle warning category');
+    lvlBtn.title = `Category: ${entry.level || 'none'} (tap to cycle)`;
+    lvlBtn.innerHTML = svgForNoteLevel(entry.level || 'none');
+    lvlBtn.addEventListener('click', () => {
+      const current = collectNotesEditorValues(listId);
+      current[idx].level = nextNoteLevel(current[idx].level);
+      renderNotesEditorList(listId, current);
+    });
+    row.appendChild(lvlBtn);
+
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'notes-input';
     input.placeholder = idx === 0
       ? 'e.g. Mind the geothermal pools — surface temp 80°C'
-      : 'Another note (optional)';
-    input.value = val;
+      : 'Another warning (optional)';
+    input.value = entry.text || '';
     input.maxLength = 200;
     row.appendChild(input);
+
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'notes-row-remove';
     remove.textContent = '×';
-    remove.title = 'Remove this note';
+    remove.title = 'Remove this warning';
     remove.addEventListener('click', () => {
-      // Capture current values and drop the index that was clicked.
-      const current = collectNotesListValues();
+      const current = collectNotesEditorValues(listId);
       current.splice(idx, 1);
-      if (current.length === 0) current.push('');   // always keep one input visible
-      renderNotesList(current);
+      if (current.length === 0) current.push({ level: 'none', text: '' });
+      renderNotesEditorList(listId, current);
     });
     row.appendChild(remove);
     list.appendChild(row);
   });
-  addBtn.disabled = values.length >= MAX_NOTES;
+  if (addBtn) addBtn.disabled = entries.length >= MAX_NOTES;
 }
 
-function collectNotesListValues() {
-  const inputs = document.querySelectorAll('#notes-modal-list input.notes-input');
-  return Array.from(inputs).map(i => i.value);
+function collectNotesEditorValues(listId) {
+  const rows = document.querySelectorAll('#' + listId + ' .notes-row');
+  return Array.from(rows).map(r => {
+    const lvlBtn = r.querySelector('.notes-level-btn');
+    const input = r.querySelector('input.notes-input');
+    return {
+      level: (lvlBtn && lvlBtn.getAttribute('data-level')) || 'none',
+      text: input ? input.value : '',
+    };
+  });
 }
 
 function dismissEditNoteModal() {
@@ -6414,16 +6522,19 @@ async function saveEditedNote() {
     errEl.textContent = 'You must be signed in as a guide.';
     return;
   }
-  // Assemble the multi-note list into a newline-separated string. Empty
-  // trims become NULL so the badge knows there are no notes.
-  const lines = collectNotesListValues()
-    .map(s => (s || '').trim())
-    .filter(Boolean)
+  // Collect per-row {level, text}, drop empty text, encode each line as
+  // "[level] text" (or plain text for level=none). The DB column
+  // `warning_level` is set to the max severity across the rows so the top
+  // banner / arrival badge keep their overall color, while each row in the
+  // banner picks its own per-line level on render.
+  const entries = collectNotesEditorValues('notes-modal-list')
+    .map(e => ({ level: e.level || 'none', text: (e.text || '').trim() }))
+    .filter(e => e.text.length > 0)
     .slice(0, MAX_NOTES);
-  const newNotes = lines.length ? lines.join('\n') : null;
-  const newWarning = _editNoteWarningLevel || 'none';
+  const newNotes = entries.length ? entries.map(e => encodeNoteLine(e.level, e.text)).join('\n') : null;
+  const newWarning = entries.length ? maxSeverityLevel(entries) : 'none';
   saveBtn.disabled = true;
-  saveBtn.textContent = 'Saving…';
+  saveBtn.textContent = 'Sending…';
   errEl.textContent = '';
   const { error } = await supabaseClient.rpc('update_stop_activation_notes', {
     p_session_id: SESSION.id,
@@ -6434,7 +6545,7 @@ async function saveEditedNote() {
   });
   if (error) {
     console.warn('[notes] update failed', error);
-    errEl.textContent = error.message || 'Could not save note.';
+    errEl.textContent = error.message || 'Could not send.';
     saveBtn.disabled = false;
     saveBtn.textContent = 'Try again';
     return;
@@ -6462,25 +6573,16 @@ function wireNotesModalHandlers() {
   cancelBtn.addEventListener('click', () => dismissEditNoteModal());
   saveBtn.addEventListener('click', () => saveEditedNote());
   addBtn.addEventListener('click', () => {
-    const current = collectNotesListValues();
+    const current = collectNotesEditorValues('notes-modal-list');
     if (current.length >= MAX_NOTES) return;
-    current.push('');
-    renderNotesList(current);
+    current.push({ level: 'none', text: '' });
+    renderNotesEditorList('notes-modal-list', current);
     // Focus the newly added empty input.
     setTimeout(() => {
       const inputs = document.querySelectorAll('#notes-modal-list input.notes-input');
       const last = inputs[inputs.length - 1];
       if (last) last.focus();
     }, 0);
-  });
-  document.querySelectorAll('#notes-modal-warning-row .stop-modal-warning-pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      const level = pill.dataset.level || 'none';
-      _editNoteWarningLevel = level;
-      document.querySelectorAll('#notes-modal-warning-row .stop-modal-warning-pill').forEach(p => {
-        p.classList.toggle('active', p === pill);
-      });
-    });
   });
 }
 
@@ -6520,40 +6622,44 @@ function refreshTopWarningBanner(stop) {
   const banner = document.getElementById('top-warning');
   if (!banner || !stop) return;
   const meta = ACTIVATION_META.get(stop.id) || {};
-  const level = meta.warning_level || 'none';
-  const notes = (meta.notes || '').trim();
-  const lines = notes ? notes.split(/\r?\n/).map(s => s.trim()).filter(Boolean) : [];
-  // When level is set but no notes, synthesize a single generic line so the
-  // banner still surfaces the warning.
-  if (level !== 'none' && lines.length === 0) {
+  const overallLevel = meta.warning_level || 'none';
+  // Parse each line into its own {level, text}. Lines without a "[level] "
+  // prefix fall back to the stop's overall warning_level so legacy/single-
+  // level data still surfaces with a color.
+  let entries = parseNotesText(meta.notes || '').map(e => ({
+    level: e.level === 'none' ? overallLevel : e.level,
+    text: e.text,
+  }));
+  // Fallback: an overall warning set but no notes → synthesize one line.
+  if (entries.length === 0 && overallLevel !== 'none') {
     const fallback = {
       info: 'Heads up from your guide.',
       caution: 'Please take care.',
       danger: 'Take this seriously.',
     };
-    if (fallback[level]) lines.push(fallback[level]);
+    entries = [{ level: overallLevel, text: fallback[overallLevel] || '' }];
   }
   const dismissed = getDismissedSet(stop.id);
-  const visible = lines.filter(line => !dismissed.has(line));
+  const visible = entries.filter(e => !dismissed.has(e.text));
   if (visible.length === 0) {
     banner.classList.remove('show');
     banner.removeAttribute('data-level');
     banner.innerHTML = '';
     return;
   }
-  banner.setAttribute('data-level', level === 'none' ? 'note' : level);
+  banner.setAttribute('data-level', overallLevel === 'none' ? 'note' : overallLevel);
   banner.innerHTML = '';
-  for (const line of visible) {
+  for (const entry of visible) {
     const row = document.createElement('div');
     row.className = 'top-warning-row';
-    if (level !== 'none') row.setAttribute('data-level', level);
+    if (entry.level !== 'none') row.setAttribute('data-level', entry.level);
     const iconWrap = document.createElement('span');
     iconWrap.className = 'top-warning-icon';
-    iconWrap.innerHTML = (level !== 'none') ? svgForLevel(level) : '';
+    iconWrap.innerHTML = (entry.level !== 'none') ? svgForLevel(entry.level) : '';
     row.appendChild(iconWrap);
     const text = document.createElement('span');
     text.className = 'top-warning-text';
-    text.textContent = line;
+    text.textContent = entry.text;
     row.appendChild(text);
     const close = document.createElement('button');
     close.className = 'top-warning-close';
@@ -6561,7 +6667,7 @@ function refreshTopWarningBanner(stop) {
     close.setAttribute('aria-label', 'Dismiss this warning');
     close.addEventListener('click', (e) => {
       e.stopPropagation();   // don't trigger the row's expand-toggle
-      dismissed.add(line);
+      dismissed.add(entry.text);
       refreshTopWarningBanner(stop);
     });
     row.appendChild(close);
