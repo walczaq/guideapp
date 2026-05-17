@@ -2,3 +2,18 @@
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
+
+# Service Worker MUST NOT be cached. A bad deploy with a cached SW can pin
+# passengers to an old build effectively forever (Service Workers update
+# only when the byte stream of /sw.js changes AND the browser fetches the
+# new copy). no-cache + must-revalidate forces revalidation on every page
+# open. Service-Worker-Allowed: / is belt-and-suspenders against future
+# scope narrowing (we register at /sw.js with scope /).
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Service-Worker-Allowed: /
+
+# Manifest changes infrequently but should not stick around forever. Short
+# cache + revalidate.
+/manifest.json
+  Cache-Control: public, max-age=300, must-revalidate

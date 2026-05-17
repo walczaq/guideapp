@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1a1d1a">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <title>Fieldnote v0.5</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1528,6 +1532,16 @@
           <div class="menu-label" id="menu-edit-name-label">Your name</div>
           <span class="menu-chevron">›</span>
         </button>
+        <button class="menu-item" data-action="enable-notifications" id="menu-enable-notifications" style="display:none;">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+            </svg>
+          </div>
+          <div class="menu-label" id="menu-enable-notifications-label">Enable notifications</div>
+          <span class="menu-chevron">›</span>
+        </button>
         <button class="menu-item" data-action="reset">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1745,7 +1759,20 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · polish v11: guide name + stop + warnings moved into burger menu · build 2026-05-16-2100';
+const BUILD_VERSION = '0.5 · chunk D: web push (service worker + edge fn) · build 2026-05-17-0000';
+
+// ╭──────────────────────────────────────────────────────╮
+// │  CHUNK D — WEB PUSH (passenger notifications)        │
+// │                                                       │
+// │  VAPID public key is paired with the private key      │
+// │  set in the send_stop_push Edge Function's env vars.  │
+// │  Rotating one without the other breaks every active   │
+// │  subscription, so don't touch this without a plan.    │
+// ╰──────────────────────────────────────────────────────╯
+const VAPID_PUBLIC_KEY = 'BD5qV65hYvECQHVrudgws_xdYzdnU2q2WCzbBKTuNcX5zM2JkWtuilao7bSOAWLXp-bcVtWX9JpX-8iMZf_yZss';
+const PUSH_PROMPT_DISMISSED_KEY = 'fn_push_prompt_dismissed_v1';   // per-browser, all-sessions
+let _swRegistration = null;
+let _pushPromptShownThisLoad = false;
 
 // ── 0. CONFIG ──
 // Public client-side credentials. Both are designed to live in client code.
@@ -2611,6 +2638,12 @@ async function loadSessionAndTour(sessionId) {
   // HUD timer card click handler (guide-only effect — wires for both roles
   // since the element exists everywhere; renderHudTimer toggles .clickable).
   wireHudTimerHandlers();
+  // Chunk D: register the SW + silently refresh the push subscription if
+  // permission was already granted on a prior visit. Passenger-only — guides
+  // don't need push (they're the source of activations).
+  if (ROLE === 'passenger') {
+    initPushSubscription().catch(err => console.warn('[push] init failed', err));
+  }
 
   // Chunk C: subscribe to live stop_activation INSERTs for this session.
   // Both guide and passenger views subscribe — guide for multi-device
@@ -5223,6 +5256,8 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   // Populate guide name, active stop, and current warnings at the top of
   // the menu from whatever state we have right now.
   renderMenuSessionInfo();
+  // Reflect current push permission in the "Enable notifications" item.
+  refreshNotificationsMenuItem();
   openScreen('screen-menu');
 });
 
@@ -5243,6 +5278,14 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
       // Close the menu, then show the edit form.
       while (screenStack.length) closeScreen();
       showEditNameForm();
+    } else if (action === 'enable-notifications') {
+      // Wire the burger-menu shortcut to the same subscribe path used by
+      // the post-activation auto-prompt.
+      const result = await subscribePushAndSave();
+      if (result && result.error) {
+        console.warn('[push] enable from menu failed:', result.error);
+      }
+      refreshNotificationsMenuItem();
     }
   });
 });
@@ -6483,6 +6526,164 @@ function renderMenuWarnings() {
   el.classList.add('show');
 }
 
+// ╭──────────────────────────────────────────────────────╮
+// │  Chunk D — Push subscription (client side)            │
+// ╰──────────────────────────────────────────────────────╯
+//
+// Permission UX (per spec recommendation): ask AFTER the first foreground
+// activation, when the passenger has just witnessed what notifications
+// would deliver. Prior to that, no auto-prompt. The burger menu's
+// "Enable notifications" item lets them turn it on manually anytime.
+
+function pushSupported() {
+  return typeof navigator !== 'undefined'
+    && 'serviceWorker' in navigator
+    && 'PushManager' in window
+    && 'Notification' in window;
+}
+
+// VAPID public key arrives as a URL-safe base64 string; PushManager wants a
+// Uint8Array of the raw bytes.
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; ++i) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+// Register the SW, then re-subscribe silently if permission was already
+// granted in a previous visit. Idempotent and safe to call on every boot.
+async function initPushSubscription() {
+  if (!pushSupported()) return;
+  try {
+    _swRegistration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+  } catch (err) {
+    console.warn('[push] SW registration failed', err);
+    return;
+  }
+  // If the SW posts pushsubscriptionchange (browser invalidated the
+  // existing subscription), re-run the subscribe path silently.
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'pushsubscriptionchange') {
+      subscribePushAndSave().catch(err => console.warn('[push] resubscribe failed', err));
+    }
+  });
+  // Already-granted: pre-warm the subscription so the user doesn't miss
+  // pushes if their old endpoint expired between visits.
+  if (Notification.permission === 'granted' && SESSION) {
+    try { await subscribePushAndSave(); }
+    catch (err) { console.warn('[push] silent re-subscribe failed', err); }
+  }
+  refreshNotificationsMenuItem();
+}
+
+// Asks the OS for permission (if needed), subscribes via pushManager,
+// posts to the save_push_subscription RPC. Idempotent — re-running just
+// upserts the same row.
+async function subscribePushAndSave() {
+  if (!pushSupported()) return { error: 'Notifications not supported on this device.' };
+  if (!_swRegistration) {
+    _swRegistration = await navigator.serviceWorker.ready;
+  }
+  if (!SESSION) return { error: 'No session.' };
+  if (Notification.permission === 'default') {
+    const result = await Notification.requestPermission();
+    if (result !== 'granted') {
+      refreshNotificationsMenuItem();
+      return { error: result === 'denied' ? 'Permission denied.' : 'Permission dismissed.' };
+    }
+  }
+  if (Notification.permission !== 'granted') {
+    refreshNotificationsMenuItem();
+    return { error: 'Permission not granted.' };
+  }
+  let sub = await _swRegistration.pushManager.getSubscription();
+  if (!sub) {
+    sub = await _swRegistration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+  }
+  const json = sub.toJSON();
+  const endpoint = json.endpoint || sub.endpoint;
+  const p256dh = json.keys && json.keys.p256dh;
+  const auth = json.keys && json.keys.auth;
+  if (!endpoint || !p256dh || !auth) {
+    return { error: 'Subscription missing fields.' };
+  }
+  const { error } = await supabaseClient.rpc('save_push_subscription', {
+    p_session_id: SESSION.id,
+    p_endpoint: endpoint,
+    p_p256dh: p256dh,
+    p_auth: auth,
+    p_passenger_id: (typeof PASSENGER_ID !== 'undefined' ? PASSENGER_ID : null),
+    p_user_agent: (navigator.userAgent || '').slice(0, 500),
+  });
+  if (error) {
+    console.warn('[push] save_push_subscription failed', error);
+    return { error: error.message || 'Could not save subscription.' };
+  }
+  refreshNotificationsMenuItem();
+  return { ok: true };
+}
+
+// Updates the burger-menu item's label + visibility to match the current
+// permission state. Hidden for guides (push targets passengers); for
+// passengers, the label reflects the next action.
+function refreshNotificationsMenuItem() {
+  const item = document.getElementById('menu-enable-notifications');
+  const label = document.getElementById('menu-enable-notifications-label');
+  if (!item || !label) return;
+  if (ROLE !== 'passenger' || !SESSION || !pushSupported()) {
+    item.style.display = 'none';
+    return;
+  }
+  const perm = Notification.permission;
+  if (perm === 'granted') {
+    item.style.display = '';
+    label.textContent = 'Notifications · on';
+    item.disabled = true;
+    item.style.opacity = '0.6';
+  } else if (perm === 'denied') {
+    item.style.display = '';
+    label.textContent = 'Notifications · blocked in browser';
+    item.disabled = true;
+    item.style.opacity = '0.6';
+  } else {
+    item.style.display = '';
+    label.textContent = 'Enable notifications';
+    item.disabled = false;
+    item.style.opacity = '';
+  }
+}
+
+// One-shot prompt run on first foreground activation. Bails out if push
+// isn't supported, the passenger already decided (granted/denied), or
+// we've already asked once on this browser.
+async function maybePromptForPushAfterActivation() {
+  if (_pushPromptShownThisLoad) return;
+  if (ROLE !== 'passenger') return;
+  if (!pushSupported()) return;
+  if (Notification.permission !== 'default') return;
+  try {
+    if (localStorage.getItem(PUSH_PROMPT_DISMISSED_KEY)) return;
+  } catch (_e) { /* private mode etc. */ }
+  _pushPromptShownThisLoad = true;
+  // Wait a moment so the arrival modal's "Got it" tap has settled before
+  // the OS permission dialog appears on top of it.
+  setTimeout(() => {
+    subscribePushAndSave().then(result => {
+      if (result && result.error) {
+        // Remember the user said no so we don't pester them next visit.
+        try { localStorage.setItem(PUSH_PROMPT_DISMISSED_KEY, '1'); }
+        catch (_e) { /* ignore */ }
+      }
+    });
+  }, 400);
+}
+
 let _hudTimerWired = false;
 function wireHudTimerHandlers() {
   if (_hudTimerWired) return;
@@ -6923,6 +7124,10 @@ function wireStopArrivalModal() {
     // After the full modal closes, surface remaining warnings as the slim
     // top banner so the passenger keeps the information at hand.
     if (stop) refreshTopWarningBanner(stop);
+    // First foreground activation is the right moment to ask about push
+    // notifications — the passenger has just seen what they'd be missing
+    // if the app were closed. No-op after the first ask per browser.
+    maybePromptForPushAfterActivation();
   });
 }
 
