@@ -157,16 +157,21 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Build the notification.
+  // Title: severity glyph + level + stop name. Body: what the guide did
+  // and the actual note text, ending with the tap CTA.
   const titlePrefix = newLevel === 'danger' ? '🚨 Danger' : '⚠ Caution';
   const title = `${titlePrefix} at ${stopName}`;
-  const bodyLine = firstNotesLine(newRow.notes)
-    || (newLevel === 'danger' ? 'Take this seriously — tap for details.' : 'Heads up from your guide.');
+  const noteText = firstNotesLine(newRow.notes);
+  const levelWord = newLevel === 'danger' ? 'danger' : 'caution';
+  const body = noteText
+    ? `Your guide sent a ${levelWord} note: "${noteText}". Tap to open the map.`
+    : `Your guide flagged a ${levelWord} at ${stopName}. Tap to open the map.`;
   // Deep-link the tap back to the passenger's active session path. Worker
   // serves /v0.5 (no .html); boot reads ?session= and rejoins.
   const deepLinkUrl = `/v0.5?session=${encodeURIComponent(sessionId)}`;
   const payload = JSON.stringify({
     title,
-    body: bodyLine,
+    body,
     tag: `fieldnote-warning-${stopId}`,
     url: deepLinkUrl,
     stop_id: stopId,

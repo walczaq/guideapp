@@ -107,16 +107,22 @@ Deno.serve(async (req: Request) => {
     return jsonResp(200, { ok: true, sent: 0, note: 'no subscriptions' });
   }
 
+  // Title: action + name. Body: what happened, ending with the tap CTA.
+  // We keep the stop ordinal in the title only when present so the user
+  // sees both the place and the position in the tour at a glance.
   const title = stopOrdinal != null
     ? `Stop ${String(stopOrdinal).padStart(2, '0')} · ${stopName}`
-    : `${stopName} is now active`;
+    : stopName;
+  const body = stopOrdinal != null
+    ? `Your guide just started Stop ${String(stopOrdinal).padStart(2, '0')} — ${stopName}. Tap to open the map.`
+    : `Your guide just started a new stop: ${stopName}. Tap to open the map.`;
   // Deep-link the notification tap back to the passenger's active session
   // path. The Worker serves /v0.5 (no .html suffix); the boot path reads
   // ?session= from the query string and rejoins the session.
   const deepLinkUrl = `/v0.5?session=${encodeURIComponent(sessionId)}`;
   const payload = JSON.stringify({
     title,
-    body: 'Tap to see the new pins.',
+    body,
     tag: `fieldnote-stop-${stopId}`,
     url: deepLinkUrl,
     stop_id: stopId,
