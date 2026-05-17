@@ -495,6 +495,52 @@
     margin-bottom: 4px;
   }
 
+  /* Push permission prompt — sits at the same z-layer as the GPS banner
+     but a bit lower so they don't collide when both are visible. Slim,
+     paper-toned card with two action buttons. Passenger-only, hidden by
+     default; renderNotifPrompt() flips .show based on permission state. */
+  .notif-prompt {
+    position: absolute; left: 16px; right: 16px;
+    top: calc(env(safe-area-inset-top, 0) + 76px);
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    color: var(--ink);
+    padding: 12px 14px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.18), 0 0 0 2px var(--paper-2);
+    font-family: 'Fraunces', serif;
+    font-size: 13px; line-height: 1.35;
+    z-index: 7;
+    display: none;
+    pointer-events: auto;
+  }
+  .notif-prompt.show { display: block; }
+  /* When the GPS banner is also showing, push the notif prompt below it
+     so both are visible. JS toggles .below-gps on this element. */
+  .notif-prompt.below-gps {
+    top: calc(env(safe-area-inset-top, 0) + 76px + 76px);
+  }
+  .notif-prompt-text {
+    margin-bottom: 10px;
+  }
+  .notif-prompt-row {
+    display: flex; gap: 8px; justify-content: flex-end;
+  }
+  .notif-prompt-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.10em; text-transform: uppercase;
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--ink);
+    background: var(--paper); color: var(--ink);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .notif-prompt-btn:active { transform: scale(0.96); }
+  .notif-prompt-btn.primary {
+    background: var(--ink); color: var(--paper);
+  }
+
   /* Broadcasting banner — slim notification at top of guide's view when
      they're sharing their location with passengers (phone or bus_pin mode).
      Hidden by default; updateBroadcastBanner() flips display + text. */
@@ -1436,6 +1482,18 @@
         <span id="gps-banner-msg">Checking…</span>
       </div>
 
+      <!-- Push permission prompt — passenger-only, shown when
+           Notification.permission === 'default' and the user hasn't
+           dismissed it. Tapping Enable triggers the OS prompt + subscribe;
+           Not now stores a localStorage flag and hides the banner. -->
+      <div class="notif-prompt" id="notif-prompt">
+        <div class="notif-prompt-text">Get notified when your guide activates a new stop or sends a warning, even with the app closed.</div>
+        <div class="notif-prompt-row">
+          <button type="button" class="notif-prompt-btn" id="notif-prompt-dismiss">Not now</button>
+          <button type="button" class="notif-prompt-btn primary" id="notif-prompt-enable">Enable</button>
+        </div>
+      </div>
+
       <!-- (The old slide-down stop-banner was removed in favor of the
            centered persistent stop-arrival-modal below.) -->
 
@@ -1759,7 +1817,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk D: web push (service worker + edge fn) · build 2026-05-17-0000';
+const BUILD_VERSION = '0.5 · chunk D: web push + persistent enable banner · build 2026-05-17-1900';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -5280,12 +5338,14 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
       showEditNameForm();
     } else if (action === 'enable-notifications') {
       // Wire the burger-menu shortcut to the same subscribe path used by
-      // the post-activation auto-prompt.
+      // the persistent banner. After grant/deny, refresh both the menu
+      // label and the banner so they reflect the new permission state.
       const result = await subscribePushAndSave();
       if (result && result.error) {
         console.warn('[push] enable from menu failed:', result.error);
       }
       refreshNotificationsMenuItem();
+      renderNotifPrompt();
     }
   });
 });
@@ -6577,6 +6637,70 @@ async function initPushSubscription() {
     catch (err) { console.warn('[push] silent re-subscribe failed', err); }
   }
   refreshNotificationsMenuItem();
+  // Persistent on-map banner — shown until the user grants, denies, or
+  // explicitly dismisses. Wired once; re-renders on every state change.
+  wireNotifPromptHandlers();
+  renderNotifPrompt();
+}
+
+// Persistent banner that asks the passenger to enable notifications. Shown
+// when permission is 'default' AND the user hasn't dismissed it AND we're
+// in a passenger session. After grant/deny/dismiss it hides itself.
+function renderNotifPrompt() {
+  const el = document.getElementById('notif-prompt');
+  if (!el) return;
+  // Guides don't receive push; never show them this banner.
+  if (ROLE !== 'passenger' || !SESSION || !pushSupported()) {
+    el.classList.remove('show');
+    return;
+  }
+  if (Notification.permission !== 'default') {
+    el.classList.remove('show');
+    return;
+  }
+  try {
+    if (localStorage.getItem(PUSH_PROMPT_DISMISSED_KEY)) {
+      el.classList.remove('show');
+      return;
+    }
+  } catch (_e) { /* private mode etc. — fall through to showing */ }
+  // Stack below the GPS banner when both are visible.
+  const gps = document.getElementById('gps-banner');
+  const gpsVisible = gps && gps.classList.contains('show');
+  el.classList.toggle('below-gps', !!gpsVisible);
+  el.classList.add('show');
+}
+
+let _notifPromptWired = false;
+function wireNotifPromptHandlers() {
+  if (_notifPromptWired) return;
+  const enable = document.getElementById('notif-prompt-enable');
+  const dismiss = document.getElementById('notif-prompt-dismiss');
+  if (!enable || !dismiss) return;
+  _notifPromptWired = true;
+  enable.addEventListener('click', async () => {
+    enable.disabled = true;
+    dismiss.disabled = true;
+    const result = await subscribePushAndSave();
+    enable.disabled = false;
+    dismiss.disabled = false;
+    if (result && result.error) {
+      // Permission denied or other failure — hide the banner. The burger
+      // menu still has an Enable item, so the user can retry from there.
+      try { localStorage.setItem(PUSH_PROMPT_DISMISSED_KEY, '1'); }
+      catch (_e) { /* ignore */ }
+    }
+    renderNotifPrompt();
+    refreshNotificationsMenuItem();
+  });
+  dismiss.addEventListener('click', () => {
+    // User said "Not now" — set the dismissed flag so the auto-prompt
+    // path also stops firing. The burger menu remains as the manual
+    // re-enable path.
+    try { localStorage.setItem(PUSH_PROMPT_DISMISSED_KEY, '1'); }
+    catch (_e) { /* ignore */ }
+    renderNotifPrompt();
+  });
 }
 
 // Asks the OS for permission (if needed), subscribes via pushManager,
@@ -6659,29 +6783,13 @@ function refreshNotificationsMenuItem() {
   }
 }
 
-// One-shot prompt run on first foreground activation. Bails out if push
-// isn't supported, the passenger already decided (granted/denied), or
-// we've already asked once on this browser.
-async function maybePromptForPushAfterActivation() {
-  if (_pushPromptShownThisLoad) return;
-  if (ROLE !== 'passenger') return;
-  if (!pushSupported()) return;
-  if (Notification.permission !== 'default') return;
-  try {
-    if (localStorage.getItem(PUSH_PROMPT_DISMISSED_KEY)) return;
-  } catch (_e) { /* private mode etc. */ }
-  _pushPromptShownThisLoad = true;
-  // Wait a moment so the arrival modal's "Got it" tap has settled before
-  // the OS permission dialog appears on top of it.
-  setTimeout(() => {
-    subscribePushAndSave().then(result => {
-      if (result && result.error) {
-        // Remember the user said no so we don't pester them next visit.
-        try { localStorage.setItem(PUSH_PROMPT_DISMISSED_KEY, '1'); }
-        catch (_e) { /* ignore */ }
-      }
-    });
-  }, 400);
+// Hook called from the arrival modal's "Got it" handler. Retained as a
+// no-op for now — the persistent on-map banner (renderNotifPrompt) is
+// the discoverable enable path. Kept rather than removed so the call
+// site doesn't break and so we have an obvious place to add per-
+// activation behavior later (e.g. nudging a previously-dismissed banner).
+function maybePromptForPushAfterActivation() {
+  // Intentionally empty — see renderNotifPrompt() for the prompt UX.
 }
 
 let _hudTimerWired = false;
