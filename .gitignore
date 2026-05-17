@@ -1,2 +1,11 @@
 node_modules/
 .claude/
+
+# VAPID rotation scratch files — generated during chunk D key rotation,
+# always deleted by the rotation script. Listed here as belt-and-suspenders
+# so a botched script run can't accidentally commit secrets.
+.vapid_*.tmp
+.vapid_*.env
+
+# Supabase CLI internal state created by `supabase link` and friends.
+supabase/.temp/
