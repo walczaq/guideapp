@@ -55,7 +55,10 @@ self.addEventListener('push', (event) => {
     tag: data.tag || (data.stop_id != null ? `fieldnote-stop-${data.stop_id}` : NOTIFICATION_DEFAULTS.tag),
     renotify: true,
     data: {
-      url: data.url || '/',
+      // Fall back to /v0.5 (no session) rather than /, which 404s on this
+      // Worker — happens only if the payload lacks `url`; the Edge Function
+      // always provides a session-aware deep link.
+      url: data.url || '/v0.5',
       stop_id: data.stop_id ?? null,
       session_id: data.session_id ?? null,
     },
@@ -65,24 +68,29 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+  // Fall back to /v0.5 (no session) rather than /, which 404s on this
+  // Worker. Only used when no existing tab is open and we have no payload
+  // URL — the Edge Function always sends a session-aware deep link.
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/v0.5';
   event.waitUntil((async () => {
     const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    // Prefer focusing an existing tab on the same origin — keeps the user's
-    // map state intact instead of starting fresh.
+    // Prefer focusing an existing same-origin tab — preserves the user's
+    // map state. Deliberately do NOT call client.navigate() even if the URL
+    // differs; reloading the tab loses scroll position, GPS-follow mode,
+    // any in-flight modals, and (on Android Chrome) sometimes drops the
+    // SW-controlled state. The push fired because something changed in
+    // the open session, and the app's realtime layer already surfaced
+    // that change in the foregrounded view.
     for (const client of allClients) {
       try {
         const sameOrigin = new URL(client.url).origin === self.location.origin;
         if (sameOrigin && 'focus' in client) {
           await client.focus();
-          // Best-effort: if the existing tab is on a different path, navigate it.
-          if ('navigate' in client && client.url !== self.location.origin + targetUrl) {
-            try { await client.navigate(targetUrl); } catch (_e) { /* navigate not always allowed */ }
-          }
           return;
         }
       } catch (_err) { /* malformed URL — ignore */ }
     }
+    // No existing tab — open the deep-linked URL fresh.
     if (self.clients.openWindow) {
       await self.clients.openWindow(targetUrl);
     }

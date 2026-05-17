@@ -110,11 +110,15 @@ Deno.serve(async (req: Request) => {
   const title = stopOrdinal != null
     ? `Stop ${String(stopOrdinal).padStart(2, '0')} · ${stopName}`
     : `${stopName} is now active`;
+  // Deep-link the notification tap back to the passenger's active session
+  // path. The Worker serves /v0.5 (no .html suffix); the boot path reads
+  // ?session= from the query string and rejoins the session.
+  const deepLinkUrl = `/v0.5?session=${encodeURIComponent(sessionId)}`;
   const payload = JSON.stringify({
     title,
     body: 'Tap to see the new pins.',
     tag: `fieldnote-stop-${stopId}`,
-    url: '/',
+    url: deepLinkUrl,
     stop_id: stopId,
     session_id: sessionId,
   });

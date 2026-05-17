@@ -161,11 +161,14 @@ Deno.serve(async (req: Request) => {
   const title = `${titlePrefix} at ${stopName}`;
   const bodyLine = firstNotesLine(newRow.notes)
     || (newLevel === 'danger' ? 'Take this seriously — tap for details.' : 'Heads up from your guide.');
+  // Deep-link the tap back to the passenger's active session path. Worker
+  // serves /v0.5 (no .html); boot reads ?session= and rejoins.
+  const deepLinkUrl = `/v0.5?session=${encodeURIComponent(sessionId)}`;
   const payload = JSON.stringify({
     title,
     body: bodyLine,
     tag: `fieldnote-warning-${stopId}`,
-    url: '/',
+    url: deepLinkUrl,
     stop_id: stopId,
     session_id: sessionId,
     warning_level: newLevel,
