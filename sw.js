@@ -68,10 +68,22 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  // Fall back to /v0.5 (no session) rather than /, which 404s on this
-  // Worker. Only used when no existing tab is open and we have no payload
-  // URL — the Edge Function always sends a session-aware deep link.
-  const targetUrl = (event.notification.data && event.notification.data.url) || '/v0.5';
+  // Build the target URL defensively. Prefer constructing from session_id
+  // (always present in our payloads) over trusting the `url` field, which
+  // an out-of-date Edge Function might still send as bare '/' (the
+  // Worker's root has no asset and 404s). If we can't reconstruct, fall
+  // back to /v0.5 with no session — the app boot loop will then either
+  // resume from last-session memo or show the join screen.
+  const data = event.notification.data || {};
+  let targetUrl = data.url;
+  const isBadUrl = !targetUrl
+    || targetUrl === '/'
+    || (typeof targetUrl === 'string' && !targetUrl.startsWith('/v0.5'));
+  if (isBadUrl) {
+    targetUrl = data.session_id
+      ? `/v0.5?session=${encodeURIComponent(data.session_id)}`
+      : '/v0.5';
+  }
   event.waitUntil((async () => {
     const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     // Prefer focusing an existing same-origin tab — preserves the user's
