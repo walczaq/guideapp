@@ -113,7 +113,11 @@ Deno.serve(async (req: Request) => {
   const title = stopOrdinal != null
     ? `Stop ${String(stopOrdinal).padStart(2, '0')} · ${stopName}`
     : stopName;
-  const body = stopOrdinal != null
+  // Renamed from `body` to avoid shadowing the `let body: any` declared
+  // at the top of the handler for the request payload — same-scope
+  // redeclaration was a TS/Deno compile error and crashed the function
+  // on every invocation, silently breaking push delivery.
+  const notificationBody = stopOrdinal != null
     ? `Your guide just started Stop ${String(stopOrdinal).padStart(2, '0')} — ${stopName}. Tap to open the map.`
     : `Your guide just started a new stop: ${stopName}. Tap to open the map.`;
   // Deep-link the notification tap back to the passenger's active session
@@ -122,7 +126,7 @@ Deno.serve(async (req: Request) => {
   const deepLinkUrl = `/v0.5?session=${encodeURIComponent(sessionId)}`;
   const payload = JSON.stringify({
     title,
-    body,
+    body: notificationBody,
     tag: `fieldnote-stop-${stopId}`,
     url: deepLinkUrl,
     stop_id: stopId,

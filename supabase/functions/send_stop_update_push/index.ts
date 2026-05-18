@@ -163,7 +163,11 @@ Deno.serve(async (req: Request) => {
   const title = `${titlePrefix} at ${stopName}`;
   const noteText = firstNotesLine(newRow.notes);
   const levelWord = newLevel === 'danger' ? 'danger' : 'caution';
-  const body = noteText
+  // Renamed from `body` to avoid shadowing the `let body: any` declared
+  // at the top of the handler for the request payload — same-scope
+  // redeclaration was a TS/Deno compile error and crashed the function
+  // on every invocation, silently breaking push delivery.
+  const notificationBody = noteText
     ? `Your guide sent a ${levelWord} note: "${noteText}". Tap to open the map.`
     : `Your guide flagged a ${levelWord} at ${stopName}. Tap to open the map.`;
   // Deep-link the tap back to the passenger's active session path. Worker
@@ -171,7 +175,7 @@ Deno.serve(async (req: Request) => {
   const deepLinkUrl = `/v0.5?session=${encodeURIComponent(sessionId)}`;
   const payload = JSON.stringify({
     title,
-    body,
+    body: notificationBody,
     tag: `fieldnote-warning-${stopId}`,
     url: deepLinkUrl,
     stop_id: stopId,
