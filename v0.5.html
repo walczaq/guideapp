@@ -114,7 +114,10 @@
   }
   .screen.visible { transform: translateX(0); }
   .screen.home { transform: translateX(0); z-index: 1; transition: none; }
-  .status-bar { height: 50px; flex-shrink: 0; padding-top: env(safe-area-inset-top); }
+  /* Secondary-screen spacer (burger menu, about, share). Same 30px
+     status-bar floor as .map-hud so the back button / title don't
+     clip on browsers that report no safe-area inset. */
+  .status-bar { height: 50px; flex-shrink: 0; padding-top: max(env(safe-area-inset-top, 0px), 30px); }
 
   /* map */
   .map-stage { position: relative; flex: 1; overflow: hidden; }
@@ -142,13 +145,17 @@
   /* HUD */
   .map-hud {
     position: absolute;
-    top: env(safe-area-inset-top, 0);
+    /* max(env(...), 30px) keeps a 30px floor even when the browser
+       refuses to report a safe-area inset. Samsung Internet (and some
+       Chrome configurations on Samsung devices) renders the page behind
+       the system status bar but reports env(safe-area-inset-top) == 0,
+       which without this floor lets the burger / timer get clipped by
+       the status bar. On a phone with a real notch env() returns ~44px
+       and that wins over the 30px floor. */
+    top: max(env(safe-area-inset-top, 0px), 30px);
     left: 0; right: 0;
     display: flex; justify-content: space-between; align-items: flex-start;
-    /* 18px vertical padding gives the burger + signal pill room below
-       the iOS notch / Android status bar — at 12px they were visually
-       glued to the safe-area boundary on big-phone screens. */
-    padding: 18px 16px; pointer-events: none; z-index: 5;
+    padding: 12px 16px; pointer-events: none; z-index: 5;
   }
   .map-hud > * { pointer-events: auto; }
   .icon-btn {
@@ -504,7 +511,7 @@
   /* GPS error banner — when location fails or is denied */
   .gps-banner {
     position: absolute; left: 16px; right: 16px;
-    top: calc(env(safe-area-inset-top, 0) + 88px);
+    top: calc(max(env(safe-area-inset-top, 0px), 30px) + 88px);
     background: var(--mark);
     color: var(--paper);
     padding: 12px 16px;
@@ -536,7 +543,7 @@
      default; renderNotifPrompt() flips .show based on permission state. */
   .notif-prompt {
     position: absolute; left: 16px; right: 16px;
-    top: calc(env(safe-area-inset-top, 0) + 88px);
+    top: calc(max(env(safe-area-inset-top, 0px), 30px) + 88px);
     background: var(--paper);
     border: 1px solid var(--ink);
     color: var(--ink);
@@ -553,7 +560,7 @@
   /* When the GPS banner is also showing, push the notif prompt below it
      so both are visible. JS toggles .below-gps on this element. */
   .notif-prompt.below-gps {
-    top: calc(env(safe-area-inset-top, 0) + 88px + 88px);
+    top: calc(max(env(safe-area-inset-top, 0px), 30px) + 88px + 88px);
   }
   .notif-prompt-text {
     margin-bottom: 10px;
@@ -582,7 +589,7 @@
      by renderInstallPrompt) so the .below-gps modifier is enough. */
   .install-prompt {
     position: absolute; left: 16px; right: 16px;
-    top: calc(env(safe-area-inset-top, 0) + 88px);
+    top: calc(max(env(safe-area-inset-top, 0px), 30px) + 88px);
     background: var(--paper);
     border: 1px solid var(--armed);
     color: var(--ink);
@@ -597,7 +604,7 @@
   }
   .install-prompt.show { display: block; }
   .install-prompt.below-gps {
-    top: calc(env(safe-area-inset-top, 0) + 88px + 88px);
+    top: calc(max(env(safe-area-inset-top, 0px), 30px) + 88px + 88px);
   }
   .install-prompt-text {
     margin-bottom: 10px;
@@ -625,7 +632,7 @@
      Hidden by default; updateBroadcastBanner() flips display + text. */
   .broadcast-banner {
     position: absolute; left: 16px; right: 16px;
-    top: calc(env(safe-area-inset-top, 0) + 88px);
+    top: calc(max(env(safe-area-inset-top, 0px), 30px) + 88px);
     background: #2563eb;       /* beacon blue — same family as guide identity */
     color: var(--paper);
     padding: 10px 14px;
@@ -1964,7 +1971,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk D: HUD breathing room at top + bottom · build 2026-05-27-0200';
+const BUILD_VERSION = '0.5 · chunk D: status-bar clip fix (max-env floor) · build 2026-05-27-0230';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
