@@ -145,7 +145,10 @@
     top: env(safe-area-inset-top, 0);
     left: 0; right: 0;
     display: flex; justify-content: space-between; align-items: flex-start;
-    padding: 12px 16px; pointer-events: none; z-index: 5;
+    /* 18px vertical padding gives the burger + signal pill room below
+       the iOS notch / Android status bar — at 12px they were visually
+       glued to the safe-area boundary on big-phone screens. */
+    padding: 18px 16px; pointer-events: none; z-index: 5;
   }
   .map-hud > * { pointer-events: auto; }
   .icon-btn {
@@ -183,9 +186,10 @@
   .zoom-controls {
     position: absolute; right: 16px;
     /* Lift above the iOS home indicator / Android gesture bar in PWA
-       mode. In a regular browser tab env(safe-area-inset-bottom) is 0
-       so this collapses to the original 30px. */
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 30px);
+       mode. The 40px floor (above the safe-area inset) keeps the bottom
+       zoom button comfortably above the gesture-bar swipe zone — at
+       30px it felt cramped on big-phone screens. */
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 40px);
     display: flex; flex-direction: column; gap: 4px; z-index: 5;
   }
   .zoom-btn {
@@ -500,7 +504,7 @@
   /* GPS error banner — when location fails or is denied */
   .gps-banner {
     position: absolute; left: 16px; right: 16px;
-    top: calc(env(safe-area-inset-top, 0) + 76px);
+    top: calc(env(safe-area-inset-top, 0) + 88px);
     background: var(--mark);
     color: var(--paper);
     padding: 12px 16px;
@@ -532,7 +536,7 @@
      default; renderNotifPrompt() flips .show based on permission state. */
   .notif-prompt {
     position: absolute; left: 16px; right: 16px;
-    top: calc(env(safe-area-inset-top, 0) + 76px);
+    top: calc(env(safe-area-inset-top, 0) + 88px);
     background: var(--paper);
     border: 1px solid var(--ink);
     color: var(--ink);
@@ -549,7 +553,7 @@
   /* When the GPS banner is also showing, push the notif prompt below it
      so both are visible. JS toggles .below-gps on this element. */
   .notif-prompt.below-gps {
-    top: calc(env(safe-area-inset-top, 0) + 76px + 76px);
+    top: calc(env(safe-area-inset-top, 0) + 88px + 88px);
   }
   .notif-prompt-text {
     margin-bottom: 10px;
@@ -578,7 +582,7 @@
      by renderInstallPrompt) so the .below-gps modifier is enough. */
   .install-prompt {
     position: absolute; left: 16px; right: 16px;
-    top: calc(env(safe-area-inset-top, 0) + 76px);
+    top: calc(env(safe-area-inset-top, 0) + 88px);
     background: var(--paper);
     border: 1px solid var(--armed);
     color: var(--ink);
@@ -593,7 +597,7 @@
   }
   .install-prompt.show { display: block; }
   .install-prompt.below-gps {
-    top: calc(env(safe-area-inset-top, 0) + 76px + 76px);
+    top: calc(env(safe-area-inset-top, 0) + 88px + 88px);
   }
   .install-prompt-text {
     margin-bottom: 10px;
@@ -621,7 +625,7 @@
      Hidden by default; updateBroadcastBanner() flips display + text. */
   .broadcast-banner {
     position: absolute; left: 16px; right: 16px;
-    top: calc(env(safe-area-inset-top, 0) + 76px);
+    top: calc(env(safe-area-inset-top, 0) + 88px);
     background: #2563eb;       /* beacon blue — same family as guide identity */
     color: var(--paper);
     padding: 10px 14px;
@@ -1960,7 +1964,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk D: WebAPK manifest hardening · build 2026-05-27-0130';
+const BUILD_VERSION = '0.5 · chunk D: HUD breathing room at top + bottom · build 2026-05-27-0200';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
