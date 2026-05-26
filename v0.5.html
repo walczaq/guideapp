@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#1a1d1a">
+<!-- iOS PWA chrome: capable=yes flips to standalone mode (no Safari URL
+     bar) once the user adds-to-home-screen. status-bar-style controls the
+     iOS clock/battery overlay; "default" gives a light translucent bar
+     that respects our --paper background. mobile-web-app-capable is the
+     legacy Android equivalent. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Fieldnote">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/icon-192.png">
@@ -157,7 +166,11 @@
 
   /* zoom + follow */
   .zoom-controls {
-    position: absolute; right: 16px; bottom: 30px;
+    position: absolute; right: 16px;
+    /* Lift above the iOS home indicator / Android gesture bar in PWA
+       mode. In a regular browser tab env(safe-area-inset-bottom) is 0
+       so this collapses to the original 30px. */
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 30px);
     display: flex; flex-direction: column; gap: 4px; z-index: 5;
   }
   .zoom-btn {
@@ -282,7 +295,10 @@
   .screen-body {
     flex: 1; overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 16px 20px 40px;
+    /* Extra bottom padding picks up the iOS home indicator / Android
+       gesture bar in PWA mode so the last menu item / Install button
+       isn't clipped under the OS chrome. */
+    padding: 16px 20px calc(40px + env(safe-area-inset-bottom, 0px));
   }
 
   /* menu */
@@ -633,6 +649,12 @@
     transition: height 0.25s cubic-bezier(0.3, 0.8, 0.3, 1);
     overflow: hidden;
     touch-action: none;  /* prevent page scroll while dragging the handle */
+    /* Reserve space for the iOS home indicator / Android gesture bar so
+       the sheet's bottom content (action buttons) doesn't tuck under the
+       OS chrome in PWA mode. The handle still reaches the bottom edge
+       visually because it lives ABOVE this padding inside the flex
+       container; the padding only nudges the bottom-most children up. */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   .guide-sheet-handle {
     flex-shrink: 0;
@@ -1923,7 +1945,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk D: green Install website button in burger menu · build 2026-05-26-2359';
+const BUILD_VERSION = '0.5 · chunk D: PWA safe-area fixes · build 2026-05-27-0030';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
