@@ -1877,7 +1877,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk D: web push + PWA install prompt · build 2026-05-26-2300';
+const BUILD_VERSION = '0.5 · chunk D: PWA cold-launch rejoins last session · build 2026-05-26-2330';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -2602,9 +2602,10 @@ async function boot() {
 
   if (sessionId) {
     // Path 1: join an existing session.
-    // If we're a logged-in guide, remember this session so we can resume
-    // it on next bare-URL visit (instead of always landing in "create new").
-    if (GUIDE) rememberLastSession(sessionId);
+    // Remember the session for both guides and passengers — the
+    // installed PWA's start_url is "/v0.5" (no query), so on next launch
+    // we need a way to find the active session, and localStorage is it.
+    rememberLastSession(sessionId);
     await loadSessionAndTour(sessionId);
   } else if (tourSlug) {
     // Path 2: legacy direct-tour mode (v0.2 behavior). Useful for testing
@@ -2622,10 +2623,17 @@ async function boot() {
     }
     showCreateSessionForm();
   } else {
-    // Path 3b: bare URL, not a logged-in guide. This person is most likely
-    // a passenger who needs a session link from their guide. Show a friendly
-    // landing screen with two paths: "I have a code" (guides) or "I'm joining
-    // a tour" (passengers — explains they need a link).
+    // Path 3b: bare URL, not a logged-in guide. The typical visitor here
+    // is a passenger who just tapped the installed PWA icon (start_url is
+    // "/v0.5", no session). If they have a recent session memo, rejoin
+    // it. Otherwise fall through to the landing screen with explainer.
+    const last = getLastSession();
+    if (last) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('session', last);
+      window.location.replace(url.toString());
+      return;
+    }
     showLandingScreen();
   }
 }
@@ -2673,15 +2681,38 @@ function showLandingScreen() {
   });
 }
 
-// Remember the last session a guide opened, so visiting the bare URL on the
-// same device next time resumes that session instead of always starting new.
-// Cleared explicitly via "End session" button (chunk H, deferred).
+// Remember the last session a device joined, so launching the installed
+// PWA (or visiting the bare URL) auto-rejoins instead of dumping the user
+// on the landing screen. The PWA's manifest start_url is "/v0.5" — fixed
+// at install time, can't carry a session — so this localStorage memo IS
+// the way the rejoin works. Now applies to passengers too, not just
+// guides; v0.5 chunk D extension. Cleared on End session.
+//
+// Stored as JSON { id, at } so we can TTL out stale entries — a passenger
+// who finished a tour days ago shouldn't get auto-redirected back into a
+// closed session on next app open. 12h is comfortable for a multi-day
+// festival tour with morning/afternoon sessions, short enough that a
+// hand-me-down phone doesn't drag the previous owner's tour forward.
 const LAST_SESSION_KEY = 'fieldnote_last_session';
+const LAST_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 function rememberLastSession(sessionId) {
-  try { localStorage.setItem(LAST_SESSION_KEY, sessionId); } catch {}
+  try {
+    localStorage.setItem(LAST_SESSION_KEY, JSON.stringify({ id: sessionId, at: Date.now() }));
+  } catch {}
 }
 function getLastSession() {
-  try { return localStorage.getItem(LAST_SESSION_KEY) || null; } catch { return null; }
+  try {
+    const v = localStorage.getItem(LAST_SESSION_KEY);
+    if (!v) return null;
+    // Backward compat: the original format was a bare string. If we see
+    // one of those, honor it once (no TTL info available) and trust the
+    // next rememberLastSession to upgrade the entry to JSON.
+    if (v.charAt(0) !== '{') return v;
+    const obj = JSON.parse(v);
+    if (!obj || !obj.id) return null;
+    if (typeof obj.at === 'number' && (Date.now() - obj.at > LAST_SESSION_TTL_MS)) return null;
+    return obj.id;
+  } catch { return null; }
 }
 function clearLastSession() {
   try { localStorage.removeItem(LAST_SESSION_KEY); } catch {}

@@ -2,7 +2,7 @@
   "name": "Fieldnote",
   "short_name": "Fieldnote",
   "description": "Walking-tour companion — live guide, live pins, live stops.",
-  "start_url": "/",
+  "start_url": "/v0.5",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
