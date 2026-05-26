@@ -1,13 +1,18 @@
 {
+  "id": "/v0.5",
   "name": "Fieldnote",
   "short_name": "Fieldnote",
   "description": "Walking-tour companion — live guide, live pins, live stops.",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "/v0.5",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
   "background_color": "#f4ede0",
   "theme_color": "#1a1d1a",
+  "categories": ["travel", "navigation"],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -16,10 +21,16 @@
       "purpose": "any"
     },
     {
-      "src": "/badge-72.png",
-      "sizes": "72x72",
+      "src": "/icon-512.png",
+      "sizes": "512x512",
       "type": "image/png",
-      "purpose": "monochrome"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
