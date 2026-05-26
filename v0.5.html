@@ -1268,6 +1268,46 @@
   }
   .stop-timer.active .stop-timer-label { color: var(--mark); }
   .stop-timer.active .stop-timer-time  { color: var(--mark); }
+  /* Pulse animation — the card scales + glows in a 1.2s cycle. Triggered
+     by two conditions (see renderHudTimer):
+       1. ≤5 min before the departure threshold (matches the existing
+          countdown 'urgent' state)
+       2. The guide has tapped "Time to head back" at least once for the
+          current stop (detected via the [bus] line in the active row's
+          notes — survives reloads because it's persisted in the DB)
+     Both conditions are designed to draw the guide's eye to a button
+     they should already be thinking about. */
+  @keyframes stop-timer-pulse {
+    0%, 100% {
+      transform: scale(1);
+      box-shadow: 0 2px 10px rgba(184,51,29,0.22);
+    }
+    50% {
+      transform: scale(1.045);
+      box-shadow: 0 6px 22px rgba(184,51,29,0.50);
+    }
+  }
+  .stop-timer.pulsing {
+    animation: stop-timer-pulse 1.2s ease-in-out infinite;
+  }
+
+  /* Bus departure modal input — single-line location field, mirrors the
+     other modal inputs but standalone (not part of the multi-row notes
+     editor). */
+  .bus-location-input {
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    font-family: 'Fraunces', serif;
+    font-size: 15px; line-height: 1.4;
+    color: var(--ink);
+    box-sizing: border-box;
+  }
+  .bus-location-input:focus {
+    outline: none; border-color: var(--ink);
+  }
 
   /* ── Top warning banner ─────────────────────────────────────────────
      Sits INSIDE the .map-hud row as a flex item between burger and signal.
@@ -1924,6 +1964,32 @@
     </div>
   </div>
 
+  <!-- BUS DEPARTURE MODAL — guide taps the HUD timer card to open this,
+       fills in where passengers should walk back to, sends. The location
+       is stored inline in the [bus] notes line so it survives a reload
+       and pre-fills the modal on the next tap for the same stop. -->
+  <div class="stop-modal-backdrop" id="bus-modal-backdrop">
+    <div class="stop-modal">
+      <div class="stop-modal-header">
+        <span class="stop-modal-stamp">Departure</span>
+      </div>
+      <div class="stop-modal-body">
+        <h2>Time to head back</h2>
+        <p>Tell the group where to walk to. The message buzzes every passenger phone.</p>
+        <div class="stop-modal-error" id="bus-modal-error"></div>
+      </div>
+      <div class="stop-modal-notes">
+        <div class="stop-modal-notes-label">Bus location (optional)</div>
+        <input type="text" id="bus-modal-location" class="bus-location-input"
+               placeholder="e.g. Main parking lot" maxlength="120" autocomplete="off" />
+      </div>
+      <div class="stop-modal-actions">
+        <button class="stop-modal-btn secondary" id="bus-modal-cancel">Cancel</button>
+        <button class="stop-modal-btn primary" id="bus-modal-send">Send to group</button>
+      </div>
+    </div>
+  </div>
+
     <!-- STOP ACTIVATION MODAL (chunk B) — shown in guide view when:
        (a) the guide's GPS enters a stop's activation_radius_m and has stayed
            inside for STOP_DWELL_MS, OR
@@ -1983,7 +2049,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk D: timer always up + red on active · build 2026-05-27-0300';
+const BUILD_VERSION = '0.5 · chunk D: bus modal + pulse + label swap · build 2026-05-27-0330';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -6630,9 +6696,38 @@ function tickCountdown() {
 // and renders its HH:MM departure on top with a live m:ss countdown below.
 // Hidden when no active stop has a departure. For guides, the card is
 // clickable — tapping publishes a "bus departure" announcement to passengers.
+// Does the given stop already have a [bus] departure signal in its notes?
+// Used by the timer-card pulse + by the bus modal to pre-fill the input.
+function hasBusSignalFor(stopId) {
+  if (stopId == null) return false;
+  const meta = ACTIVATION_META.get(stopId);
+  if (!meta || !meta.notes) return false;
+  for (const raw of String(meta.notes).split(/\r?\n/)) {
+    if (/^\[bus\]/.test(raw.trim())) return true;
+  }
+  return false;
+}
+
+// Extract the bus location (if any) from the existing [bus] line of the
+// given stop's notes. Pattern: "[bus] Time to head back to the bus at <X>".
+// Returns the location, or '' when not present / line doesn't match.
+function busLocationFor(stopId) {
+  if (stopId == null) return '';
+  const meta = ACTIVATION_META.get(stopId);
+  if (!meta || !meta.notes) return '';
+  for (const raw of String(meta.notes).split(/\r?\n/)) {
+    const trimmed = raw.trim();
+    if (!/^\[bus\]/.test(trimmed)) continue;
+    const m = /^\[bus\]\s*Time to head back to the bus at (.+)$/i.exec(trimmed);
+    if (m) return m[1];
+  }
+  return '';
+}
+
 function renderHudTimer() {
   const el = document.getElementById('stop-timer');
   if (!el) return;
+  const labelEl = document.querySelector('#stop-timer .stop-timer-label');
   const timeEl = document.getElementById('stop-timer-time');
   const cdEl = document.getElementById('stop-timer-countdown');
   let soonestMs = Infinity;
@@ -6642,57 +6737,79 @@ function renderHudTimer() {
     if (dep == null) continue;
     if (dep < soonestMs) { soonestMs = dep; soonestStopId = stopId; }
   }
-  // The card is ALWAYS shown now — even with no active stop — so the guide
-  // can tap "to the bus" whenever needed. When no stop is active we fill
-  // with em-dash placeholders; the .active class only flips on when there's
-  // a live stop (drives the red-clock styling).
+  // The card is ALWAYS shown — even with no active stop — so the guide
+  // can see at a glance whether there's something to head back from.
+  // When no stop is active we fill with em-dash placeholders and the
+  // card is not clickable; otherwise the .active class flips on.
   el.classList.add('show');
   const hasActiveStop = soonestMs !== Infinity;
   el.classList.toggle('active', hasActiveStop);
-  // Guide can tap any time the card's visible. Passengers can't.
-  el.classList.toggle('clickable', ROLE === 'guide');
+  // Clickable only when a stop is actually active — the bus modal needs
+  // something to attach the [bus] line to, so an idle card has nothing
+  // to do.
+  el.classList.toggle('clickable', ROLE === 'guide' && hasActiveStop);
+  // Label: "Departure" by default, "Time to head back" once a stop is
+  // armed so it reads as a call-to-action rather than a passive readout.
+  if (labelEl) {
+    labelEl.textContent = hasActiveStop ? 'Time to head back' : 'Departure';
+  }
   if (!hasActiveStop) {
     if (timeEl) timeEl.textContent = '—:—';
     if (cdEl) {
       cdEl.textContent = '—:—';
       cdEl.classList.remove('urgent', 'past');
     }
+    el.classList.remove('pulsing');
     return;
   }
   if (timeEl) timeEl.textContent = formatHHMM(new Date(soonestMs));
+  let isUrgent = false;
   if (cdEl) {
     const diffMs = soonestMs - Date.now();
     const past = diffMs < 0;
+    isUrgent = !past && diffMs <= ALARM_THRESHOLD_MS;
     const absSec = Math.max(0, Math.floor(Math.abs(diffMs) / 1000));
     const mm = Math.floor(absSec / 60);
     const ss = absSec % 60;
     const text = `${mm}:${String(ss).padStart(2, '0')}`;
     cdEl.textContent = past ? `-${text}` : text;
-    cdEl.classList.toggle('urgent', !past && diffMs <= ALARM_THRESHOLD_MS);
+    cdEl.classList.toggle('urgent', isUrgent);
     cdEl.classList.toggle('past', past);
   }
+  // Pulse drivers: ≤5 min before departure, OR the guide already sent
+  // the bus signal at least once for this stop (the [bus] line in the
+  // active row's notes persists across reloads).
+  const busAlreadySent = hasBusSignalFor(soonestStopId);
+  el.classList.toggle('pulsing', isUrgent || busAlreadySent);
 }
 
-// Guide-side: tapping the HUD timer publishes a "bus departure" line to the
-// active stop's notes. Passengers see a black banner row with a bus icon.
-// Repeated taps refresh the message (single bus line, idempotent).
+// Guide-side: send the [bus] departure line. Accepts an optional location
+// the guide typed into the bus modal; falls back to a generic line when
+// blank. Idempotent — any prior [bus] line in the notes is replaced rather
+// than stacked, so repeated sends (e.g. correcting the location) leave
+// exactly one bus line.
 let _sendingDepartureSignal = false;
-async function sendDepartureSignal() {
-  if (ROLE !== 'guide') return;
-  if (!SESSION) return;
-  if (_sendingDepartureSignal) return;
+async function sendDepartureSignal(location) {
+  if (ROLE !== 'guide') return { error: 'Guide only.' };
+  if (!SESSION) return { error: 'No session.' };
+  if (_sendingDepartureSignal) return { error: 'Already sending.' };
   const stopId = Array.from(ACTIVE_STOP_IDS)[0];
-  if (stopId == null) return;
+  if (stopId == null) return { error: 'No active stop.' };
   const stop = TOUR ? TOUR.stops.find(s => s.id === stopId) : null;
-  if (!stop) return;
+  if (!stop) return { error: 'Stop not found locally.' };
   const token = getStoredGuideToken();
-  if (!token) return;
+  if (!token) return { error: 'Not signed in as guide.' };
   _sendingDepartureSignal = true;
   const meta = ACTIVATION_META.get(stopId) || {};
-  // Strip any existing [bus] lines so tapping again replaces rather than stacks.
+  const cleanLocation = (location || '').trim();
+  const busText = cleanLocation
+    ? `Time to head back to the bus at ${cleanLocation}`
+    : 'Time to head back to the bus';
+  // Strip any existing [bus] lines so tapping again replaces rather than
+  // stacks — a single, current bus line per stop.
   const others = parseNotesText(meta.notes || '').filter(e => e.level !== 'bus');
   const newEntries = [
-    { level: 'bus', text: 'Time to head back to the bus' },
+    { level: 'bus', text: busText },
     ...others,
   ];
   const newNotes = newEntries.map(e => encodeNoteLine(e.level, e.text)).join('\n');
@@ -6707,7 +6824,7 @@ async function sendDepartureSignal() {
   _sendingDepartureSignal = false;
   if (error) {
     console.warn('[bus] departure signal failed', error);
-    return;
+    return { error: error.message || 'Could not send.' };
   }
   ACTIVATION_META.set(stopId, Object.assign({}, meta, {
     notes: newNotes,
@@ -6715,6 +6832,60 @@ async function sendDepartureSignal() {
   }));
   _topBannerDismissedTexts.delete(stopId);
   refreshTopWarningBanner(stop);
+  renderHudTimer();   // pick up the new .pulsing state immediately
+  return { ok: true };
+}
+
+// Bus modal — opened by tapping the HUD timer card when a stop is active.
+// Pre-fills with the last-sent location for the current stop so re-sending
+// after a typo doesn't make the guide retype.
+function showBusModal() {
+  const backdrop = document.getElementById('bus-modal-backdrop');
+  const input = document.getElementById('bus-modal-location');
+  const err = document.getElementById('bus-modal-error');
+  if (!backdrop || !input) return;
+  const stopId = Array.from(ACTIVE_STOP_IDS)[0];
+  input.value = stopId != null ? busLocationFor(stopId) : '';
+  if (err) err.textContent = '';
+  const sendBtn = document.getElementById('bus-modal-send');
+  if (sendBtn) {
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Send to group';
+  }
+  backdrop.classList.add('show');
+  setTimeout(() => { try { input.focus(); } catch (_e) {} }, 200);
+}
+function dismissBusModal() {
+  const backdrop = document.getElementById('bus-modal-backdrop');
+  if (backdrop) backdrop.classList.remove('show');
+}
+let _busModalWired = false;
+function wireBusModalHandlers() {
+  if (_busModalWired) return;
+  const cancel = document.getElementById('bus-modal-cancel');
+  const send = document.getElementById('bus-modal-send');
+  const input = document.getElementById('bus-modal-location');
+  const err = document.getElementById('bus-modal-error');
+  if (!cancel || !send || !input) return;
+  _busModalWired = true;
+  cancel.addEventListener('click', () => dismissBusModal());
+  // Pressing Enter in the input also sends.
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); send.click(); }
+  });
+  send.addEventListener('click', async () => {
+    send.disabled = true;
+    send.textContent = 'Sending…';
+    if (err) err.textContent = '';
+    const result = await sendDepartureSignal(input.value);
+    if (result && result.error) {
+      if (err) err.textContent = result.error;
+      send.disabled = false;
+      send.textContent = 'Try again';
+      return;
+    }
+    dismissBusModal();
+  });
 }
 
 // Populates the session-info block at the top of the burger menu — guide
@@ -7209,8 +7380,11 @@ function wireHudTimerHandlers() {
   _hudTimerWired = true;
   el.addEventListener('click', () => {
     if (!el.classList.contains('clickable')) return;
-    sendDepartureSignal();
+    showBusModal();
   });
+  // Wire the bus modal once — its DOM exists for both roles but only the
+  // guide ever opens it (timer is .clickable only for guides).
+  wireBusModalHandlers();
 }
 
 function fire5MinAlarm(stopId, remainingMs) {
