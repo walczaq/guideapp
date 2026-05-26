@@ -78,7 +78,21 @@
     text-transform: uppercase; color: #777;
     pointer-events: none;
   }
-  @media (max-width: 500px), (pointer: coarse) {
+  /* "Real phone" mode — drop the phone-in-frame chrome and fill the
+     viewport. Matches in three independent ways so it survives the
+     edge cases that wrecked S26 Ultra rendering:
+       - any-pointer: coarse  →  any touch capability counts as mobile,
+                                 even when an S Pen reports pointer:fine
+                                 as the primary input
+       - display-mode: standalone  →  installed PWAs always get this
+                                      layout regardless of viewport size
+                                      (PWA spec puts the page into
+                                      fullscreen-ish mode and we want
+                                      mobile chrome there)
+       - max-width: 900px  →  catches landscape phones and big-phone
+                              viewports that legitimately exceed the
+                              old 500px threshold */
+  @media (max-width: 900px), (any-pointer: coarse), (display-mode: standalone), (display-mode: minimal-ui), (display-mode: fullscreen) {
     body { background: var(--paper); }
     .phone {
       width: 100vw; height: 100dvh; max-height: 100dvh;
@@ -1945,7 +1959,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk D: PWA safe-area fixes · build 2026-05-27-0030';
+const BUILD_VERSION = '0.5 · chunk D: big-phone mobile-layout fix · build 2026-05-27-0100';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
