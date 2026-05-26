@@ -541,6 +541,50 @@
     background: var(--ink); color: var(--paper);
   }
 
+  /* Install prompt — same layout as notif-prompt with a different accent
+     (--armed border) so it reads as a separate message rather than the
+     same banner reopening. The two are sequenced (never shown together
+     by renderInstallPrompt) so the .below-gps modifier is enough. */
+  .install-prompt {
+    position: absolute; left: 16px; right: 16px;
+    top: calc(env(safe-area-inset-top, 0) + 76px);
+    background: var(--paper);
+    border: 1px solid var(--armed);
+    color: var(--ink);
+    padding: 12px 14px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.18), 0 0 0 2px rgba(199,148,40,0.18);
+    font-family: 'Fraunces', serif;
+    font-size: 13px; line-height: 1.35;
+    z-index: 7;
+    display: none;
+    pointer-events: auto;
+  }
+  .install-prompt.show { display: block; }
+  .install-prompt.below-gps {
+    top: calc(env(safe-area-inset-top, 0) + 76px + 76px);
+  }
+  .install-prompt-text {
+    margin-bottom: 10px;
+  }
+  .install-prompt-row {
+    display: flex; gap: 8px; justify-content: flex-end;
+  }
+  .install-prompt-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.10em; text-transform: uppercase;
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--ink);
+    background: var(--paper); color: var(--ink);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .install-prompt-btn:active { transform: scale(0.96); }
+  .install-prompt-btn.primary {
+    background: var(--ink); color: var(--paper);
+  }
+
   /* Broadcasting banner — slim notification at top of guide's view when
      they're sharing their location with passengers (phone or bus_pin mode).
      Hidden by default; updateBroadcastBanner() flips display + text. */
@@ -1494,6 +1538,22 @@
         </div>
       </div>
 
+      <!-- Install prompt — passenger-only, shown when the browser fires
+           beforeinstallprompt (Chrome/Edge/Samsung) AND notifications are
+           already enabled (or dismissed). Installing turns the site into
+           a WebAPK / PWA whose push channel survives browser kill, which
+           is the practical workaround to the "killed browser = no push"
+           limitation. Uses the same layout/sizing as the notif-prompt
+           but with a distinct accent so users see a different message
+           rather than thinking the same banner reappeared. -->
+      <div class="install-prompt" id="install-prompt">
+        <div class="install-prompt-text">Install Fieldnote on your phone to keep notifications reliable even if you close the browser.</div>
+        <div class="install-prompt-row">
+          <button type="button" class="install-prompt-btn" id="install-prompt-dismiss">Not now</button>
+          <button type="button" class="install-prompt-btn primary" id="install-prompt-install">Install</button>
+        </div>
+      </div>
+
       <!-- (The old slide-down stop-banner was removed in favor of the
            centered persistent stop-arrival-modal below.) -->
 
@@ -1817,7 +1877,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk D: web push + persistent enable banner · build 2026-05-17-1900';
+const BUILD_VERSION = '0.5 · chunk D: web push + PWA install prompt · build 2026-05-26-2300';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -1829,6 +1889,11 @@ const BUILD_VERSION = '0.5 · chunk D: web push + persistent enable banner · bu
 // ╰──────────────────────────────────────────────────────╯
 const VAPID_PUBLIC_KEY = 'BCJbZ9Igmq1_8ap7WUvkSl48Kt8XBHZvLgVe43dmSopBDgwrAHgAaJESAo6035YR_U0nn_BZ8eXd7KEubw76EP0';
 const PUSH_PROMPT_DISMISSED_KEY = 'fn_push_prompt_dismissed_v1';   // per-browser, all-sessions
+const INSTALL_PROMPT_DISMISSED_KEY = 'fn_install_prompt_dismissed_v1';
+// Saved beforeinstallprompt event — fired by Chrome/Edge/Samsung Internet
+// when the site meets PWA install criteria. We hold it so we can call
+// .prompt() on user gesture (browser won't let us trigger it spontaneously).
+let _deferredInstallPromptEvent = null;
 let _swRegistration = null;
 let _pushPromptShownThisLoad = false;
 
@@ -6641,6 +6706,10 @@ async function initPushSubscription() {
   // explicitly dismisses. Wired once; re-renders on every state change.
   wireNotifPromptHandlers();
   renderNotifPrompt();
+  // Install prompt — sequenced after the notif prompt. Wired here so the
+  // Install button's click handler exists by the time the user could tap.
+  wireInstallPromptHandlers();
+  renderInstallPrompt();
 }
 
 // Persistent banner that asks the passenger to enable notifications. Shown
@@ -6700,6 +6769,123 @@ function wireNotifPromptHandlers() {
     try { localStorage.setItem(PUSH_PROMPT_DISMISSED_KEY, '1'); }
     catch (_e) { /* ignore */ }
     renderNotifPrompt();
+    // The notif prompt is hiding now — if the install prompt is gated on
+    // "no notif prompt visible", this is its cue to appear.
+    renderInstallPrompt();
+  });
+}
+
+// ── Install-as-PWA prompt ──────────────────────────────────────────────
+// The platform reality is that a browser tab killed from recents stops
+// receiving push within ~30 min on most Android phones and immediately
+// on desktop. Installing the site as a home-screen PWA (WebAPK on
+// Android, "Add to Home Screen" on iOS 16.4+) creates a proper OS-level
+// app whose push channel survives. This banner surfaces the
+// beforeinstallprompt event the browser fires when install criteria
+// are met.
+
+// True when we're already running as an installed PWA — no point
+// prompting the user to install something they already have.
+function runningAsInstalledPWA() {
+  try {
+    if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+    // iOS Safari uses navigator.standalone instead of the media query.
+    if (typeof navigator !== 'undefined' && navigator.standalone === true) return true;
+  } catch (_e) { /* ignore */ }
+  return false;
+}
+
+// Capture the install prompt event as soon as the browser fires it.
+// preventDefault() suppresses the browser's own mini-infobar so our
+// branded banner is the only ask. The event is saved so the user's
+// Install tap can call .prompt() on it (browser requires user gesture).
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  _deferredInstallPromptEvent = event;
+  // The banner element + handlers may not exist yet on first paint;
+  // re-render to surface the banner once they do (or now, if they do).
+  try { renderInstallPrompt(); } catch (_e) { /* DOM not ready — boot will retry */ }
+});
+
+window.addEventListener('appinstalled', () => {
+  _deferredInstallPromptEvent = null;
+  const el = document.getElementById('install-prompt');
+  if (el) el.classList.remove('show');
+});
+
+function renderInstallPrompt() {
+  const el = document.getElementById('install-prompt');
+  if (!el) return;
+  // Passenger-only — guides don't need the PWA install path.
+  if (ROLE !== 'passenger' || !SESSION) { el.classList.remove('show'); return; }
+  // Already installed → never show.
+  if (runningAsInstalledPWA()) { el.classList.remove('show'); return; }
+  // No deferred event captured → browser hasn't deemed us installable
+  // (yet, or at all on iOS Safari). Stay hidden; the appinstalled /
+  // beforeinstallprompt listeners will re-render when state changes.
+  if (!_deferredInstallPromptEvent) { el.classList.remove('show'); return; }
+  // User explicitly dismissed → respect that.
+  try {
+    if (localStorage.getItem(INSTALL_PROMPT_DISMISSED_KEY)) {
+      el.classList.remove('show');
+      return;
+    }
+  } catch (_e) { /* private mode etc. — fall through */ }
+  // Sequencing: don't pile on top of the notification prompt. The notif
+  // prompt is higher priority (permission must be granted before the
+  // install offer makes sense), so wait until it's gone.
+  const notifEl = document.getElementById('notif-prompt');
+  if (notifEl && notifEl.classList.contains('show')) {
+    el.classList.remove('show');
+    return;
+  }
+  // Stack below GPS banner if both visible.
+  const gps = document.getElementById('gps-banner');
+  el.classList.toggle('below-gps', !!(gps && gps.classList.contains('show')));
+  el.classList.add('show');
+}
+
+let _installPromptWired = false;
+function wireInstallPromptHandlers() {
+  if (_installPromptWired) return;
+  const install = document.getElementById('install-prompt-install');
+  const dismiss = document.getElementById('install-prompt-dismiss');
+  if (!install || !dismiss) return;
+  _installPromptWired = true;
+  install.addEventListener('click', async () => {
+    if (!_deferredInstallPromptEvent) {
+      // Event expired — Chrome invalidates the deferred event after use
+      // or page lifecycle changes. Hide and bail; the next time the
+      // browser deems us installable it'll fire beforeinstallprompt again.
+      const el = document.getElementById('install-prompt');
+      if (el) el.classList.remove('show');
+      return;
+    }
+    install.disabled = true;
+    dismiss.disabled = true;
+    try {
+      await _deferredInstallPromptEvent.prompt();
+      const choice = await _deferredInstallPromptEvent.userChoice;
+      _deferredInstallPromptEvent = null;
+      if (choice && choice.outcome === 'dismissed') {
+        // User saw the OS dialog and said no. Don't pester again on
+        // this browser; the burger menu can be a future re-entry point.
+        try { localStorage.setItem(INSTALL_PROMPT_DISMISSED_KEY, '1'); }
+        catch (_e) { /* ignore */ }
+      }
+      // 'accepted' fires appinstalled later, which hides the banner.
+    } catch (err) {
+      console.warn('[install] prompt() failed', err);
+    } finally {
+      install.disabled = false;
+      dismiss.disabled = false;
+      renderInstallPrompt();
+    }
+  });
+  dismiss.addEventListener('click', () => {
+    try { localStorage.setItem(INSTALL_PROMPT_DISMISSED_KEY, '1'); }
+    catch (_e) { /* ignore */ }
+    renderInstallPrompt();
   });
 }
 
