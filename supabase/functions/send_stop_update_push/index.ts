@@ -72,6 +72,27 @@ function firstNotesLine(notes: string | null | undefined): string {
   return '';
 }
 
+// Does this notes blob contain a [bus] line? The HUD-timer departure tap is
+// the only thing that emits these; detecting "new bus line vs old" lets us
+// fire a separate push without conflating with caution/danger warnings.
+function hasBusLine(notes: string | null | undefined): boolean {
+  if (!notes) return false;
+  for (const raw of notes.split(/\r?\n/)) {
+    if (/^\[bus\]/.test(raw.trim())) return true;
+  }
+  return false;
+}
+
+// The bus line's actual text (sans prefix). Used as the body when present.
+function firstBusLine(notes: string | null | undefined): string {
+  if (!notes) return '';
+  for (const raw of notes.split(/\r?\n/)) {
+    const trimmed = raw.trim();
+    if (/^\[bus\]/.test(trimmed)) return stripLevelPrefix(trimmed);
+  }
+  return '';
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
   if (!VAPID_PRIVATE_KEY || !VAPID_PUBLIC_KEY) {
@@ -92,10 +113,21 @@ Deno.serve(async (req: Request) => {
     return jsonResp(400, { ok: false, error: 'missing session_id/stop_id/id' });
   }
 
-  // ── Filter 1: warning level must be escalated.
+  // ── Filter 1: must be either an escalated caution/danger OR a brand-new
+  // [bus] departure signal that wasn't present in the old row. The bus tap
+  // doesn't escalate warning_level (severity 0 in the client), so it
+  // arrives here with newLevel='none' but a [bus] line freshly added.
   const newLevel = String(newRow.warning_level || 'none');
-  if (!ESCALATED_LEVELS.has(newLevel)) {
-    return jsonResp(200, { ok: true, skipped: 'level not escalated', level: newLevel });
+  const isEscalated = ESCALATED_LEVELS.has(newLevel);
+  const newHasBus = hasBusLine(newRow.notes);
+  const oldHasBus = oldRow ? hasBusLine(oldRow.notes) : false;
+  const isNewBusSignal = newHasBus && !oldHasBus;
+  if (!isEscalated && !isNewBusSignal) {
+    return jsonResp(200, {
+      ok: true,
+      skipped: 'level not escalated and no new bus signal',
+      level: newLevel,
+    });
   }
 
   // ── Filter 2: something meaningful must have actually changed.
@@ -156,31 +188,47 @@ Deno.serve(async (req: Request) => {
     return jsonResp(200, { ok: true, sent: 0, note: 'no subscriptions' });
   }
 
-  // ── Build the notification.
-  // Title: severity glyph + level + stop name. Body: what the guide did
-  // and the actual note text, ending with the tap CTA.
-  const titlePrefix = newLevel === 'danger' ? '🚨 Danger' : '⚠ Caution';
-  const title = `${titlePrefix} at ${stopName}`;
-  const noteText = firstNotesLine(newRow.notes);
-  const levelWord = newLevel === 'danger' ? 'danger' : 'caution';
+  // ── Build the notification. Precedence: escalated warning wins over a
+  // bare bus signal (a danger sent simultaneously is more urgent than the
+  // bus call). Tag is distinct per trigger type so a bus push and a
+  // warning push for the same stop don't collapse onto each other on
+  // the lockscreen.
   // Renamed from `body` to avoid shadowing the `let body: any` declared
   // at the top of the handler for the request payload — same-scope
-  // redeclaration was a TS/Deno compile error and crashed the function
-  // on every invocation, silently breaking push delivery.
-  const notificationBody = noteText
-    ? `Your guide sent a ${levelWord} note: "${noteText}". Tap to open the map.`
-    : `Your guide flagged a ${levelWord} at ${stopName}. Tap to open the map.`;
+  // redeclaration was a TS/Deno compile error.
+  let title: string;
+  let notificationBody: string;
+  let tag: string;
+  if (isEscalated) {
+    const titlePrefix = newLevel === 'danger' ? '🚨 Danger' : '⚠ Caution';
+    title = `${titlePrefix} at ${stopName}`;
+    const noteText = firstNotesLine(newRow.notes);
+    const levelWord = newLevel === 'danger' ? 'danger' : 'caution';
+    notificationBody = noteText
+      ? `Your guide sent a ${levelWord} note: "${noteText}". Tap to open the map.`
+      : `Your guide flagged a ${levelWord} at ${stopName}. Tap to open the map.`;
+    tag = `fieldnote-warning-${stopId}`;
+  } else {
+    // isNewBusSignal === true (Filter 1 guarantees one of the two).
+    title = `🚌 Time to head back · ${stopName}`;
+    const busText = firstBusLine(newRow.notes);
+    notificationBody = busText
+      ? `${busText}. Tap to open the map.`
+      : `Your guide signaled departure. Tap to open the map.`;
+    tag = `fieldnote-bus-${stopId}`;
+  }
   // Deep-link the tap back to the passenger's active session path. Worker
   // serves /v0.5 (no .html); boot reads ?session= and rejoins.
   const deepLinkUrl = `/v0.5?session=${encodeURIComponent(sessionId)}`;
   const payload = JSON.stringify({
     title,
     body: notificationBody,
-    tag: `fieldnote-warning-${stopId}`,
+    tag,
     url: deepLinkUrl,
     stop_id: stopId,
     session_id: sessionId,
     warning_level: newLevel,
+    bus_signal: isNewBusSignal,
   });
 
   // ── Fire all sends in parallel; clean up dead endpoints inline.
