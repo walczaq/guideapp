@@ -1439,6 +1439,44 @@
     color: var(--paper);
   }
 
+  /* Install website CTA — green, prominent, at the bottom of the burger
+     menu. The always-visible escape hatch for when the beforeinstallprompt
+     banner didn't fire (Chrome engagement heuristics, iOS Safari, etc.).
+     `.install-hint` carries any extra context text the handler chose to
+     surface (iOS instructions, "already installed", browser fallback). */
+  .install-row {
+    margin-top: 20px; padding-top: 18px;
+    border-top: 1px solid var(--rule-soft);
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .install-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 12px 24px;
+    background: #2ea44f; color: #ffffff;
+    border: 1px solid #267e3d; border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    box-shadow: 0 2px 6px rgba(46,164,79,0.25);
+  }
+  .install-btn:hover { background: #267e3d; }
+  .install-btn:active { transform: scale(0.97); }
+  .install-btn[disabled] {
+    background: var(--paper-2);
+    color: var(--rule);
+    border-color: var(--rule);
+    cursor: default;
+    box-shadow: none;
+  }
+  .install-hint {
+    font-family: 'Fraunces', serif;
+    font-size: 12px; line-height: 1.45;
+    color: var(--rule);
+    text-align: center;
+    max-width: 320px;
+  }
+  .install-hint:empty { display: none; }
+
   /* "Tour ended" full-screen state shown to passengers when sessions.ended_at
      is set (realtime UPDATE). Replaces the map view entirely. */
   .session-ended-screen {
@@ -1682,6 +1720,14 @@
           <span class="menu-chevron">›</span>
         </button>
       </div>
+      <!-- Install website CTA — always-visible escape hatch for when the
+           beforeinstallprompt banner didn't fire. Handles four states:
+           already-installed, iOS Safari (manual instructions), deferred
+           event ready, deferred event missing (browser fallback hint). -->
+      <div class="install-row">
+        <button class="install-btn" id="menu-install-btn" type="button">Install website</button>
+        <div class="install-hint" id="menu-install-hint"></div>
+      </div>
     </div>
   </div>
 
@@ -1877,7 +1923,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk D: PWA cold-launch rejoins last session · build 2026-05-26-2330';
+const BUILD_VERSION = '0.5 · chunk D: green Install website button in burger menu · build 2026-05-26-2359';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -2792,6 +2838,10 @@ async function loadSessionAndTour(sessionId) {
   // HUD timer card click handler (guide-only effect — wires for both roles
   // since the element exists everywhere; renderHudTimer toggles .clickable).
   wireHudTimerHandlers();
+  // Always-visible "Install website" button at the bottom of the burger
+  // menu. Independent of push (different browser capability), so wired
+  // for both roles regardless of pushSupported().
+  wireMenuInstallBtn();
   // Chunk D: register the SW + silently refresh the push subscription if
   // permission was already granted on a prior visit. Passenger-only — guides
   // don't need push (they're the source of activations).
@@ -5412,6 +5462,9 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   renderMenuSessionInfo();
   // Reflect current push permission in the "Enable notifications" item.
   refreshNotificationsMenuItem();
+  // Update the install button label/disabled state (Already installed vs
+  // Install website).
+  refreshMenuInstallBtn();
   openScreen('screen-menu');
 });
 
@@ -6874,6 +6927,76 @@ function renderInstallPrompt() {
   const gps = document.getElementById('gps-banner');
   el.classList.toggle('below-gps', !!(gps && gps.classList.contains('show')));
   el.classList.add('show');
+}
+
+// Always-visible green CTA at the bottom of the burger menu. Reliable
+// escape hatch for when the on-map install banner didn't fire (Chrome's
+// beforeinstallprompt is gated by engagement heuristics; iOS Safari
+// never fires it; the deferred event can also be invalidated by a page
+// lifecycle change). Refreshed every time the burger menu opens.
+function refreshMenuInstallBtn() {
+  const btn = document.getElementById('menu-install-btn');
+  const hint = document.getElementById('menu-install-hint');
+  if (!btn || !hint) return;
+  if (runningAsInstalledPWA()) {
+    btn.disabled = true;
+    btn.textContent = 'Already installed';
+    hint.textContent = 'Open Fieldnote from your home screen.';
+    return;
+  }
+  btn.disabled = false;
+  btn.textContent = 'Install website';
+  hint.textContent = '';
+}
+
+function handleMenuInstallClick() {
+  const hint = document.getElementById('menu-install-hint');
+  if (runningAsInstalledPWA()) {
+    if (hint) hint.textContent = 'Already installed. Open Fieldnote from your home screen.';
+    return;
+  }
+  // iOS Safari has no programmatic install — Apple requires the user
+  // to go through Share → Add to Home Screen. Surface a clear path
+  // rather than silently failing.
+  const ua = navigator.userAgent || '';
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !(/Android/.test(ua));
+  if (isIOS) {
+    if (hint) hint.textContent = 'On iPhone / iPad: tap the Share button (square with up-arrow) in Safari, then "Add to Home Screen".';
+    return;
+  }
+  // Chrome / Edge / Samsung Internet — fire the deferred event if we
+  // captured one. .prompt() must be called from a user gesture (this
+  // click is one).
+  if (_deferredInstallPromptEvent) {
+    const evt = _deferredInstallPromptEvent;
+    _deferredInstallPromptEvent = null;
+    evt.prompt().then(() => evt.userChoice).then((choice) => {
+      if (choice && choice.outcome === 'accepted') {
+        if (hint) hint.textContent = 'Installing… the icon should appear on your home screen shortly.';
+      } else {
+        if (hint) hint.textContent = 'No problem — you can install later from this menu.';
+      }
+    }).catch((err) => {
+      console.warn('[install] menu prompt failed', err);
+      if (hint) hint.textContent = 'Couldn\'t open the install dialog. Try your browser\'s menu (⋮) → "Install app".';
+    });
+    return;
+  }
+  // Fallback: browser hasn't deemed us installable yet (or it's a
+  // browser like Firefox that doesn't surface the prompt API at all).
+  // Direct the user to the browser's own install path.
+  if (hint) {
+    hint.textContent = 'Your browser hasn\'t offered an install option yet. Open the browser menu (⋮ on Android, … on desktop) and look for "Install app" or "Install Fieldnote". On Firefox, this isn\'t supported — use Chrome or Edge instead.';
+  }
+}
+
+let _menuInstallBtnWired = false;
+function wireMenuInstallBtn() {
+  if (_menuInstallBtnWired) return;
+  const btn = document.getElementById('menu-install-btn');
+  if (!btn) return;
+  _menuInstallBtnWired = true;
+  btn.addEventListener('click', handleMenuInstallClick);
 }
 
 let _installPromptWired = false;
