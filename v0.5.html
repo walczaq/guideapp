@@ -1476,6 +1476,96 @@
   }
   .sm-newbtn:active { transform: scale(0.98); }
 
+  /* ── Tour builder (v0.6) ────────────────────────────────────────────── */
+  .tb-screen, .tb-editor {
+    position: absolute; inset: 0; z-index: 92;
+    background: var(--paper);
+    display: flex; flex-direction: column;
+    padding-top: max(env(safe-area-inset-top, 0px), 30px);
+  }
+  .tb-header { padding: 16px 20px 12px; border-bottom: 1px solid var(--rule-soft); }
+  .tb-stamp {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--rule); margin-bottom: 6px;
+  }
+  .tb-title {
+    font-family: 'Fraunces', serif; font-weight: 400; font-size: 26px; color: var(--ink);
+    font-variation-settings: "opsz" 90;
+  }
+  .tb-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px 16px calc(16px + env(safe-area-inset-bottom,0px)); }
+  .tb-empty { text-align:center; color:var(--rule); font-family:'Fraunces',serif; font-style:italic; font-size:15px; padding:40px 20px; }
+  .tb-row { border:1px solid var(--rule); border-radius:10px; padding:12px 14px; margin-bottom:10px; background:var(--paper); }
+  .tb-row.base { border-style: dashed; }
+  .tb-row-name { font-family:'Fraunces',serif; font-weight:700; font-size:17px; color:var(--ink); line-height:1.2; }
+  .tb-row-sub { font-family:'Fraunces',serif; font-style:italic; font-size:13px; color:#4a4a4a; margin-top:2px; }
+  .tb-row-meta { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.06em; color:var(--rule); margin-top:4px; }
+  .tb-tag {
+    display:inline-block; font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.1em;
+    text-transform:uppercase; padding:2px 7px; border-radius:10px; margin-left:6px; vertical-align:middle;
+    border:1px solid var(--rule); color:var(--rule);
+  }
+  .tb-tag.yours { border-color: var(--ink); color: var(--ink); }
+  .tb-actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .tb-footer { padding:14px 16px calc(16px + env(safe-area-inset-bottom,0px)); border-top:1px solid var(--rule-soft); }
+
+  /* Editor: map on top, scrollable panel below */
+  .tb-map { flex: 0 0 46%; position: relative; }
+  .tb-map .mapboxgl-ctrl-bottom-left, .tb-map .mapboxgl-ctrl-top-right { display:none !important; }
+  .tb-panel { flex: 1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 16px calc(16px + env(safe-area-inset-bottom,0px)); }
+  .tb-section-label { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); margin:10px 0 8px; }
+  .tb-stop-row, .tb-pin-row {
+    border:1px solid var(--rule); border-radius:8px; padding:10px 12px; margin-bottom:8px; background:var(--paper); cursor:pointer;
+  }
+  .tb-stop-row.selected { border-color:var(--ink); box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+  .tb-pin-row { margin-left:14px; background:var(--paper-2); cursor:default; }
+  .tb-rowtitle { font-family:'Fraunces',serif; font-weight:700; font-size:15px; color:var(--ink); }
+  .tb-rowbody { font-family:'Fraunces',serif; font-size:13px; color:#3a3a3a; margin-top:2px; line-height:1.35; }
+  .tb-num {
+    display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%;
+    background:var(--ink); color:var(--paper); font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; margin-right:8px; vertical-align:middle;
+  }
+  /* Map markers */
+  .tb-stop-marker {
+    width:28px; height:28px; border-radius:50%; background:var(--ink); color:var(--paper);
+    border:2px solid var(--paper); box-shadow:0 2px 6px rgba(0,0,0,0.3);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700;
+  }
+  .tb-stop-marker.sel { background:var(--mark); }
+  .tb-pin-marker { width:14px; height:14px; border-radius:50%; background:var(--mark); border:2px solid var(--paper); box-shadow:0 1px 4px rgba(0,0,0,0.3); }
+  /* Placement banner */
+  .tb-place-banner {
+    position:absolute; left:12px; right:12px; top:12px; z-index:5;
+    background:var(--ink); color:var(--paper); padding:10px 14px; border-radius:10px;
+    font-family:'Fraunces',serif; font-size:13px; display:none; align-items:center; gap:10px;
+    box-shadow:0 4px 14px rgba(0,0,0,0.3);
+  }
+  .tb-place-banner.show { display:flex; }
+  .tb-place-banner span { flex:1; }
+  .tb-place-cancel {
+    font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase;
+    padding:5px 9px; background:transparent; color:var(--paper); border:1px solid var(--paper); border-radius:6px; cursor:pointer;
+  }
+  /* Form modal */
+  .tb-form-backdrop {
+    position:absolute; inset:0; z-index:95; background:rgba(26,29,26,0.42);
+    display:none; align-items:center; justify-content:center; padding:24px;
+  }
+  .tb-form-backdrop.show { display:flex; }
+  .tb-form {
+    background:var(--paper); border:1px solid var(--ink); width:100%; max-width:360px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.35), 0 0 0 8px var(--paper-2); padding:18px 20px 20px;
+  }
+  .tb-form h3 { font-family:'Fraunces',serif; font-weight:400; font-size:20px; margin-bottom:14px; }
+  .tb-form label { display:block; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--rule); margin:10px 0 4px; }
+  .tb-form input, .tb-form textarea {
+    width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid var(--rule); border-radius:6px;
+    font-family:'Fraunces',serif; font-size:15px; color:var(--ink); background:var(--paper);
+  }
+  .tb-form textarea { min-height:64px; resize:vertical; }
+  .tb-form-err { color:var(--mark); font-family:'JetBrains Mono',monospace; font-size:11px; min-height:14px; margin-top:8px; }
+  .tb-form-actions { display:flex; gap:10px; margin-top:16px; }
+
   /* ── HUD right column + persistent departure timer ──────────────────
      Right-side stack inside .map-hud. The timer card sits ABOVE the
      signal pill and is only shown when an active stop has a departure.
@@ -2099,6 +2189,16 @@
           <div class="menu-label">My sessions</div>
           <span class="menu-chevron">›</span>
         </button>
+        <button class="menu-item" data-action="build-tours" id="menu-build-tours" style="display:none;">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 21s-6-5.3-6-10a6 6 0 0 1 12 0c0 4.7-6 10-6 10z"/>
+              <circle cx="12" cy="11" r="2"/>
+            </svg>
+          </div>
+          <div class="menu-label">Build tours</div>
+          <span class="menu-chevron">›</span>
+        </button>
         <button class="menu-item" data-action="edit-name" id="menu-edit-name" style="display:none;">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2484,7 +2584,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · tour authoring phase 1 + Golden Circle default · build 2026-06-02-2051';
+const BUILD_VERSION = '0.6 · tour builder UI (create/edit stops & pins on map) · build 2026-06-02-2100';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3980,6 +4080,486 @@ function renderSmList() {
     list.appendChild(row);
   }
 }
+
+// ══ Tour builder (v0.6) ════════════════════════════════════════════════
+// Guide-only. Create/edit base + own tours and their stops/pins in-app,
+// placing points by tapping a dedicated editor map. All writes go through
+// the migration-011 RPCs. No more hand-seeding the DB.
+
+const TB_DEFAULT_CENTER = [-21.9408, 64.1466];   // Reykjavík fallback for new-tour home
+
+// ── RPC wrappers ──
+async function tbListTours() {
+  const token = getStoredGuideToken(); if (!token) return [];
+  const { data, error } = await supabaseClient.rpc('list_guide_tours', { p_guide_token: token });
+  if (error) { console.warn('[tb] list failed', error); return []; }
+  return data || [];
+}
+async function tbCreateTour(name, homeLng, homeLat) {
+  const token = getStoredGuideToken(); if (!token) return { error: 'Not signed in.' };
+  const { data, error } = await supabaseClient.rpc('create_tour',
+    { p_guide_token: token, p_name: name, p_subtitle: null, p_home_lng: homeLng, p_home_lat: homeLat });
+  if (error) return { error: error.message || 'Could not create tour.' };
+  return { ok: true, tour: data };
+}
+async function tbDeleteTour(id) {
+  const token = getStoredGuideToken(); if (!token) return { error: 'Not signed in.' };
+  const { error } = await supabaseClient.rpc('delete_tour', { p_guide_token: token, p_tour_id: id });
+  return error ? { error: error.message } : { ok: true };
+}
+async function tbCreateStop(tourId, name, lng, lat, radius) {
+  const token = getStoredGuideToken();
+  const { data, error } = await supabaseClient.rpc('create_stop',
+    { p_guide_token: token, p_tour_id: tourId, p_name: name, p_subtitle: null, p_lng: lng, p_lat: lat, p_activation_radius_m: radius });
+  return error ? { error: error.message } : { ok: true, row: data };
+}
+async function tbUpdateStop(id, f) {
+  const token = getStoredGuideToken();
+  const { data, error } = await supabaseClient.rpc('update_stop',
+    { p_guide_token: token, p_stop_id: id, p_name: f.name ?? null, p_subtitle: null,
+      p_lng: f.lng ?? null, p_lat: f.lat ?? null, p_activation_radius_m: f.radius ?? null });
+  return error ? { error: error.message } : { ok: true, row: data };
+}
+async function tbDeleteStop(id) {
+  const token = getStoredGuideToken();
+  const { error } = await supabaseClient.rpc('delete_stop', { p_guide_token: token, p_stop_id: id });
+  return error ? { error: error.message } : { ok: true };
+}
+async function tbCreatePin(stopId, title, body, lng, lat, radius) {
+  const token = getStoredGuideToken();
+  const { data, error } = await supabaseClient.rpc('create_pin',
+    { p_guide_token: token, p_stop_id: stopId, p_title: title, p_body: body, p_lng: lng, p_lat: lat, p_trigger_radius_m: radius });
+  return error ? { error: error.message } : { ok: true, row: data };
+}
+async function tbUpdatePin(id, f) {
+  const token = getStoredGuideToken();
+  const { data, error } = await supabaseClient.rpc('update_pin',
+    { p_guide_token: token, p_pin_id: id, p_title: f.title ?? null, p_body: f.body ?? null,
+      p_lng: f.lng ?? null, p_lat: f.lat ?? null, p_trigger_radius_m: f.radius ?? null });
+  return error ? { error: error.message } : { ok: true, row: data };
+}
+async function tbDeletePin(id) {
+  const token = getStoredGuideToken();
+  const { error } = await supabaseClient.rpc('delete_pin', { p_guide_token: token, p_pin_id: id });
+  return error ? { error: error.message } : { ok: true };
+}
+async function tbLoadTourDetail(tourId) {
+  const { data, error } = await supabaseClient
+    .from('tours')
+    .select('id, slug, name, subtitle, home_lng, home_lat, owner_guide_id, stops ( id, ordinal, name, subtitle, lng, lat, activation_radius_m, pins ( id, ordinal, title, body, lng, lat, trigger_radius_m ) )')
+    .eq('id', tourId).single();
+  if (error) { console.warn('[tb] load detail failed', error); return null; }
+  if (data && data.stops) {
+    data.stops.sort((a, b) => a.ordinal - b.ordinal);
+    data.stops.forEach(s => (s.pins || []).sort((a, b) => a.ordinal - b.ordinal));
+  }
+  return data;
+}
+
+// ── Manager screen ──
+let _tbTours = [];
+let _tbTourDeleteConfirm = null;
+async function showTourManager() {
+  hideLoading();
+  let el = document.getElementById('tour-manager');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'tour-manager';
+  el.className = 'tb-screen';
+  const backBtn = SESSION ? '<button class="sm-btn" id="tb-mgr-back" style="margin-top:10px;">‹ Back to tour</button>' : '';
+  el.innerHTML = `
+    <div class="tb-header">
+      <div class="tb-stamp">Fieldnote · Tour builder</div>
+      <div class="tb-title">Tours</div>
+      ${backBtn}
+    </div>
+    <div class="tb-list" id="tb-list"><div class="tb-empty">Loading…</div></div>
+    <div class="tb-footer"><button class="sm-newbtn" id="tb-new">+ New tour</button></div>`;
+  document.getElementById('phone').appendChild(el);
+  const back = document.getElementById('tb-mgr-back');
+  if (back) back.addEventListener('click', () => { const m = document.getElementById('tour-manager'); if (m) m.remove(); });
+  document.getElementById('tb-new').addEventListener('click', tbNewTourFlow);
+  _tbTours = await tbListTours();
+  _tbTourDeleteConfirm = null;
+  renderTbTourList();
+}
+
+function renderTbTourList() {
+  const list = document.getElementById('tb-list');
+  if (!list) return;
+  if (!_tbTours.length) { list.innerHTML = '<div class="tb-empty">No tours yet.<br>Create one below.</div>'; return; }
+  list.innerHTML = '';
+  for (const t of _tbTours) {
+    const own = !!t.owner_guide_id;
+    const row = document.createElement('div');
+    row.className = 'tb-row' + (own ? '' : ' base');
+    const name = document.createElement('div');
+    name.className = 'tb-row-name';
+    name.innerHTML = (t.name || '(untitled)').replace(/</g, '&lt;') +
+      `<span class="tb-tag ${own ? 'yours' : ''}">${own ? 'Yours' : 'Base'}</span>`;
+    row.appendChild(name);
+    if (t.subtitle) { const s = document.createElement('div'); s.className = 'tb-row-sub'; s.textContent = t.subtitle; row.appendChild(s); }
+    const meta = document.createElement('div'); meta.className = 'tb-row-meta';
+    meta.textContent = `${t.stop_count} stop${t.stop_count === 1 ? '' : 's'}`;
+    row.appendChild(meta);
+    const actions = document.createElement('div'); actions.className = 'tb-actions';
+    actions.appendChild(smMakeBtn('Edit', 'primary', () => openTourEditor(t.id)));
+    if (own) {
+      if (_tbTourDeleteConfirm === t.id) {
+        actions.appendChild(smMakeBtn('Tap to confirm', 'danger', async () => {
+          const r = await tbDeleteTour(t.id); _tbTourDeleteConfirm = null;
+          if (!r.error) _tbTours = _tbTours.filter(x => x.id !== t.id);
+          renderTbTourList();
+        }));
+      } else {
+        actions.appendChild(smMakeBtn('Delete', 'danger', () => { _tbTourDeleteConfirm = t.id; renderTbTourList(); }));
+      }
+    }
+    row.appendChild(actions);
+    list.appendChild(row);
+  }
+}
+
+function tbNewTourFlow() {
+  // Home defaults to the guide's current GPS, else Reykjavík; refined later
+  // via "Set home" in the editor.
+  const hasFix = (typeof state !== 'undefined' && state && Number.isFinite(state.youLng) && Number.isFinite(state.youLat));
+  const homeLng = hasFix ? state.youLng : TB_DEFAULT_CENTER[0];
+  const homeLat = hasFix ? state.youLat : TB_DEFAULT_CENTER[1];
+  tbShowForm({
+    title: 'New tour',
+    fields: [{ key: 'name', label: 'Tour name', type: 'text', value: '' }],
+    note: hasFix ? 'Home set to your current location (move it later via "Set home").'
+                 : 'Home defaults to Reykjavík — set it on the map in the editor.',
+    onSave: async (vals, err) => {
+      if (!vals.name.trim()) { err('Name required'); return false; }
+      const r = await tbCreateTour(vals.name.trim(), homeLng, homeLat);
+      if (r.error) { err(r.error); return false; }
+      tbCloseForm();
+      openTourEditor(r.tour.id);
+      return true;
+    },
+  });
+}
+
+// ── Editor (dedicated map + panel) ──
+let _tbEditorMap = null;
+let _tbTour = null;             // full detail {id,...,stops:[{...,pins:[]}]}
+let _tbSelStopId = null;
+let _tbPlace = null;            // {kind:'stop'|'pin'|'home'|'move-stop'|'move-pin', id?}
+let _tbStopMarkers = [];
+let _tbPinMarkers = [];
+let _tbStopDeleteConfirm = null;
+let _tbPinDeleteConfirm = null;
+
+async function openTourEditor(tourId) {
+  const mgr = document.getElementById('tour-manager');
+  if (mgr) mgr.remove();
+  _tbTour = await tbLoadTourDetail(tourId);
+  if (!_tbTour) { showTourManager(); return; }
+  _tbSelStopId = _tbTour.stops && _tbTour.stops[0] ? _tbTour.stops[0].id : null;
+  _tbPlace = null; _tbStopDeleteConfirm = null; _tbPinDeleteConfirm = null;
+
+  let el = document.getElementById('tour-editor');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'tour-editor';
+  el.className = 'tb-editor';
+  el.innerHTML = `
+    <div class="tb-header">
+      <div class="tb-stamp" id="tb-ed-stamp">Editing tour</div>
+      <div class="tb-title" id="tb-ed-title">…</div>
+      <button class="sm-btn" id="tb-ed-back" style="margin-top:10px;">‹ Tours</button>
+    </div>
+    <div class="tb-map" id="tb-map">
+      <div class="tb-place-banner" id="tb-place-banner"><span id="tb-place-text">Tap the map</span><button type="button" class="tb-place-cancel" id="tb-place-cancel">Cancel</button></div>
+    </div>
+    <div class="tb-panel" id="tb-panel"></div>`;
+  document.getElementById('phone').appendChild(el);
+  document.getElementById('tb-ed-back').addEventListener('click', tbCloseEditor);
+  document.getElementById('tb-place-cancel').addEventListener('click', tbCancelPlace);
+
+  // Dedicated editor map.
+  try {
+    _tbEditorMap = new mapboxgl.Map({
+      container: 'tb-map',
+      style: 'mapbox://styles/mapbox/outdoors-v12',
+      center: [_tbTour.home_lng, _tbTour.home_lat],
+      zoom: 13,
+      attributionControl: false, pitchWithRotate: false, dragRotate: false,
+    });
+    _tbEditorMap.on('load', () => { setTimeout(() => { try { _tbEditorMap.resize(); } catch (_e) {} }, 50); renderTbMarkers(); });
+    _tbEditorMap.on('click', tbOnMapClick);
+  } catch (e) { console.warn('[tb] editor map failed', e); }
+
+  renderTbEditorPanel();
+}
+
+function tbCloseEditor() {
+  if (_tbEditorMap) { try { _tbEditorMap.remove(); } catch (_e) {} _tbEditorMap = null; }
+  _tbStopMarkers = []; _tbPinMarkers = [];
+  const el = document.getElementById('tour-editor'); if (el) el.remove();
+  showTourManager();
+}
+
+function renderTbMarkers() {
+  if (!_tbEditorMap) return;
+  _tbStopMarkers.forEach(m => { try { m.remove(); } catch (_e) {} });
+  _tbPinMarkers.forEach(m => { try { m.remove(); } catch (_e) {} });
+  _tbStopMarkers = []; _tbPinMarkers = [];
+  for (const s of (_tbTour.stops || [])) {
+    const elm = document.createElement('div');
+    elm.className = 'tb-stop-marker' + (s.id === _tbSelStopId ? ' sel' : '');
+    elm.textContent = String(s.ordinal);
+    elm.addEventListener('click', (ev) => { ev.stopPropagation(); _tbSelStopId = s.id; renderTbMarkers(); renderTbEditorPanel(); });
+    _tbStopMarkers.push(new mapboxgl.Marker({ element: elm, anchor: 'center' }).setLngLat([s.lng, s.lat]).addTo(_tbEditorMap));
+    if (s.id === _tbSelStopId) {
+      for (const p of (s.pins || [])) {
+        const pe = document.createElement('div'); pe.className = 'tb-pin-marker';
+        _tbPinMarkers.push(new mapboxgl.Marker({ element: pe, anchor: 'center' }).setLngLat([p.lng, p.lat]).addTo(_tbEditorMap));
+      }
+    }
+  }
+}
+
+function tbSelStop() { return (_tbTour.stops || []).find(s => s.id === _tbSelStopId) || null; }
+
+function renderTbEditorPanel() {
+  const panel = document.getElementById('tb-panel');
+  const titleEl = document.getElementById('tb-ed-title');
+  if (titleEl) titleEl.textContent = _tbTour.name || '(untitled)';
+  if (!panel) return;
+  panel.innerHTML = '';
+
+  // Tour-level actions.
+  const top = document.createElement('div'); top.className = 'tb-actions';
+  top.appendChild(smMakeBtn('Rename tour', '', () => tbShowForm({
+    title: 'Rename tour',
+    fields: [{ key: 'name', label: 'Tour name', type: 'text', value: _tbTour.name || '' }],
+    onSave: async (v, err) => {
+      if (!v.name.trim()) { err('Name required'); return false; }
+      const token = getStoredGuideToken();
+      const { error } = await supabaseClient.rpc('update_tour', { p_guide_token: token, p_tour_id: _tbTour.id, p_name: v.name.trim(), p_subtitle: null, p_home_lng: null, p_home_lat: null });
+      if (error) { err(error.message); return false; }
+      _tbTour.name = v.name.trim(); tbCloseForm(); renderTbEditorPanel(); return true;
+    },
+  })));
+  top.appendChild(smMakeBtn('Set home', '', () => tbArmPlace('home')));
+  panel.appendChild(top);
+
+  // Stops.
+  const sl = document.createElement('div'); sl.className = 'tb-section-label'; sl.textContent = 'Stops'; panel.appendChild(sl);
+  if (!(_tbTour.stops || []).length) {
+    const e = document.createElement('div'); e.className = 'tb-empty'; e.style.padding = '12px'; e.textContent = 'No stops yet — add one.'; panel.appendChild(e);
+  }
+  for (const s of (_tbTour.stops || [])) {
+    const row = document.createElement('div');
+    row.className = 'tb-stop-row' + (s.id === _tbSelStopId ? ' selected' : '');
+    row.addEventListener('click', () => { _tbSelStopId = s.id; renderTbMarkers(); renderTbEditorPanel(); });
+    const title = document.createElement('div'); title.className = 'tb-rowtitle';
+    title.innerHTML = `<span class="tb-num">${s.ordinal}</span>${(s.name || '').replace(/</g, '&lt;')}`;
+    row.appendChild(title);
+    const meta = document.createElement('div'); meta.className = 'tb-row-meta';
+    meta.textContent = `${(s.pins || []).length} pin${(s.pins || []).length === 1 ? '' : 's'} · ${s.activation_radius_m} m radius`;
+    row.appendChild(meta);
+    const acts = document.createElement('div'); acts.className = 'tb-actions';
+    acts.appendChild(smMakeBtn('Edit', '', (ev) => { ev.stopPropagation(); tbEditStopForm(s); }));
+    acts.appendChild(smMakeBtn('Move', '', (ev) => { ev.stopPropagation(); _tbSelStopId = s.id; tbArmPlace('move-stop', s.id); }));
+    if (_tbStopDeleteConfirm === s.id) {
+      acts.appendChild(smMakeBtn('Tap to confirm', 'danger', async (ev) => {
+        ev.stopPropagation(); const r = await tbDeleteStop(s.id); _tbStopDeleteConfirm = null;
+        if (!r.error) { _tbTour.stops = _tbTour.stops.filter(x => x.id !== s.id); if (_tbSelStopId === s.id) _tbSelStopId = _tbTour.stops[0] ? _tbTour.stops[0].id : null; }
+        renderTbMarkers(); renderTbEditorPanel();
+      }));
+    } else {
+      acts.appendChild(smMakeBtn('Delete', 'danger', (ev) => { ev.stopPropagation(); _tbStopDeleteConfirm = s.id; renderTbEditorPanel(); }));
+    }
+    row.appendChild(acts);
+    panel.appendChild(row);
+
+    // Pins of the selected stop.
+    if (s.id === _tbSelStopId) {
+      for (const p of (s.pins || [])) {
+        const pr = document.createElement('div'); pr.className = 'tb-pin-row';
+        const pt = document.createElement('div'); pt.className = 'tb-rowtitle'; pt.textContent = p.title || ''; pr.appendChild(pt);
+        if (p.body) { const pb = document.createElement('div'); pb.className = 'tb-rowbody'; pb.textContent = p.body; pr.appendChild(pb); }
+        const pa = document.createElement('div'); pa.className = 'tb-actions';
+        pa.appendChild(smMakeBtn('Edit', '', () => tbEditPinForm(p)));
+        pa.appendChild(smMakeBtn('Move', '', () => tbArmPlace('move-pin', p.id)));
+        if (_tbPinDeleteConfirm === p.id) {
+          pa.appendChild(smMakeBtn('Tap to confirm', 'danger', async () => {
+            const r = await tbDeletePin(p.id); _tbPinDeleteConfirm = null;
+            if (!r.error) s.pins = s.pins.filter(x => x.id !== p.id);
+            renderTbMarkers(); renderTbEditorPanel();
+          }));
+        } else {
+          pa.appendChild(smMakeBtn('Delete', 'danger', () => { _tbPinDeleteConfirm = p.id; renderTbEditorPanel(); }));
+        }
+        pr.appendChild(pa);
+        panel.appendChild(pr);
+      }
+      const addPin = smMakeBtn('+ Add pin here', 'primary', () => tbArmPlace('pin'));
+      addPin.style.marginLeft = '14px';
+      panel.appendChild(addPin);
+    }
+  }
+
+  const addStop = document.createElement('div'); addStop.style.marginTop = '12px';
+  addStop.appendChild(smMakeBtn('+ Add stop', 'primary', () => tbArmPlace('stop')));
+  panel.appendChild(addStop);
+}
+
+function tbArmPlace(kind, id) {
+  _tbPlace = { kind, id };
+  const banner = document.getElementById('tb-place-banner');
+  const text = document.getElementById('tb-place-text');
+  if (text) {
+    text.textContent =
+      kind === 'home' ? 'Tap the map to set the tour home' :
+      kind === 'stop' ? 'Tap the map to place the new stop' :
+      kind === 'pin' ? 'Tap the map to place the new pin' :
+      kind === 'move-stop' ? 'Tap the map to move this stop' :
+      'Tap the map to move this pin';
+  }
+  if (banner) banner.classList.add('show');
+}
+function tbCancelPlace() {
+  _tbPlace = null;
+  const banner = document.getElementById('tb-place-banner');
+  if (banner) banner.classList.remove('show');
+}
+
+async function tbOnMapClick(e) {
+  if (!_tbPlace) return;
+  const lng = e.lngLat.lng, lat = e.lngLat.lat;
+  const place = _tbPlace;
+  tbCancelPlace();
+  if (place.kind === 'home') {
+    const token = getStoredGuideToken();
+    const { error } = await supabaseClient.rpc('update_tour', { p_guide_token: token, p_tour_id: _tbTour.id, p_name: null, p_subtitle: null, p_home_lng: lng, p_home_lat: lat });
+    if (!error) { _tbTour.home_lng = lng; _tbTour.home_lat = lat; }
+    return;
+  }
+  if (place.kind === 'stop') {
+    tbShowForm({
+      title: 'New stop',
+      fields: [
+        { key: 'name', label: 'Stop name', type: 'text', value: '' },
+        { key: 'radius', label: 'Activation radius (m)', type: 'number', value: 150 },
+      ],
+      onSave: async (v, err) => {
+        if (!v.name.trim()) { err('Name required'); return false; }
+        const r = await tbCreateStop(_tbTour.id, v.name.trim(), lng, lat, parseInt(v.radius, 10) || 150);
+        if (r.error) { err(r.error); return false; }
+        r.row.pins = []; _tbTour.stops.push(r.row); _tbSelStopId = r.row.id;
+        tbCloseForm(); renderTbMarkers(); renderTbEditorPanel(); return true;
+      },
+    });
+    return;
+  }
+  if (place.kind === 'pin') {
+    const stop = tbSelStop(); if (!stop) return;
+    tbShowForm({
+      title: 'New pin',
+      fields: [
+        { key: 'title', label: 'Title', type: 'text', value: '' },
+        { key: 'body', label: 'Description', type: 'textarea', value: '' },
+        { key: 'radius', label: 'Trigger radius (m)', type: 'number', value: 25 },
+      ],
+      onSave: async (v, err) => {
+        if (!v.title.trim()) { err('Title required'); return false; }
+        const r = await tbCreatePin(stop.id, v.title.trim(), v.body || '', lng, lat, parseInt(v.radius, 10) || 25);
+        if (r.error) { err(r.error); return false; }
+        stop.pins.push(r.row);
+        tbCloseForm(); renderTbMarkers(); renderTbEditorPanel(); return true;
+      },
+    });
+    return;
+  }
+  if (place.kind === 'move-stop') {
+    const r = await tbUpdateStop(place.id, { lng, lat });
+    if (!r.error) { const s = (_tbTour.stops || []).find(x => x.id === place.id); if (s) { s.lng = lng; s.lat = lat; } }
+    renderTbMarkers();
+    return;
+  }
+  if (place.kind === 'move-pin') {
+    const r = await tbUpdatePin(place.id, { lng, lat });
+    if (!r.error) { for (const s of _tbTour.stops) { const p = (s.pins || []).find(x => x.id === place.id); if (p) { p.lng = lng; p.lat = lat; } } }
+    renderTbMarkers();
+    return;
+  }
+}
+
+function tbEditStopForm(s) {
+  tbShowForm({
+    title: 'Edit stop',
+    fields: [
+      { key: 'name', label: 'Stop name', type: 'text', value: s.name || '' },
+      { key: 'radius', label: 'Activation radius (m)', type: 'number', value: s.activation_radius_m },
+    ],
+    onSave: async (v, err) => {
+      if (!v.name.trim()) { err('Name required'); return false; }
+      const r = await tbUpdateStop(s.id, { name: v.name.trim(), radius: parseInt(v.radius, 10) || s.activation_radius_m });
+      if (r.error) { err(r.error); return false; }
+      s.name = v.name.trim(); s.activation_radius_m = parseInt(v.radius, 10) || s.activation_radius_m;
+      tbCloseForm(); renderTbEditorPanel(); return true;
+    },
+  });
+}
+function tbEditPinForm(p) {
+  tbShowForm({
+    title: 'Edit pin',
+    fields: [
+      { key: 'title', label: 'Title', type: 'text', value: p.title || '' },
+      { key: 'body', label: 'Description', type: 'textarea', value: p.body || '' },
+      { key: 'radius', label: 'Trigger radius (m)', type: 'number', value: p.trigger_radius_m },
+    ],
+    onSave: async (v, err) => {
+      if (!v.title.trim()) { err('Title required'); return false; }
+      const r = await tbUpdatePin(p.id, { title: v.title.trim(), body: v.body || '', radius: parseInt(v.radius, 10) || p.trigger_radius_m });
+      if (r.error) { err(r.error); return false; }
+      p.title = v.title.trim(); p.body = v.body || ''; p.trigger_radius_m = parseInt(v.radius, 10) || p.trigger_radius_m;
+      tbCloseForm(); renderTbEditorPanel(); return true;
+    },
+  });
+}
+
+// ── Reusable form modal ──
+function tbShowForm(opts) {
+  tbCloseForm();
+  const bd = document.createElement('div');
+  bd.className = 'tb-form-backdrop show';
+  bd.id = 'tb-form-backdrop';
+  const fieldsHtml = opts.fields.map((f, i) => {
+    const id = 'tb-f-' + i;
+    if (f.type === 'textarea') return `<label for="${id}">${f.label}</label><textarea id="${id}">${(f.value || '').toString().replace(/</g, '&lt;')}</textarea>`;
+    const type = f.type === 'number' ? 'number' : 'text';
+    return `<label for="${id}">${f.label}</label><input id="${id}" type="${type}" value="${(f.value ?? '').toString().replace(/"/g, '&quot;')}" />`;
+  }).join('');
+  bd.innerHTML = `
+    <div class="tb-form">
+      <h3>${opts.title}</h3>
+      ${fieldsHtml}
+      ${opts.note ? `<div class="tb-row-meta" style="margin-top:8px;">${opts.note}</div>` : ''}
+      <div class="tb-form-err" id="tb-form-err"></div>
+      <div class="tb-form-actions">
+        <button class="sm-btn" id="tb-form-cancel">Cancel</button>
+        <button class="sm-btn primary" id="tb-form-save" style="flex:1;">Save</button>
+      </div>
+    </div>`;
+  document.getElementById('phone').appendChild(bd);
+  const errEl = document.getElementById('tb-form-err');
+  const setErr = (m) => { if (errEl) errEl.textContent = m || ''; };
+  document.getElementById('tb-form-cancel').addEventListener('click', tbCloseForm);
+  document.getElementById('tb-form-save').addEventListener('click', async () => {
+    const vals = {};
+    opts.fields.forEach((f, i) => { const node = document.getElementById('tb-f-' + i); vals[f.key] = node ? node.value : ''; });
+    setErr('');
+    await opts.onSave(vals, setErr);
+  });
+  setTimeout(() => { const first = bd.querySelector('input,textarea'); if (first) try { first.focus(); } catch (_e) {} }, 80);
+}
+function tbCloseForm() { const bd = document.getElementById('tb-form-backdrop'); if (bd) bd.remove(); }
 
 // Render the "create session" form — a name input + a button.
 // On submit: generate nanoid, insert session row, redirect to ?session=<id>.
@@ -6314,6 +6894,10 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   if (mySessionsItem) {
     mySessionsItem.style.display = GUIDE ? '' : 'none';
   }
+  const buildToursItem = document.getElementById('menu-build-tours');
+  if (buildToursItem) {
+    buildToursItem.style.display = GUIDE ? '' : 'none';
+  }
   // "Your name" — passenger-only, only when in a session. Show current name
   // as a subtitle so they know what's stored without opening the form.
   const editNameItem = document.getElementById('menu-edit-name');
@@ -6351,6 +6935,9 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
       // over the current view so the guide can switch/manage sessions.
       while (screenStack.length) closeScreen();
       showSessionManager();
+    } else if (action === 'build-tours') {
+      while (screenStack.length) closeScreen();
+      showTourManager();
     } else if (action === 'edit-name') {
       // Close the menu, then show the edit form.
       while (screenStack.length) closeScreen();
