@@ -507,6 +507,17 @@
     font-variation-settings: "opsz" 90;
   }
   .popup-body p { font-size: 15px; line-height: 1.55; color: #2a2e2a; }
+  .popup-actions { margin-top: 18px; }
+  .popup-ok {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--ink); color: var(--paper);
+    border: 1px solid var(--ink); border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    cursor: pointer; transition: transform 0.1s;
+  }
+  .popup-ok:active { transform: scale(0.97); }
 
   /* GPS error banner — when location fails or is denied */
   .gps-banner {
@@ -2026,6 +2037,9 @@
         <div class="popup-body">
           <h2 id="popup-title">…</h2>
           <p id="popup-body-el">…</p>
+          <div class="popup-actions">
+            <button class="popup-ok" id="popup-ok">Continue</button>
+          </div>
         </div>
       </div>
     </div>
@@ -2470,7 +2484,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · prefetch tour-area tiles for offline detail · build 2026-06-02-1849';
+const BUILD_VERSION = '0.5 · pin popup gets a Continue button · build 2026-06-02-2027';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -6236,6 +6250,8 @@ function showPopup(pin) {
 }
 function closePopup() { popup.classList.remove('show'); }
 popupClose.addEventListener('click', closePopup);
+const popupOk = document.getElementById('popup-ok');
+if (popupOk) popupOk.addEventListener('click', closePopup);
 
 // ── 10. CHIME ──
 let audioCtx = null;
