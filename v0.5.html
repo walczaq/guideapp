@@ -939,6 +939,15 @@
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px; letter-spacing: 0.08em; color: var(--rule);
   }
+  /* Live "departs at HH:MM" hint under the edit-notes duration field, so
+     the guide sees the resulting clock time as they change the minutes. */
+  .notes-modal-departure-hint {
+    margin-top: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.04em;
+    color: var(--rule);
+  }
+  .notes-modal-departure-hint:empty { display: none; }
 
   /* Warning level pills — None / Info / Caution / Danger. Each pill carries
      a severity tint when active so the guide sees the level at a glance. */
@@ -1993,6 +2002,20 @@
         <p id="notes-modal-sub">Tap the icon on each warning to cycle its category. Up to 3 warnings.</p>
         <div class="stop-modal-error" id="notes-modal-error"></div>
       </div>
+      <div class="stop-modal-duration">
+        <div class="stop-modal-duration-label">Time at stop</div>
+        <div class="stop-modal-duration-row">
+          <input
+            type="number"
+            id="notes-modal-duration-input"
+            class="stop-modal-duration-input"
+            min="1" max="360" step="1"
+            inputmode="numeric"
+          />
+          <span class="stop-modal-duration-suffix">minutes</span>
+        </div>
+        <div class="notes-modal-departure-hint" id="notes-modal-departure-hint"></div>
+      </div>
       <div class="stop-modal-notes">
         <div class="stop-modal-notes-label">Warnings for passengers (max 3)</div>
         <div id="notes-modal-list"></div>
@@ -2065,7 +2088,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk D: note updates use banner not full modal · build 2026-06-02-1610';
+const BUILD_VERSION = '0.5 · chunk D: editable departure time · build 2026-06-02-1616';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -6344,7 +6367,9 @@ function onStopActivationUpdated(row) {
   // If the duration_minutes changed, the alarm should be re-evaluated on
   // the new schedule — drop the fired flag so the next tick re-checks.
   const prev = ACTIVATION_META.get(row.stop_id);
-  if (!prev || prev.duration_minutes !== (row.duration_minutes ?? 20)) {
+  const newDur = row.duration_minutes ?? 20;
+  const durationChanged = !!prev && prev.duration_minutes !== newDur;
+  if (!prev || durationChanged) {
     _alarmFiredFor.delete(row.stop_id);
   }
   // Detect whether this update actually changed the notes text. We only
@@ -6368,14 +6393,15 @@ function onStopActivationUpdated(row) {
   // content in place (no chime, no animation — just updated values).
   if (_arrivalStop && _arrivalStop.id === row.stop_id) {
     populateArrivalModalContent(_arrivalStop);
-  } else if (ROLE === 'passenger' && stop && hasContent && notesChanged) {
-    // A new publish landed while the passenger is NOT in the full modal.
-    // Surface ONLY the notification content — the slim top warning banner
-    // (refreshed below) plus a chime. We deliberately do NOT re-pop the
-    // full stop window here; that big modal is reserved for the initial
-    // stop activation, not for follow-up notes/warnings.
+  } else if (ROLE === 'passenger' && stop && ((hasContent && notesChanged) || durationChanged)) {
+    // A push-worthy update landed while the passenger is NOT in the full
+    // modal: a new note/warning, OR a changed departure time. Surface ONLY
+    // the notification content — the slim top banner (refreshed below) and
+    // a chime. The full stop window stays reserved for initial activation.
     playChime();
   }
+  // A departure-time change updates the HUD timer's HH:MM live.
+  if (durationChanged) renderHudTimer();
 
   if (!stop) return;
   if (!hasContent) {
@@ -7678,6 +7704,15 @@ function showEditNoteModal(stop) {
     ? existing
     : [{ level: meta.warning_level || 'none', text: '' }];
   renderNotesEditorList('notes-modal-list', initial);
+  // Pre-fill the duration field with the stop's current minutes, and show
+  // the resulting departure clock time live as the guide edits it.
+  const durInput = document.getElementById('notes-modal-duration-input');
+  if (durInput) {
+    durInput.value = String(meta.duration_minutes ?? 20);
+    _noteEditOrigDuration = meta.duration_minutes ?? 20;
+    updateNotesDepartureHint();
+    durInput.oninput = updateNotesDepartureHint;
+  }
   saveBtn.disabled = false;
   saveBtn.textContent = 'Send to group';
   backdrop.classList.add('show');
@@ -7685,6 +7720,22 @@ function showEditNoteModal(stop) {
     const first = list.querySelector('input.notes-input');
     if (first) first.focus();
   }, 200);
+}
+
+// Track the duration the modal opened with, so saveEditedNote only sends a
+// duration update (and the push that follows) when it actually changed.
+let _noteEditOrigDuration = null;
+
+// Live "departs at HH:MM" hint under the edit-notes duration field.
+function updateNotesDepartureHint() {
+  const hint = document.getElementById('notes-modal-departure-hint');
+  const durInput = document.getElementById('notes-modal-duration-input');
+  if (!hint || !durInput || !_noteEditStop) return;
+  const meta = ACTIVATION_META.get(_noteEditStop.id) || {};
+  const mins = parseInt(durInput.value, 10);
+  if (!meta.activated_at || !Number.isFinite(mins) || mins < 1) { hint.textContent = ''; return; }
+  const dep = new Date(new Date(meta.activated_at).getTime() + mins * 60 * 1000);
+  hint.textContent = `Departs at ${formatHHMM(dep)}`;
 }
 
 // Inline SVG used inside the level cycle button. The "none" state shows a
@@ -7792,6 +7843,17 @@ async function saveEditedNote() {
     .slice(0, MAX_NOTES);
   const newNotes = entries.length ? entries.map(e => encodeNoteLine(e.level, e.text)).join('\n') : null;
   const newWarning = entries.length ? maxSeverityLevel(entries) : 'none';
+  // Departure-time edit: only send a duration update when it actually
+  // changed from what the modal opened with. Sending it unchanged would
+  // trip the push pipeline's "departure changed" trigger for no reason.
+  const durInput = document.getElementById('notes-modal-duration-input');
+  let newDuration = null;
+  if (durInput) {
+    const n = parseInt(durInput.value, 10);
+    if (Number.isFinite(n) && n >= 1 && n <= 360 && n !== _noteEditOrigDuration) {
+      newDuration = n;
+    }
+  }
   saveBtn.disabled = true;
   saveBtn.textContent = 'Sending…';
   errEl.textContent = '';
@@ -7801,6 +7863,7 @@ async function saveEditedNote() {
     p_guide_token: token,
     p_notes: newNotes,
     p_warning_level: newWarning,
+    p_duration_minutes: newDuration,   // null = leave unchanged
   });
   if (error) {
     console.warn('[notes] update failed', error);
@@ -7816,13 +7879,14 @@ async function saveEditedNote() {
   ACTIVATION_META.set(stop.id, Object.assign({}, existing, {
     notes: newNotes,
     warning_level: newWarning,
-  }));
+  }, (newDuration != null ? { duration_minutes: newDuration } : {})));
   // Every publish is treated as a fresh broadcast: previously-dismissed
   // warnings get to surface again. Refresh the banner immediately so the
   // publishing guide doesn't have to wait for the realtime echo to see it.
   _topBannerDismissedTexts.delete(stop.id);
   if (ROLE === 'guide') renderStopList();
   refreshTopWarningBanner(stop);
+  renderHudTimer();   // reflect a changed departure time immediately
   if (_arrivalStop && _arrivalStop.id === stop.id) {
     populateArrivalModalContent(_arrivalStop);
   }

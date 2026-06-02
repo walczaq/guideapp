@@ -83,6 +83,19 @@ function hasBusLine(notes: string | null | undefined): boolean {
   return false;
 }
 
+// Format a departure clock time (HH:MM) from an activated_at ISO string
+// plus a duration in minutes. Rendered in UTC, which equals local time in
+// Iceland (the tour region — no DST, UTC year-round). Returns '' on bad input.
+function fmtUTCHHMM(activatedAtIso: string | null | undefined, durationMinutes: number | null): string {
+  if (!activatedAtIso || durationMinutes == null) return '';
+  const base = Date.parse(activatedAtIso);
+  if (Number.isNaN(base)) return '';
+  const d = new Date(base + durationMinutes * 60 * 1000);
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mm = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
 // The bus line's actual text (sans prefix). Used as the body when present.
 function firstBusLine(notes: string | null | undefined): string {
   if (!notes) return '';
@@ -113,19 +126,24 @@ Deno.serve(async (req: Request) => {
     return jsonResp(400, { ok: false, error: 'missing session_id/stop_id/id' });
   }
 
-  // ── Filter 1: must be either an escalated caution/danger OR a brand-new
-  // [bus] departure signal that wasn't present in the old row. The bus tap
-  // doesn't escalate warning_level (severity 0 in the client), so it
-  // arrives here with newLevel='none' but a [bus] line freshly added.
+  // ── Filter 1: must be one of three push-worthy changes:
+  //   (a) escalated caution/danger warning level
+  //   (b) a brand-new [bus] departure signal (bus tap doesn't escalate
+  //       warning_level — severity 0 in the client — so it arrives with
+  //       newLevel='none' but a [bus] line freshly added)
+  //   (c) the departure time (duration_minutes) changed
   const newLevel = String(newRow.warning_level || 'none');
   const isEscalated = ESCALATED_LEVELS.has(newLevel);
   const newHasBus = hasBusLine(newRow.notes);
   const oldHasBus = oldRow ? hasBusLine(oldRow.notes) : false;
   const isNewBusSignal = newHasBus && !oldHasBus;
-  if (!isEscalated && !isNewBusSignal) {
+  const newDuration = (newRow.duration_minutes == null) ? null : Number(newRow.duration_minutes);
+  const oldDuration = (oldRow && oldRow.duration_minutes != null) ? Number(oldRow.duration_minutes) : null;
+  const durationChanged = !!oldRow && newDuration != null && oldDuration != null && newDuration !== oldDuration;
+  if (!isEscalated && !isNewBusSignal && !durationChanged) {
     return jsonResp(200, {
       ok: true,
-      skipped: 'level not escalated and no new bus signal',
+      skipped: 'nothing push-worthy changed',
       level: newLevel,
     });
   }
@@ -139,7 +157,7 @@ Deno.serve(async (req: Request) => {
     const oldLevel = String(oldRow.warning_level || 'none');
     const oldNotes = oldRow.notes || '';
     const newNotes = newRow.notes || '';
-    if (oldLevel === newLevel && oldNotes === newNotes) {
+    if (oldLevel === newLevel && oldNotes === newNotes && !durationChanged) {
       return jsonResp(200, { ok: true, skipped: 'no meaningful change' });
     }
   }
@@ -208,14 +226,23 @@ Deno.serve(async (req: Request) => {
       ? `Your guide sent a ${levelWord} note: "${noteText}". Tap to open the map.`
       : `Your guide flagged a ${levelWord} at ${stopName}. Tap to open the map.`;
     tag = `fieldnote-warning-${stopId}`;
-  } else {
-    // isNewBusSignal === true (Filter 1 guarantees one of the two).
+  } else if (isNewBusSignal) {
     title = `🚌 Time to head back · ${stopName}`;
     const busText = firstBusLine(newRow.notes);
     notificationBody = busText
       ? `${busText}. Tap to open the map.`
       : `Your guide signaled departure. Tap to open the map.`;
     tag = `fieldnote-bus-${stopId}`;
+  } else {
+    // durationChanged === true (Filter 1 guarantees one of the three).
+    // Departure clock time = activated_at + duration. Formatted in UTC,
+    // which is correct local time for Iceland (no DST, UTC year-round).
+    const depHHMM = fmtUTCHHMM(newRow.activated_at, newDuration);
+    title = `🕒 Departure time updated · ${stopName}`;
+    notificationBody = depHHMM
+      ? `Departure is now ${depHHMM}. Tap to open the map.`
+      : `Your guide changed the departure time. Tap to open the map.`;
+    tag = `fieldnote-departure-${stopId}`;
   }
   // Deep-link the tap back to the passenger's active session path. Worker
   // serves /v0.5 (no .html); boot reads ?session= and rejoins.
