@@ -1384,6 +1384,87 @@
   .intro-btn.ghost { flex: 0 0 auto; padding: 14px 18px; }
   .intro-btn[disabled] { opacity: 0.5; cursor: default; }
 
+  /* ── My Sessions (per-guide session manager) ────────────────────────── */
+  .sm-screen {
+    position: absolute; inset: 0; z-index: 90;
+    background: var(--paper);
+    display: flex; flex-direction: column;
+    padding-top: max(env(safe-area-inset-top, 0px), 30px);
+  }
+  .sm-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .sm-stamp {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule); margin-bottom: 6px;
+  }
+  .sm-title {
+    font-family: 'Fraunces', serif; font-weight: 400; font-size: 26px;
+    color: var(--ink); font-variation-settings: "opsz" 90;
+  }
+  .sm-list {
+    flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .sm-empty {
+    text-align: center; color: var(--rule);
+    font-family: 'Fraunces', serif; font-style: italic; font-size: 15px;
+    padding: 40px 20px;
+  }
+  .sm-row {
+    border: 1px solid var(--rule); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 10px;
+    background: var(--paper);
+  }
+  .sm-row.active { border-color: var(--ink); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .sm-label {
+    font-family: 'Fraunces', serif; font-weight: 700; font-size: 17px;
+    color: var(--ink); line-height: 1.2;
+  }
+  .sm-status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.06em; color: var(--rule);
+    margin-top: 3px;
+  }
+  .sm-status .sm-dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--signal-good); margin-right: 5px; vertical-align: middle;
+  }
+  .sm-actions {
+    display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;
+  }
+  .sm-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 9px 14px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--ink); background: var(--paper); color: var(--ink);
+    transition: transform 0.1s;
+  }
+  .sm-btn:active { transform: scale(0.96); }
+  .sm-btn.primary { background: var(--ink); color: var(--paper); }
+  .sm-btn.danger { border-color: var(--mark); color: var(--mark); }
+  .sm-rename-input {
+    width: 100%; box-sizing: border-box;
+    padding: 8px 10px; margin-bottom: 8px;
+    border: 1px solid var(--ink); border-radius: 6px;
+    font-family: 'Fraunces', serif; font-size: 16px; color: var(--ink);
+    background: var(--paper);
+  }
+  .sm-footer {
+    padding: 14px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--rule-soft);
+  }
+  .sm-newbtn {
+    width: 100%; padding: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
+    background: var(--ink); color: var(--paper);
+    border: none; border-radius: 8px; cursor: pointer;
+  }
+  .sm-newbtn:active { transform: scale(0.98); }
+
   /* ── HUD right column + persistent departure timer ──────────────────
      Right-side stack inside .map-hud. The timer card sits ABOVE the
      signal pill and is only shown when an active stop has a departure.
@@ -1993,6 +2074,17 @@
           <div class="menu-label">Share invite</div>
           <span class="menu-chevron">›</span>
         </button>
+        <button class="menu-item" data-action="my-sessions" id="menu-my-sessions" style="display:none;">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="4" rx="1"/>
+              <rect x="3" y="10" width="18" height="4" rx="1"/>
+              <rect x="3" y="16" width="18" height="4" rx="1"/>
+            </svg>
+          </div>
+          <div class="menu-label">My sessions</div>
+          <span class="menu-chevron">›</span>
+        </button>
         <button class="menu-item" data-action="edit-name" id="menu-edit-name" style="display:none;">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2378,7 +2470,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · passenger start zoom 16.5 (more detail) · build 2026-06-02-1808';
+const BUILD_VERSION = '0.5 · per-guide session management (My Sessions) · build 2026-06-02-1823';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3083,14 +3175,13 @@ async function boot() {
     return;
   }
 
-  // Resume the last session IN PLACE when launched without a ?session=
-  // param (e.g. the installed PWA's start_url is "/v0.5"). Previously this
-  // did a full window.location.replace, which (a) flashed a visible reload
-  // on every cold launch and (b) broke offline — the redirect target had to
-  // be re-fetched from the network. history.replaceState just updates the
-  // URL bar; we then fall through to the normal session-join path with no
-  // navigation. Applies to guide + passenger alike.
-  if (!sessionId && !tourSlug) {
+  // Resume the last session IN PLACE for PASSENGERS launched without a
+  // ?session= param (e.g. the installed PWA's start_url is "/v0.5").
+  // history.replaceState just updates the URL bar; we then fall through to
+  // the normal join path with no navigation/reload. Guides are excluded —
+  // they land on the My Sessions manager (Path 3a) to pick/resume/start,
+  // which is the per-guide session-management hub.
+  if (!sessionId && !tourSlug && !GUIDE) {
     const last = getLastSession();
     if (last) {
       sessionId = last;
@@ -3128,9 +3219,9 @@ async function boot() {
     // a tour without going through the session flow.
     await loadTourDirectly(tourSlug);
   } else if (GUIDE) {
-    // Path 3a: logged-in guide with no session to resume (the in-place
-    // resume above already handled the "has a recent session" case).
-    showCreateSessionForm();
+    // Path 3a: logged-in guide on a bare URL → the My Sessions manager
+    // (resume / rename / end / start new). Their hub for managing sessions.
+    showSessionManager();
   } else {
     // Path 3b: bare URL, not a logged-in guide and no session memo to
     // resume — show the landing screen with the join explainer.
@@ -3701,6 +3792,175 @@ function showInviteCodeForm() {
   codeInput.focus();
 }
 
+// ── Per-guide session management ──────────────────────────────────────
+// A logged-in guide manages their own sessions: resume / rename / end any
+// of them, start new, and stale ones auto-close on entry. Backed by the
+// migration-010 RPCs (list_guide_sessions / rename_session /
+// cleanup_stale_sessions) + the existing end_session.
+let _smSessions = [];
+let _smRenamingId = null;
+let _smConfirmEndId = null;
+
+async function listGuideSessions() {
+  const token = getStoredGuideToken();
+  if (!token) return [];
+  const { data, error } = await supabaseClient.rpc('list_guide_sessions', { p_guide_token: token });
+  if (error) { console.warn('[sessions] list failed', error); return []; }
+  return data || [];
+}
+async function cleanupStaleSessions() {
+  const token = getStoredGuideToken();
+  if (!token) return 0;
+  const { data, error } = await supabaseClient.rpc('cleanup_stale_sessions', { p_guide_token: token, p_hours: 12 });
+  if (error) { console.warn('[sessions] cleanup failed', error); return 0; }
+  return data || 0;
+}
+async function renameSessionById(id, label) {
+  const token = getStoredGuideToken();
+  if (!token) return { error: 'Not signed in.' };
+  const { error } = await supabaseClient.rpc('rename_session', { p_session_id: id, p_guide_token: token, p_label: label });
+  if (error) return { error: error.message || 'Rename failed.' };
+  return { ok: true };
+}
+async function endSessionById(id) {
+  const token = getStoredGuideToken();
+  if (!token) return { error: 'Not signed in.' };
+  const { error } = await supabaseClient.rpc('end_session', { p_session_id: id, p_guide_token: token });
+  if (error) return { error: error.message || 'Could not end session.' };
+  return { ok: true };
+}
+
+// Compact local timestamp: "Today 14:30" / "May 30 14:30".
+function smFmtWhen(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  if (d.toDateString() === new Date().toDateString()) return `Today ${hh}:${mm}`;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ` ${hh}:${mm}`;
+}
+
+function smMakeBtn(text, variant, onClick) {
+  const b = document.createElement('button');
+  b.className = 'sm-btn' + (variant ? ' ' + variant : '');
+  b.textContent = text;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+// Resume a session as guide — navigate so boot re-initialises cleanly.
+function resumeSession(id) {
+  rememberLastSession(id);
+  window.location.href = `${window.location.pathname}?session=${encodeURIComponent(id)}&role=guide`;
+}
+
+async function showSessionManager() {
+  hideLoading();
+  let el = document.getElementById('session-manager');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'session-manager';
+  el.className = 'sm-screen';
+  const who = (GUIDE && GUIDE.name) ? GUIDE.name.replace(/</g, '&lt;') : 'Guide';
+  // Show a "Back" affordance only when opened over a live session (from the
+  // burger menu) — on the boot path there's nothing to go back to.
+  const backBtn = SESSION
+    ? '<button class="sm-btn" id="sm-back" style="margin-top:10px;">‹ Back to tour</button>'
+    : '';
+  el.innerHTML = `
+    <div class="sm-header">
+      <div class="sm-stamp">Fieldnote · ${who}</div>
+      <div class="sm-title">My sessions</div>
+      ${backBtn}
+    </div>
+    <div class="sm-list" id="sm-list"><div class="sm-empty">Loading…</div></div>
+    <div class="sm-footer"><button class="sm-newbtn" id="sm-new">+ Start new session</button></div>
+  `;
+  document.getElementById('phone').appendChild(el);
+  const back = document.getElementById('sm-back');
+  if (back) back.addEventListener('click', () => {
+    const m = document.getElementById('session-manager');
+    if (m) m.remove();
+  });
+  document.getElementById('sm-new').addEventListener('click', () => {
+    const m = document.getElementById('session-manager');
+    if (m) m.remove();
+    showCreateSessionForm();
+  });
+  // Auto-close the guide's stale (>12h) sessions, then list what remains.
+  await cleanupStaleSessions();
+  _smSessions = await listGuideSessions();
+  _smRenamingId = null; _smConfirmEndId = null;
+  renderSmList();
+}
+
+function renderSmList() {
+  const list = document.getElementById('sm-list');
+  if (!list) return;
+  if (!_smSessions.length) {
+    list.innerHTML = '<div class="sm-empty">No sessions yet.<br>Start one below.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  for (const s of _smSessions) {
+    const active = !s.ended_at;
+    const row = document.createElement('div');
+    row.className = 'sm-row' + (active ? ' active' : '');
+
+    // Inline rename mode for this row.
+    if (_smRenamingId === s.id) {
+      const input = document.createElement('input');
+      input.className = 'sm-rename-input';
+      input.value = s.label || '';
+      input.maxLength = 80;
+      row.appendChild(input);
+      const actions = document.createElement('div'); actions.className = 'sm-actions';
+      const save = smMakeBtn('Save', 'primary', async () => {
+        const v = (input.value || '').trim();
+        if (!v) { input.focus(); input.style.borderColor = 'var(--mark)'; return; }
+        const r = await renameSessionById(s.id, v);
+        if (r.error) { input.style.borderColor = 'var(--mark)'; return; }
+        s.label = v; _smRenamingId = null; renderSmList();
+      });
+      actions.append(save, smMakeBtn('Cancel', '', () => { _smRenamingId = null; renderSmList(); }));
+      row.appendChild(actions);
+      list.appendChild(row);
+      setTimeout(() => { try { input.focus(); } catch (_e) {} }, 50);
+      continue;
+    }
+
+    const label = document.createElement('div');
+    label.className = 'sm-label';
+    label.textContent = s.label || s.id;
+    const status = document.createElement('div');
+    status.className = 'sm-status';
+    status.innerHTML = active
+      ? `<span class="sm-dot"></span>Active · started ${smFmtWhen(s.started_at)}`
+      : `Ended ${smFmtWhen(s.ended_at)}`;
+    row.append(label, status);
+
+    const actions = document.createElement('div');
+    actions.className = 'sm-actions';
+    actions.appendChild(smMakeBtn('Resume', 'primary', () => resumeSession(s.id)));
+    actions.appendChild(smMakeBtn('Rename', '', () => { _smRenamingId = s.id; _smConfirmEndId = null; renderSmList(); }));
+    if (active) {
+      if (_smConfirmEndId === s.id) {
+        actions.appendChild(smMakeBtn('Tap to confirm', 'danger', async () => {
+          const r = await endSessionById(s.id);
+          _smConfirmEndId = null;
+          if (!r.error) s.ended_at = new Date().toISOString();
+          renderSmList();
+        }));
+      } else {
+        actions.appendChild(smMakeBtn('End', 'danger', () => { _smConfirmEndId = s.id; renderSmList(); }));
+      }
+    }
+    row.appendChild(actions);
+    list.appendChild(row);
+  }
+}
+
 // Render the "create session" form — a name input + a button.
 // On submit: generate nanoid, insert session row, redirect to ?session=<id>.
 function showCreateSessionForm() {
@@ -3758,12 +4018,12 @@ async function createSession(tourSlug, guideName) {
   const id = nanoid8();
   const label = makeSessionLabel(tourSlug, guideName);
 
-  // owner_guide_id will be set once the sessions table has that column
-  // (alter-table migration pending — see briefing's v0.4 schema). Until then
-  // sessions are created without ownership tracked. The auto role-promote
-  // logic in boot() handles guide-vs-passenger view selection regardless.
+  // Tie the session to the logged-in guide (migration 010 added the column).
+  // GUIDE.id is the guides UUID from lookup_guide_by_token. Falls back to
+  // null only in the belt-and-suspenders no-login case.
   const insertPayload = {
     id, label, tour_slug: tourSlug, guide_name: guideName,
+    owner_guide_id: (GUIDE && GUIDE.id) ? GUIDE.id : null,
   };
 
   const { data, error } = await supabaseClient
@@ -5953,6 +6213,12 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   if (shareItem) {
     shareItem.style.display = SESSION ? '' : 'none';
   }
+  // "My sessions" — guide-only (logged-in). Lets a guide switch/manage
+  // sessions without leaving the current one.
+  const mySessionsItem = document.getElementById('menu-my-sessions');
+  if (mySessionsItem) {
+    mySessionsItem.style.display = GUIDE ? '' : 'none';
+  }
   // "Your name" — passenger-only, only when in a session. Show current name
   // as a subtitle so they know what's stored without opening the form.
   const editNameItem = document.getElementById('menu-edit-name');
@@ -5985,6 +6251,11 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
       openScreen('screen-about');
     } else if (action === 'share-invite') {
       openShareScreen();
+    } else if (action === 'my-sessions') {
+      // Close the menu + any open screens, then show the session manager
+      // over the current view so the guide can switch/manage sessions.
+      while (screenStack.length) closeScreen();
+      showSessionManager();
     } else if (action === 'edit-name') {
       // Close the menu, then show the edit form.
       while (screenStack.length) closeScreen();
