@@ -2584,7 +2584,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · tour builder UI (create/edit stops & pins on map) · build 2026-06-02-2100';
+const BUILD_VERSION = '0.6 · drop tour "home"; frame maps on stops · build 2026-06-02-2118';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4221,16 +4221,16 @@ function renderTbTourList() {
 }
 
 function tbNewTourFlow() {
-  // Home defaults to the guide's current GPS, else Reykjavík; refined later
-  // via "Set home" in the editor.
+  // The map needs a starting center for a stops-less tour; seed it from the
+  // guide's current GPS (else Reykjavík). Not a guide-facing concept — the
+  // editor re-frames on the stops as soon as they're added.
   const hasFix = (typeof state !== 'undefined' && state && Number.isFinite(state.youLng) && Number.isFinite(state.youLat));
   const homeLng = hasFix ? state.youLng : TB_DEFAULT_CENTER[0];
   const homeLat = hasFix ? state.youLat : TB_DEFAULT_CENTER[1];
   tbShowForm({
     title: 'New tour',
     fields: [{ key: 'name', label: 'Tour name', type: 'text', value: '' }],
-    note: hasFix ? 'Home set to your current location (move it later via "Set home").'
-                 : 'Home defaults to Reykjavík — set it on the map in the editor.',
+    note: 'Then add your stops by tapping the map.',
     onSave: async (vals, err) => {
       if (!vals.name.trim()) { err('Name required'); return false; }
       const r = await tbCreateTour(vals.name.trim(), homeLng, homeLat);
@@ -4246,7 +4246,7 @@ function tbNewTourFlow() {
 let _tbEditorMap = null;
 let _tbTour = null;             // full detail {id,...,stops:[{...,pins:[]}]}
 let _tbSelStopId = null;
-let _tbPlace = null;            // {kind:'stop'|'pin'|'home'|'move-stop'|'move-pin', id?}
+let _tbPlace = null;            // {kind:'stop'|'pin'|'move-stop'|'move-pin', id?}
 let _tbStopMarkers = [];
 let _tbPinMarkers = [];
 let _tbStopDeleteConfirm = null;
@@ -4279,15 +4279,28 @@ async function openTourEditor(tourId) {
   document.getElementById('tb-ed-back').addEventListener('click', tbCloseEditor);
   document.getElementById('tb-place-cancel').addEventListener('click', tbCancelPlace);
 
-  // Dedicated editor map.
+  // Dedicated editor map — framed on the tour's stops (+pins) if any,
+  // otherwise centered on the home seed (current GPS at creation).
+  const edPoints = [
+    ...((_tbTour.stops || []).map(s => ({ lng: s.lng, lat: s.lat }))),
+    ...((_tbTour.stops || []).flatMap(s => (s.pins || []).map(p => ({ lng: p.lng, lat: p.lat })))),
+  ];
+  const edOpts = {
+    container: 'tb-map',
+    style: 'mapbox://styles/mapbox/outdoors-v12',
+    attributionControl: false, pitchWithRotate: false, dragRotate: false,
+  };
+  if (edPoints.length) {
+    const lo = [Math.min(...edPoints.map(p => p.lng)), Math.min(...edPoints.map(p => p.lat))];
+    const hi = [Math.max(...edPoints.map(p => p.lng)), Math.max(...edPoints.map(p => p.lat))];
+    edOpts.bounds = [[lo[0] - 0.003, lo[1] - 0.003], [hi[0] + 0.003, hi[1] + 0.003]];
+    edOpts.fitBoundsOptions = { padding: 50, maxZoom: 16 };
+  } else {
+    edOpts.center = [_tbTour.home_lng, _tbTour.home_lat];
+    edOpts.zoom = 13;
+  }
   try {
-    _tbEditorMap = new mapboxgl.Map({
-      container: 'tb-map',
-      style: 'mapbox://styles/mapbox/outdoors-v12',
-      center: [_tbTour.home_lng, _tbTour.home_lat],
-      zoom: 13,
-      attributionControl: false, pitchWithRotate: false, dragRotate: false,
-    });
+    _tbEditorMap = new mapboxgl.Map(edOpts);
     _tbEditorMap.on('load', () => { setTimeout(() => { try { _tbEditorMap.resize(); } catch (_e) {} }, 50); renderTbMarkers(); });
     _tbEditorMap.on('click', tbOnMapClick);
   } catch (e) { console.warn('[tb] editor map failed', e); }
@@ -4344,7 +4357,6 @@ function renderTbEditorPanel() {
       _tbTour.name = v.name.trim(); tbCloseForm(); renderTbEditorPanel(); return true;
     },
   })));
-  top.appendChild(smMakeBtn('Set home', '', () => tbArmPlace('home')));
   panel.appendChild(top);
 
   // Stops.
@@ -4415,7 +4427,6 @@ function tbArmPlace(kind, id) {
   const text = document.getElementById('tb-place-text');
   if (text) {
     text.textContent =
-      kind === 'home' ? 'Tap the map to set the tour home' :
       kind === 'stop' ? 'Tap the map to place the new stop' :
       kind === 'pin' ? 'Tap the map to place the new pin' :
       kind === 'move-stop' ? 'Tap the map to move this stop' :
@@ -4434,12 +4445,6 @@ async function tbOnMapClick(e) {
   const lng = e.lngLat.lng, lat = e.lngLat.lat;
   const place = _tbPlace;
   tbCancelPlace();
-  if (place.kind === 'home') {
-    const token = getStoredGuideToken();
-    const { error } = await supabaseClient.rpc('update_tour', { p_guide_token: token, p_tour_id: _tbTour.id, p_name: null, p_subtitle: null, p_home_lng: lng, p_home_lat: lat });
-    if (!error) { _tbTour.home_lng = lng; _tbTour.home_lat = lat; }
-    return;
-  }
   if (place.kind === 'stop') {
     tbShowForm({
       title: 'New stop',
@@ -4866,11 +4871,18 @@ function initMap(token) {
   // minZoom/maxZoom locks. Real tours span huge geography (10-12hr drives,
   // multiple stops); locking the map to the home area was a v0.1 leftover
   // assumption that doesn't match reality.
-  // Use ALL pins (not just active ones) so the initial map view always shows
-  // the whole tour area, even when chunks B/C are live and pins start hidden.
-  const allPoints = [TOUR.home, ...allPins()];
-  const lngs = allPoints.map(p => p.lng);
-  const lats = allPoints.map(p => p.lat);
+  // Frame the initial view on the tour's STOPS (+ all pins). "home" is no
+  // longer a guide-facing concept (a single tour-level point can't model
+  // real pickups — those are per-passenger/per-company) — it survives only
+  // as a fallback center for a tour that has no stops yet.
+  const framePoints = [
+    ...((TOUR.stops || []).map(s => ({ lng: s.lng, lat: s.lat }))),
+    ...allPins(),
+  ];
+  if (!framePoints.length && TOUR.home) framePoints.push({ lng: TOUR.home.lng, lat: TOUR.home.lat });
+  if (!framePoints.length) framePoints.push({ lng: -21.94, lat: 64.15 });
+  const lngs = framePoints.map(p => p.lng);
+  const lats = framePoints.map(p => p.lat);
   const PADDING_DEG = 0.002;
   const bounds = [
     [Math.min(...lngs) - PADDING_DEG, Math.min(...lats) - PADDING_DEG],
@@ -4890,16 +4902,14 @@ function initMap(token) {
     maxTileCacheSize: 2000,
   };
   if (ROLE === 'passenger') {
-    // Passengers open at street level on the tour start point so PATHS are
-    // visible immediately (and those detail tiles load while online — so if
-    // the signal drops, the zoomed-in view still renders). Fitting the whole
-    // multi-stop tour zoomed them out so far that streets/paths didn't draw.
-    // Once their first GPS fix lands, onGpsSuccess re-centers on them at this
-    // same zoom.
-    mapOpts.center = [TOUR.home.lng, TOUR.home.lat];
+    // Passengers open at street level on the first stop so PATHS are visible
+    // immediately (those detail tiles load while online → still render if the
+    // signal drops). Their first GPS fix re-centers on them at this zoom.
+    const firstStop = (TOUR.stops || [])[0];
+    mapOpts.center = firstStop ? [firstStop.lng, firstStop.lat] : [framePoints[0].lng, framePoints[0].lat];
     mapOpts.zoom = 16.5;   // street/footpath detail — labels + paths render
   } else {
-    // Guides keep the whole-tour overview.
+    // Guides keep the whole-tour overview, framed on the stops.
     mapOpts.bounds = bounds;
     mapOpts.fitBoundsOptions = { padding: 40 };
   }
