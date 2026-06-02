@@ -2470,7 +2470,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · graceful recovery for missing sessions · build 2026-06-02-1838';
+const BUILD_VERSION = '0.5 · guide view: Share invite (QR) replaces Copy link · build 2026-06-02-1842';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -5646,9 +5646,9 @@ function mountGuideBottomSheet() {
             ${SESSION ? `${window.location.origin}${window.location.pathname}?session=${SESSION.id}` : '—'}
           </div>
           <button
-            id="guide-share-copy"
+            id="guide-share-invite"
             style="margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:10px 18px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
-          >Copy link</button>
+          >Share invite</button>
         </div>
         <div class="guide-sheet-list" id="guide-sheet-list" style="display:none;">
           <!-- passenger rows populate here -->
@@ -5666,43 +5666,11 @@ function mountGuideBottomSheet() {
   applySheetState();
   bindSheetDrag();
 
-  // Copy-link button. Uses the modern Clipboard API where available,
-  // falls back to a hidden textarea for older browsers / non-HTTPS.
-  const copyBtn = document.getElementById('guide-share-copy');
-  if (copyBtn) {
-    copyBtn.addEventListener('click', async () => {
-      const link = document.getElementById('guide-share-link');
-      if (!link) return;
-      const text = link.textContent.trim();
-      const flash = (msg) => {
-        const original = copyBtn.textContent;
-        copyBtn.textContent = msg;
-        copyBtn.disabled = true;
-        setTimeout(() => {
-          copyBtn.textContent = original;
-          copyBtn.disabled = false;
-        }, 1400);
-      };
-      try {
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(text);
-        } else {
-          // Fallback for non-HTTPS contexts. Creates a temporary textarea,
-          // selects its content, asks the browser to copy. Older approach.
-          const ta = document.createElement('textarea');
-          ta.value = text;
-          ta.style.position = 'fixed';
-          ta.style.opacity = '0';
-          document.body.appendChild(ta);
-          ta.select();
-          document.execCommand('copy');
-          document.body.removeChild(ta);
-        }
-        flash('Copied');
-      } catch {
-        flash('Copy failed');
-      }
-    });
+  // "Share invite" button — opens the full share screen (QR + link + copy),
+  // the same one as the burger menu's Share invite, instead of a bare copy.
+  const shareBtn = document.getElementById('guide-share-invite');
+  if (shareBtn) {
+    shareBtn.addEventListener('click', () => openShareScreen());
   }
 
   // Visibility pill handlers (chunk F). Two independent pills:
