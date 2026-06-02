@@ -1566,6 +1566,45 @@
   .tb-form-err { color:var(--mark); font-family:'JetBrains Mono',monospace; font-size:11px; min-height:14px; margin-top:8px; }
   .tb-form-actions { display:flex; gap:10px; margin-top:16px; }
 
+  /* Slim editor top bar (replaces the tall header in the editor) */
+  .tb-edbar {
+    display:flex; align-items:center; gap:10px;
+    padding:8px 12px; border-bottom:1px solid var(--rule-soft); flex:0 0 auto;
+  }
+  .tb-backbtn {
+    flex:0 0 auto; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.06em;
+    padding:7px 12px; background:var(--paper); color:var(--ink);
+    border:1px solid var(--rule); border-radius:7px; cursor:pointer;
+  }
+  .tb-backbtn:active { transform:scale(0.97); }
+  .tb-edname {
+    flex:1; min-width:0; font-family:'Fraunces',serif; font-weight:700; font-size:16px; color:var(--ink);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .tb-edbar-stamp {
+    flex:0 0 auto; font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--rule);
+  }
+  /* Live zoom readout on the editor map */
+  .tb-zoom {
+    position:absolute; bottom:10px; right:10px; z-index:5;
+    background:var(--paper); border:1px solid var(--rule); border-radius:8px;
+    padding:3px 9px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink);
+    box-shadow:0 1px 4px rgba(0,0,0,0.15); pointer-events:none;
+  }
+  /* Editor footer with an obvious Done/save affordance */
+  .tb-edfoot {
+    flex:0 0 auto; padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px));
+    border-top:1px solid var(--rule-soft);
+    display:flex; align-items:center; gap:12px;
+  }
+  .tb-saved { flex:1; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.04em; color:var(--rule); }
+  .tb-donebtn {
+    flex:0 0 auto; font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:0.1em; text-transform:uppercase;
+    padding:12px 24px; background:var(--ink); color:var(--paper); border:none; border-radius:8px; cursor:pointer;
+  }
+  .tb-donebtn:active { transform:scale(0.98); }
+
   /* ── HUD right column + persistent departure timer ──────────────────
      Right-side stack inside .map-hud. The timer card sits ABOVE the
      signal pill and is only shown when an active stop has a departure.
@@ -2584,7 +2623,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · drop tour "home"; frame maps on stops · build 2026-06-02-2118';
+const BUILD_VERSION = '0.6 · builder: slim bar + zoom readout + Done button · build 2026-06-02-2140';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4266,17 +4305,23 @@ async function openTourEditor(tourId) {
   el.id = 'tour-editor';
   el.className = 'tb-editor';
   el.innerHTML = `
-    <div class="tb-header">
-      <div class="tb-stamp" id="tb-ed-stamp">Editing tour</div>
-      <div class="tb-title" id="tb-ed-title">…</div>
-      <button class="sm-btn" id="tb-ed-back" style="margin-top:10px;">‹ Tours</button>
+    <div class="tb-edbar">
+      <button class="tb-backbtn" id="tb-ed-back">‹ Tours</button>
+      <div class="tb-edname" id="tb-ed-title">…</div>
+      <span class="tb-edbar-stamp">Editing</span>
     </div>
     <div class="tb-map" id="tb-map">
       <div class="tb-place-banner" id="tb-place-banner"><span id="tb-place-text">Tap the map</span><button type="button" class="tb-place-cancel" id="tb-place-cancel">Cancel</button></div>
+      <div class="tb-zoom" id="tb-zoom">z —</div>
     </div>
-    <div class="tb-panel" id="tb-panel"></div>`;
+    <div class="tb-panel" id="tb-panel"></div>
+    <div class="tb-edfoot">
+      <span class="tb-saved">✓ Changes save automatically</span>
+      <button class="tb-donebtn" id="tb-ed-done">Done</button>
+    </div>`;
   document.getElementById('phone').appendChild(el);
   document.getElementById('tb-ed-back').addEventListener('click', tbCloseEditor);
+  document.getElementById('tb-ed-done').addEventListener('click', tbCloseEditor);
   document.getElementById('tb-place-cancel').addEventListener('click', tbCancelPlace);
 
   // Dedicated editor map — framed on the tour's stops (+pins) if any,
@@ -4301,7 +4346,8 @@ async function openTourEditor(tourId) {
   }
   try {
     _tbEditorMap = new mapboxgl.Map(edOpts);
-    _tbEditorMap.on('load', () => { setTimeout(() => { try { _tbEditorMap.resize(); } catch (_e) {} }, 50); renderTbMarkers(); });
+    _tbEditorMap.on('load', () => { setTimeout(() => { try { _tbEditorMap.resize(); } catch (_e) {} }, 50); renderTbMarkers(); updateTbZoom(); });
+    _tbEditorMap.on('zoom', updateTbZoom);
     _tbEditorMap.on('click', tbOnMapClick);
   } catch (e) { console.warn('[tb] editor map failed', e); }
 
@@ -4313,6 +4359,12 @@ function tbCloseEditor() {
   _tbStopMarkers = []; _tbPinMarkers = [];
   const el = document.getElementById('tour-editor'); if (el) el.remove();
   showTourManager();
+}
+
+// Live zoom readout so the guide can tell what zoom POIs/labels appear at.
+function updateTbZoom() {
+  const el = document.getElementById('tb-zoom');
+  if (el && _tbEditorMap) el.textContent = 'z ' + _tbEditorMap.getZoom().toFixed(1);
 }
 
 function renderTbMarkers() {
