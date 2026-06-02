@@ -662,6 +662,37 @@
     50%      { opacity: 0.3; }
   }
 
+  /* Departure placement banner — dark ink "transient mode" banner shown
+     while the guide drops the bus pin from the HUD timer. Separate from
+     both the broadcast banner and the bottom-sheet pill so the departure
+     flow leaves the bottom sheet untouched. */
+  .departure-place-banner {
+    position: absolute; left: 16px; right: 16px;
+    top: calc(max(env(safe-area-inset-top, 0px), 30px) + 88px);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 12px 16px;
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.30);
+    font-family: 'Fraunces', serif;
+    font-size: 14px; line-height: 1.35;
+    z-index: 9;
+    display: none;
+    align-items: center;
+    gap: 12px;
+  }
+  .departure-place-banner.show { display: flex; }
+  .departure-place-text { flex: 1; }
+  .departure-place-cancel {
+    flex: 0 0 auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.10em; text-transform: uppercase;
+    padding: 6px 10px;
+    background: transparent; color: var(--paper);
+    border: 1px solid var(--paper); border-radius: 6px;
+    cursor: pointer;
+  }
+
   /* Guide bottom sheet — appears in role=guide view only.
      Three drag-snap states managed in JS via .style.height directly. */
   .guide-sheet {
@@ -1705,6 +1736,15 @@
         <span id="broadcast-banner-text">Broadcasting your location</span>
       </div>
 
+      <!-- Departure bus-pin placement banner — shown only while the guide
+           is dropping the bus pin via the HUD "Time to head back" timer.
+           Kept separate from the bottom-sheet bus-pin pill so the timer
+           flow stays visually silent there. -->
+      <div class="departure-place-banner" id="departure-place-banner">
+        <span class="departure-place-text">Tap the map to drop the bus pin.</span>
+        <button type="button" class="departure-place-cancel" id="departure-place-cancel">Cancel</button>
+      </div>
+
       <!-- Joystick simulator (dev). Hidden until toggled on from About. -->
       <div class="joystick" id="joystick">
         <div class="joystick-knob" id="joystick-knob"></div>
@@ -2026,7 +2066,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk D: timer drops bus pin on map (reuses bus-pin system) · build 2026-05-27-0500';
+const BUILD_VERSION = '0.5 · chunk D: departure flow silent on bottom sheet · build 2026-05-27-0600';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4265,13 +4305,21 @@ async function toggleBusPin() {
 // bus_pin mode. Inserts a new guide_locations row with source='bus_pin' so
 // passengers see the new position instantly via realtime.
 async function placeBusPin(lng, lat) {
+  // Was this placement kicked off by the HUD "Time to head back" timer?
+  // If so, keep the bottom sheet untouched (visually silent) and use the
+  // departure banner instead of the bus-pill broadcast UI.
+  const fromDeparture = _departurePushPending;
   BUS_PIN = { lng, lat };
-  updateVisibilityControlUI();
-  updateBroadcastBanner();      // banner copy depends on whether pin is placed
+  if (fromDeparture) {
+    hideDeparturePlaceBanner();
+  } else {
+    updateVisibilityControlUI();
+    updateBroadcastBanner();    // banner copy depends on whether pin is placed
+  }
   renderBusPinOnGuideMap();
   renderHudTimer();             // pin now exists → timer pulses
 
-  if (!SESSION) return;
+  if (!SESSION) { _departurePushPending = false; return; }
   const { error } = await supabaseClient.from('guide_locations').insert({
     session_id: SESSION.id,
     source: 'bus_pin',
@@ -4280,10 +4328,10 @@ async function placeBusPin(lng, lat) {
   });
   if (error) console.warn('bus_pin insert failed', error);
 
-  // If this placement was kicked off by the HUD "Time to head back" timer,
-  // fire the push announcement now that the pin is down. (Pin placed from
-  // the bottom-sheet pill alone does NOT push — that's a silent broadcast.)
-  if (_departurePushPending) {
+  // Departure-initiated placement fires the push announcement now that the
+  // pin is down. Pin placed from the bottom-sheet pill alone does NOT push
+  // — that's a silent location broadcast.
+  if (fromDeparture) {
     _departurePushPending = false;
     sendDepartureSignal().catch(err => console.warn('[bus] departure push failed', err));
   }
@@ -6807,9 +6855,14 @@ async function sendDepartureSignal() {
 }
 
 // Begin the bus-departure flow from the HUD timer. If the bus pin isn't
-// placed yet, arm the existing placement system (next map tap drops the
-// pin via placeBusPin) and remember to fire the push once it lands. If
-// the pin is already placed, just re-send the push (re-buzz the group).
+// placed yet, arm placement (next map tap drops the pin via placeBusPin)
+// and remember to fire the push once it lands. If the pin is already
+// placed, just re-send the push (re-buzz the group).
+//
+// Deliberately does NOT touch BUS_PIN_ON or the bottom-sheet visibility
+// pill — the departure flow stays visually silent on the bottom sheet.
+// Placement guidance comes from its own top banner instead. The pin still
+// reuses the guide_locations broadcast (placeBusPin), so passengers see it.
 let _departurePushPending = false;
 function beginDepartureFlow() {
   if (ROLE !== 'guide' || !SESSION) return;
@@ -6819,14 +6872,33 @@ function beginDepartureFlow() {
     sendDepartureSignal().catch(err => console.warn('[bus] re-announce failed', err));
     return;
   }
-  // No pin yet — reuse the existing bus-pin placement system. Turning the
-  // pill on shows the "Tap the map to place the bus" broadcast banner for
-  // free; the existing map-click handler calls placeBusPin on the next tap.
+  // No pin yet — arm the existing map-click placement (which only needs
+  // BUS_PIN_PLACING) and show our own placement banner.
   _departurePushPending = true;
-  BUS_PIN_ON = true;
   BUS_PIN_PLACING = true;
-  updateVisibilityControlUI();
-  updateBroadcastBanner();
+  showDeparturePlaceBanner();
+}
+
+function showDeparturePlaceBanner() {
+  const b = document.getElementById('departure-place-banner');
+  if (b) b.classList.add('show');
+}
+function hideDeparturePlaceBanner() {
+  const b = document.getElementById('departure-place-banner');
+  if (b) b.classList.remove('show');
+}
+// Cancel exits placement mode without dropping a pin.
+let _departureBannerWired = false;
+function wireDeparturePlaceBanner() {
+  if (_departureBannerWired) return;
+  const cancel = document.getElementById('departure-place-cancel');
+  if (!cancel) return;
+  _departureBannerWired = true;
+  cancel.addEventListener('click', () => {
+    BUS_PIN_PLACING = false;
+    _departurePushPending = false;
+    hideDeparturePlaceBanner();
+  });
 }
 
 // Populates the session-info block at the top of the burger menu — guide
@@ -7323,6 +7395,7 @@ function wireHudTimerHandlers() {
     if (!el.classList.contains('clickable')) return;
     beginDepartureFlow();
   });
+  wireDeparturePlaceBanner();
 }
 
 function fire5MinAlarm(stopId, remainingMs) {
