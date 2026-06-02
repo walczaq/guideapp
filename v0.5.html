@@ -1286,19 +1286,18 @@
     font-variant-numeric: tabular-nums;
   }
   .stop-timer-countdown.urgent { color: var(--mark); font-weight: 700; }
-  .stop-timer-countdown.past   { color: var(--muted); }
+  .stop-timer-countdown.past   { color: var(--mark); font-weight: 700; }
 
-  /* When a stop is active, the timer becomes a "watch this clock" signal
-     — clock + label go red so it reads as a live countdown the moment
-     the guide activates a stop, not just when the 5-min urgent threshold
-     kicks in. The countdown number stays neutral until the 5-min mark to
-     preserve the existing escalation language (default → urgent red). */
-  .stop-timer.active {
+  /* The timer stays neutral dark ink while a stop is simply active. It only
+     goes red in the alarm window — ≤5 min before departure, or once
+     departure has passed — so red consistently means "act now" rather than
+     "a stop is on". The .alarm class is toggled in renderHudTimer. */
+  .stop-timer.alarm {
     border-color: var(--mark);
     box-shadow: 0 2px 10px rgba(184,51,29,0.20);
   }
-  .stop-timer.active .stop-timer-label { color: var(--mark); }
-  .stop-timer.active .stop-timer-time  { color: var(--mark); }
+  .stop-timer.alarm .stop-timer-label { color: var(--mark); }
+  .stop-timer.alarm .stop-timer-time  { color: var(--mark); }
   /* Pulse animation — the card scales + glows in a 1.2s cycle. Triggered
      by two conditions (see renderHudTimer):
        1. ≤5 min before the departure threshold (matches the existing
@@ -2066,7 +2065,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk D: departure flow silent on bottom sheet · build 2026-05-27-0600';
+const BUILD_VERSION = '0.5 · chunk D: timer red only in alarm window · build 2026-05-27-0700';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -6760,10 +6759,9 @@ function renderHudTimer() {
   // The card is ALWAYS shown — even with no active stop — so the guide
   // can see at a glance whether there's something to head back from.
   // When no stop is active we fill with em-dash placeholders and the
-  // card is not clickable; otherwise the .active class flips on.
+  // card is not clickable.
   el.classList.add('show');
   const hasActiveStop = soonestMs !== Infinity;
-  el.classList.toggle('active', hasActiveStop);
   // Clickable only when a stop is actually active — the departure flow
   // attaches the [bus] line to the active stop, so an idle card has
   // nothing to do.
@@ -6779,15 +6777,14 @@ function renderHudTimer() {
       cdEl.textContent = '—:—';
       cdEl.classList.remove('urgent', 'past');
     }
-    el.classList.remove('pulsing');
+    el.classList.remove('pulsing', 'alarm');
     return;
   }
   if (timeEl) timeEl.textContent = formatHHMM(new Date(soonestMs));
-  let isUrgent = false;
+  const diffMs = soonestMs - Date.now();
+  const past = diffMs < 0;
+  const isUrgent = !past && diffMs <= ALARM_THRESHOLD_MS;
   if (cdEl) {
-    const diffMs = soonestMs - Date.now();
-    const past = diffMs < 0;
-    isUrgent = !past && diffMs <= ALARM_THRESHOLD_MS;
     const absSec = Math.max(0, Math.floor(Math.abs(diffMs) / 1000));
     const mm = Math.floor(absSec / 60);
     const ss = absSec % 60;
@@ -6796,11 +6793,15 @@ function renderHudTimer() {
     cdEl.classList.toggle('urgent', isUrgent);
     cdEl.classList.toggle('past', past);
   }
-  // Pulse drivers: ≤5 min before departure, OR the guide already sent
-  // the bus signal at least once for this stop (the [bus] line in the
-  // active row's notes persists across reloads).
+  // Alarm window — red only when it means "act now": ≤5 min before
+  // departure, or once departure has passed. Neutral dark ink otherwise,
+  // even while the stop is active.
+  el.classList.toggle('alarm', isUrgent || past);
+  // Pulse drivers: in the alarm window, OR the guide already sent the bus
+  // signal at least once for this stop (the [bus] line in the active row's
+  // notes persists across reloads).
   const busAlreadySent = hasBusSignalFor(soonestStopId);
-  el.classList.toggle('pulsing', isUrgent || busAlreadySent);
+  el.classList.toggle('pulsing', isUrgent || past || busAlreadySent);
 }
 
 // Guide-side: write the [bus] departure line to the active stop's notes.
