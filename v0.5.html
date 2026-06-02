@@ -2065,7 +2065,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk D: timer red only in alarm window · build 2026-05-27-0700';
+const BUILD_VERSION = '0.5 · chunk D: clear bus pin on deactivate · build 2026-06-02-1557';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4309,6 +4309,10 @@ async function placeBusPin(lng, lat) {
   // departure banner instead of the bus-pill broadcast UI.
   const fromDeparture = _departurePushPending;
   BUS_PIN = { lng, lat };
+  // Remember whether this pin belongs to a stop's departure flow. If so it
+  // is cleared when that stop is deactivated; a pin placed via the legacy
+  // bottom-sheet pill stays independent of stop lifecycle.
+  _busPinFromDeparture = fromDeparture;
   if (fromDeparture) {
     hideDeparturePlaceBanner();
   } else {
@@ -5977,6 +5981,12 @@ async function deactivateStop(stop) {
     return { error: error.message || 'Could not deactivate stop.' };
   }
   ACTIVE_STOP_IDS.delete(stop.id);
+  // A bus pin placed via this stop's departure flow belongs to the stop —
+  // clear it (and retract from passengers) now that the stop is off. A pin
+  // placed via the legacy bottom-sheet pill is left untouched.
+  if (_busPinFromDeparture) {
+    await clearBusPin({ retract: true });
+  }
   renderPins();
   renderStopList();
   return { ok: true };
@@ -6865,6 +6875,10 @@ async function sendDepartureSignal() {
 // Placement guidance comes from its own top banner instead. The pin still
 // reuses the guide_locations broadcast (placeBusPin), so passengers see it.
 let _departurePushPending = false;
+// True when the current bus pin was placed by the departure flow (vs. the
+// legacy bottom-sheet pill). Departure-placed pins are cleared when their
+// stop is deactivated; pill-placed pins persist.
+let _busPinFromDeparture = false;
 function beginDepartureFlow() {
   if (ROLE !== 'guide' || !SESSION) return;
   if (Array.from(ACTIVE_STOP_IDS)[0] == null) return;
@@ -6878,6 +6892,28 @@ function beginDepartureFlow() {
   _departurePushPending = true;
   BUS_PIN_PLACING = true;
   showDeparturePlaceBanner();
+}
+
+// Clear the bus pin and its local state. retract:true also broadcasts an
+// off-sentinel so passengers' bus marker disappears. Called when the active
+// stop is deactivated (departure-placed pins only) and as a general reset.
+async function clearBusPin(opts) {
+  const retract = !!(opts && opts.retract);
+  const had = BUS_PIN;
+  BUS_PIN = null;
+  BUS_PIN_ON = false;
+  BUS_PIN_PLACING = false;
+  _departurePushPending = false;
+  _busPinFromDeparture = false;
+  hideDeparturePlaceBanner();
+  if (typeof closeBusPinPopup === 'function') closeBusPinPopup();
+  renderBusPinOnGuideMap();
+  renderHudTimer();
+  updateVisibilityControlUI();
+  updateBroadcastBanner();
+  if (retract && had && SESSION) {
+    await insertGuideOffSentinel('bus_pin', had.lng, had.lat);
+  }
 }
 
 function showDeparturePlaceBanner() {
