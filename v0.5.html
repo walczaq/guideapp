@@ -2170,7 +2170,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk D: centered update popup (warnings + departure) · build 2026-06-02-1640';
+const BUILD_VERSION = '0.5 · offline app shell + in-place session resume · build 2026-06-02-1658';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -2859,7 +2859,7 @@ async function boot() {
   }
 
   const params = new URLSearchParams(window.location.search);
-  const sessionId = params.get('session');
+  let sessionId = params.get('session');
   const tourSlug = params.get('tour');
   const role = params.get('role');
 
@@ -2873,6 +2873,21 @@ async function boot() {
   if (role === 'guide' && !GUIDE) {
     showInviteCodeForm();
     return;
+  }
+
+  // Resume the last session IN PLACE when launched without a ?session=
+  // param (e.g. the installed PWA's start_url is "/v0.5"). Previously this
+  // did a full window.location.replace, which (a) flashed a visible reload
+  // on every cold launch and (b) broke offline — the redirect target had to
+  // be re-fetched from the network. history.replaceState just updates the
+  // URL bar; we then fall through to the normal session-join path with no
+  // navigation. Applies to guide + passenger alike.
+  if (!sessionId && !tourSlug) {
+    const last = getLastSession();
+    if (last) {
+      sessionId = last;
+      try { history.replaceState(null, '', '?session=' + encodeURIComponent(last)); } catch (_e) {}
+    }
   }
 
   // Lock in the role for the rest of the page-load. Default is passenger.
@@ -2905,28 +2920,12 @@ async function boot() {
     // a tour without going through the session flow.
     await loadTourDirectly(tourSlug);
   } else if (GUIDE) {
-    // Path 3a: logged-in guide visiting bare URL. If they have a recent
-    // session, take them straight back to it. Otherwise show create-session form.
-    const last = getLastSession();
-    if (last) {
-      const url = new URL(window.location.href);
-      url.searchParams.set('session', last);
-      window.location.replace(url.toString());
-      return;
-    }
+    // Path 3a: logged-in guide with no session to resume (the in-place
+    // resume above already handled the "has a recent session" case).
     showCreateSessionForm();
   } else {
-    // Path 3b: bare URL, not a logged-in guide. The typical visitor here
-    // is a passenger who just tapped the installed PWA icon (start_url is
-    // "/v0.5", no session). If they have a recent session memo, rejoin
-    // it. Otherwise fall through to the landing screen with explainer.
-    const last = getLastSession();
-    if (last) {
-      const url = new URL(window.location.href);
-      url.searchParams.set('session', last);
-      window.location.replace(url.toString());
-      return;
-    }
+    // Path 3b: bare URL, not a logged-in guide and no session memo to
+    // resume — show the landing screen with the join explainer.
     showLandingScreen();
   }
 }

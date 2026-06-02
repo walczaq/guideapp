@@ -1,19 +1,48 @@
-// Fieldnote v0.5 chunk D — Service Worker.
+// Fieldnote v0.5 — Service Worker.
 //
-// Two responsibilities:
-//   1. 'push' event handler  — receives the encrypted payload from the
-//      send_stop_push Edge Function and surfaces it as a system notification.
-//   2. 'notificationclick'   — when the passenger taps the notification, focus
-//      an existing tab if there is one, otherwise open the app URL.
+// Responsibilities:
+//   1. Offline app shell  — precache the HTML + the critical CDN scripts so
+//      the app loads (and shows its OWN reconnecting UI) when the device is
+//      offline, instead of the browser's "you are offline" error page.
+//   2. 'push'             — surface the Edge Function payload as a notification.
+//   3. 'notificationclick'— focus an existing tab, else open the deep link.
 //
-// Critical: this file is served with no-cache headers (see /_headers) so
-// updates propagate to phones on next app open instead of being stuck behind
-// the browser's aggressive SW cache.
+// Caching strategy (deliberately conservative to avoid the classic "stuck on
+// an old version" trap):
+//   - Navigations: NETWORK-FIRST. When online the freshest HTML always wins
+//     and is copied into the cache; the cache is only the offline fallback.
+//   - Critical CDN libs (mapbox-gl, supabase-js, idb, qrcode, fonts CSS):
+//     CACHE-FIRST on their versioned URLs (stable, safe to pin).
+//   - Everything else (Supabase REST/realtime, Mapbox tiles, font binaries):
+//     PASSTHROUGH — never cached; they just fail offline and the app copes.
 //
-// Payload contract (Edge Function ↔ SW):
-//   { title, body, tag, url, stop_id }
-// Anything missing falls back to a sensible default so a malformed push still
-// surfaces SOMETHING rather than going silent.
+// /sw.js itself is served no-cache (see /_headers), so SW updates propagate
+// on next app open; bumping SHELL_CACHE purges the old shell on activate.
+
+const SHELL_CACHE = 'fieldnote-shell-v2';
+
+// Same-origin shell assets — these MUST cache for the app to boot offline.
+const SHELL_URLS = [
+  '/v0.5',
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/badge-72.png',
+];
+
+// Cross-origin libraries the page <script>/<link> tags pull in. Versioned
+// URLs, CORS-friendly CDNs — cached best-effort (a single failure must not
+// abort install).
+const CDN_URLS = [
+  'https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css',
+  'https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
+  'https://cdn.jsdelivr.net/npm/idb@8/build/umd.js',
+  'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js',
+  'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap',
+];
+
+const NAV_FALLBACK = '/v0.5';
 
 const NOTIFICATION_DEFAULTS = {
   title: 'New stop activated',
@@ -24,15 +53,100 @@ const NOTIFICATION_DEFAULTS = {
 };
 
 self.addEventListener('install', (event) => {
-  // No precache for v0.5 — chunk D is push-only, not offline shell.
-  // skipWaiting so a new SW takes over on the next page load without
-  // requiring the user to close all tabs.
-  self.skipWaiting();
+  event.waitUntil((async () => {
+    const cache = await caches.open(SHELL_CACHE);
+    // Same-origin shell must succeed.
+    try { await cache.addAll(SHELL_URLS); }
+    catch (err) { console.warn('[sw] shell precache failed', err); }
+    // CDN libs best-effort, individually so one failure doesn't abort.
+    await Promise.allSettled(CDN_URLS.map((u) => cache.add(u).catch((e) => {
+      console.warn('[sw] cdn precache failed', u, e);
+    })));
+    // Take over on next page load without requiring all tabs to close.
+    self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil((async () => {
+    // Drop stale shell caches from prior versions.
+    const names = await caches.keys();
+    await Promise.all(names.map((n) => (n !== SHELL_CACHE ? caches.delete(n) : null)));
+    await self.clients.claim();
+  })());
 });
+
+function isCdnAsset(url) {
+  return CDN_URLS.includes(url) ||
+    url.startsWith('https://api.mapbox.com/mapbox-gl-js/') ||
+    url.startsWith('https://cdn.jsdelivr.net/npm/');
+}
+
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  if (req.method !== 'GET') return;   // never touch writes
+
+  const url = new URL(req.url);
+  const sameOrigin = url.origin === self.location.origin;
+
+  // 1. Navigations → network-first, cache fallback to the app shell.
+  if (req.mode === 'navigate') {
+    event.respondWith((async () => {
+      try {
+        const net = await fetch(req);
+        // Refresh the canonical shell entry so the offline fallback stays
+        // current. Keyed on /v0.5 (no query) so any ?session= hits it.
+        try {
+          const cache = await caches.open(SHELL_CACHE);
+          cache.put(NAV_FALLBACK, net.clone());
+        } catch (_e) { /* ignore */ }
+        return net;
+      } catch (_err) {
+        const cache = await caches.open(SHELL_CACHE);
+        const cached = await cache.match(NAV_FALLBACK, { ignoreSearch: true });
+        if (cached) return cached;
+        // Nothing cached yet — let the browser show its default.
+        return Response.error();
+      }
+    })());
+    return;
+  }
+
+  // 2. Same-origin static shell assets → cache-first.
+  if (sameOrigin && (SHELL_URLS.includes(url.pathname) ||
+      url.pathname === '/icon-192.png' || url.pathname === '/icon-512.png' ||
+      url.pathname === '/badge-72.png' || url.pathname === '/manifest.json')) {
+    event.respondWith(cacheFirst(req));
+    return;
+  }
+
+  // 3. Critical CDN libs → cache-first on versioned URLs.
+  if (isCdnAsset(url.href.split('#')[0]) || isCdnAsset(url.origin + url.pathname)) {
+    event.respondWith(cacheFirst(req));
+    return;
+  }
+
+  // 4. Everything else (Supabase REST/realtime, Mapbox tiles, font files) —
+  //    passthrough. Not cached; fails offline and the app handles it.
+});
+
+async function cacheFirst(req) {
+  const cache = await caches.open(SHELL_CACHE);
+  const cached = await cache.match(req, { ignoreSearch: false });
+  if (cached) return cached;
+  try {
+    const net = await fetch(req);
+    if (net && (net.ok || net.type === 'opaque')) {
+      try { cache.put(req, net.clone()); } catch (_e) { /* opaque/uncacheable */ }
+    }
+    return net;
+  } catch (err) {
+    // Last resort: maybe an ignoreSearch match exists.
+    const loose = await cache.match(req, { ignoreSearch: true });
+    if (loose) return loose;
+    throw err;
+  }
+}
 
 self.addEventListener('push', (event) => {
   let data = {};
@@ -40,7 +154,6 @@ self.addEventListener('push', (event) => {
     try {
       data = event.data.json();
     } catch (_err) {
-      // If the payload isn't JSON, treat the raw text as the body.
       data = { body: event.data.text() };
     }
   }
@@ -49,15 +162,9 @@ self.addEventListener('push', (event) => {
     body: data.body || NOTIFICATION_DEFAULTS.body,
     icon: data.icon || NOTIFICATION_DEFAULTS.icon,
     badge: data.badge || NOTIFICATION_DEFAULTS.badge,
-    // tag deduplicates: a second push with the same tag replaces the first
-    // notification rather than stacking. Use stop_id when present so two
-    // activations don't collapse but two pushes for the same activation do.
     tag: data.tag || (data.stop_id != null ? `fieldnote-stop-${data.stop_id}` : NOTIFICATION_DEFAULTS.tag),
     renotify: true,
     data: {
-      // Fall back to /v0.5 (no session) rather than /, which 404s on this
-      // Worker — happens only if the payload lacks `url`; the Edge Function
-      // always provides a session-aware deep link.
       url: data.url || '/v0.5',
       stop_id: data.stop_id ?? null,
       session_id: data.session_id ?? null,
@@ -68,12 +175,6 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  // Build the target URL defensively. Prefer constructing from session_id
-  // (always present in our payloads) over trusting the `url` field, which
-  // an out-of-date Edge Function might still send as bare '/' (the
-  // Worker's root has no asset and 404s). If we can't reconstruct, fall
-  // back to /v0.5 with no session — the app boot loop will then either
-  // resume from last-session memo or show the join screen.
   const data = event.notification.data || {};
   let targetUrl = data.url;
   const isBadUrl = !targetUrl
@@ -86,13 +187,6 @@ self.addEventListener('notificationclick', (event) => {
   }
   event.waitUntil((async () => {
     const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    // Prefer focusing an existing same-origin tab — preserves the user's
-    // map state. Deliberately do NOT call client.navigate() even if the URL
-    // differs; reloading the tab loses scroll position, GPS-follow mode,
-    // any in-flight modals, and (on Android Chrome) sometimes drops the
-    // SW-controlled state. The push fired because something changed in
-    // the open session, and the app's realtime layer already surfaced
-    // that change in the foregrounded view.
     for (const client of allClients) {
       try {
         const sameOrigin = new URL(client.url).origin === self.location.origin;
@@ -102,17 +196,12 @@ self.addEventListener('notificationclick', (event) => {
         }
       } catch (_err) { /* malformed URL — ignore */ }
     }
-    // No existing tab — open the deep-linked URL fresh.
     if (self.clients.openWindow) {
       await self.clients.openWindow(targetUrl);
     }
   })());
 });
 
-// Optional: surface push-subscription churn so the client can re-subscribe.
-// Fires when the browser invalidates the existing subscription (rare, but
-// happens after long inactivity or token rotation). The client picks this up
-// via a message listener and re-runs the subscription flow.
 self.addEventListener('pushsubscriptionchange', (event) => {
   event.waitUntil((async () => {
     const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
