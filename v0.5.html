@@ -2470,7 +2470,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · per-guide session management (My Sessions) · build 2026-06-02-1823';
+const BUILD_VERSION = '0.5 · graceful recovery for missing sessions · build 2026-06-02-1838';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3321,7 +3321,13 @@ async function loadSessionAndTour(sessionId) {
     .single();
 
   if (sessionErr || !session) {
-    showFatalError(`Couldn't find session "${sessionId}". The link may be wrong, or the session may have been deleted.`);
+    // Session is gone (deleted/ended/bad link). If we arrived by auto-
+    // resuming a saved "last session", that memo is now stale — clear it so
+    // we stop retrying — and route somewhere useful instead of a dead end:
+    // guides to My Sessions, passengers to the join landing.
+    if (getLastSession() === sessionId) clearLastSession();
+    if (GUIDE) { showSessionManager(); return; }
+    showLandingScreen();
     return;
   }
 
