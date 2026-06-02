@@ -2065,7 +2065,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · chunk D: clear bus pin on deactivate · build 2026-06-02-1557';
+const BUILD_VERSION = '0.5 · chunk D: note updates use banner not full modal · build 2026-06-02-1610';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -6334,8 +6334,8 @@ function onStopDeactivated(row) {
 
 // UPDATE handler — fires when a guide edits notes via update_stop_activation_notes.
 // Every publish is treated as a fresh broadcast: previously-dismissed warnings
-// surface again. Passengers also get the full modal re-shown when there's
-// genuinely new note content, so the publish gets their attention.
+// surface again in the slim top banner (plus a chime). The full stop window
+// is NOT re-popped on updates — it's reserved for the initial activation.
 function onStopActivationUpdated(row) {
   if (!row || row.stop_id == null) return;
   // The content may have changed — wipe any per-line dismissed state so
@@ -6364,14 +6364,17 @@ function onStopActivationUpdated(row) {
     (row.notes && row.notes.trim().length > 0);
   const stop = TOUR ? TOUR.stops.find(s => s.id === row.stop_id) : null;
 
-  // If the full modal is currently showing this stop, refresh its content
-  // in place (no chime, no animation — just updated values inside the badge).
+  // If the full arrival modal is ALREADY open for this stop, refresh its
+  // content in place (no chime, no animation — just updated values).
   if (_arrivalStop && _arrivalStop.id === row.stop_id) {
     populateArrivalModalContent(_arrivalStop);
   } else if (ROLE === 'passenger' && stop && hasContent && notesChanged) {
-    // Passenger had already dismissed the arrival modal but a NEW publish
-    // landed — re-show with chime so the warnings get their attention.
-    showStopArrivalModal(stop);
+    // A new publish landed while the passenger is NOT in the full modal.
+    // Surface ONLY the notification content — the slim top warning banner
+    // (refreshed below) plus a chime. We deliberately do NOT re-pop the
+    // full stop window here; that big modal is reserved for the initial
+    // stop activation, not for follow-up notes/warnings.
+    playChime();
   }
 
   if (!stop) return;
