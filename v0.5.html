@@ -2470,7 +2470,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · guide view: Share invite (QR) replaces Copy link · build 2026-06-02-1842';
+const BUILD_VERSION = '0.5 · prefetch tour-area tiles for offline detail · build 2026-06-02-1849';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4333,6 +4333,11 @@ function initMap(token) {
         startGeolocation();
       }
     }
+    // Prefetch the tour-area map tiles for offline use — a few seconds
+    // after load so it doesn't compete with first paint. Re-attempts if
+    // the device comes online later.
+    setTimeout(() => { prewarmOfflineTiles().catch(() => {}); }, 4000);
+    window.addEventListener('online', () => { prewarmOfflineTiles().catch(() => {}); });
   });
   map.on('move', renderAll);
   map.on('zoom', renderAll);
@@ -4344,6 +4349,106 @@ function initMap(token) {
       document.getElementById('recenter').classList.remove('active');
     }
   });
+}
+
+// ── Offline tile prefetch ─────────────────────────────────────────────
+// Browser Mapbox GL has no offline-pack API, so we warm the cache by
+// driving a hidden, off-screen map over each stop at several zoom levels
+// while online. It uses Mapbox's own fetch pipeline (correct tile/glyph/
+// sprite URLs + billing sku), and the service worker (SWR on api.mapbox.com)
+// stores every response — so the visible map renders those areas offline,
+// including the zoomed-in detail the live view hadn't fetched yet.
+//
+// Bounded: home + up to 14 stops, zooms 14–16 (16 is the streets source's
+// max; higher zoom overzooms the same tiles). Runs once per load, only when
+// online. Streets/paths are the goal — that's what these tiles carry.
+let _prewarmStarted = false;
+function showPrewarmStatus(on) {
+  let el = document.getElementById('prewarm-status');
+  if (on) {
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'prewarm-status';
+      el.textContent = 'Saving map for offline…';
+      el.style.cssText =
+        'position:absolute; left:50%; transform:translateX(-50%);' +
+        'bottom:calc(env(safe-area-inset-bottom,0px) + 18px); z-index:8;' +
+        'background:var(--ink); color:var(--paper); padding:7px 14px;' +
+        'border-radius:14px; font-family:\'JetBrains Mono\',monospace;' +
+        'font-size:10px; letter-spacing:0.06em; box-shadow:0 2px 8px rgba(0,0,0,0.25);' +
+        'pointer-events:none; opacity:0.92;';
+      const phone = document.getElementById('phone');
+      if (phone) phone.appendChild(el);
+    }
+  } else if (el) {
+    el.remove();
+  }
+}
+
+async function prewarmOfflineTiles() {
+  if (_prewarmStarted) return;
+  if (!TOUR || typeof mapboxgl === 'undefined') return;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  _prewarmStarted = true;
+
+  const points = [];
+  if (TOUR.home) points.push({ lng: TOUR.home.lng, lat: TOUR.home.lat });
+  for (const s of (TOUR.stops || [])) {
+    if (Number.isFinite(s.lng) && Number.isFinite(s.lat)) points.push({ lng: s.lng, lat: s.lat });
+  }
+  if (!points.length) return;
+  const pts = points.slice(0, 15);     // home + ~14 stops cap
+  const ZOOMS = [14, 15, 16];
+
+  // Hidden off-screen container sized so the map actually renders tiles.
+  const div = document.createElement('div');
+  div.style.cssText = 'position:fixed; left:-10000px; top:0; width:512px; height:512px; visibility:hidden; pointer-events:none;';
+  document.body.appendChild(div);
+
+  let warm;
+  try {
+    warm = new mapboxgl.Map({
+      container: div,
+      style: 'mapbox://styles/mapbox/outdoors-v12',
+      center: [pts[0].lng, pts[0].lat],
+      zoom: ZOOMS[0],
+      interactive: false,
+      attributionControl: false,
+      fadeDuration: 0,
+    });
+  } catch (_e) { div.remove(); _prewarmStarted = false; return; }
+
+  // Wait for a settle event ('idle' = tiles loaded + rendered), with a
+  // per-step timeout so a stuck step can't hang the whole sweep.
+  const settle = () => new Promise((res) => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; clearTimeout(t); res(); } };
+    const t = setTimeout(finish, 2500);
+    warm.once('idle', finish);
+  });
+
+  try {
+    await new Promise((res, rej) => {
+      const t = setTimeout(() => rej(new Error('load timeout')), 15000);
+      warm.on('load', () => { clearTimeout(t); res(); });
+    });
+    showPrewarmStatus(true);
+    for (const p of pts) {
+      for (const z of ZOOMS) {
+        if (navigator.onLine === false) throw new Error('offline');
+        warm.jumpTo({ center: [p.lng, p.lat], zoom: z });
+        await settle();
+      }
+    }
+  } catch (_e) {
+    // offline mid-sweep / load timeout — keep whatever cached so far, and
+    // allow a retry the next time the device comes online.
+    _prewarmStarted = false;
+  } finally {
+    showPrewarmStatus(false);
+    try { warm && warm.remove(); } catch (_e) {}
+    div.remove();
+  }
 }
 
 // ── 6. GEOLOCATION ──
