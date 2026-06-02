@@ -2378,7 +2378,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · real Android/Apple logos in intro · build 2026-06-02-1730';
+const BUILD_VERSION = '0.5 · passenger street-level start + offline map tiles · build 2026-06-02-1805';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4017,18 +4017,33 @@ function initMap(token) {
     [Math.max(...lngs) + PADDING_DEG, Math.max(...lats) + PADDING_DEG],
   ];
 
-  map = new mapboxgl.Map({
+  const mapOpts = {
     container: 'mapbox-map',
     style: 'mapbox://styles/mapbox/outdoors-v12',
-    bounds: bounds,                  // open with the whole tour visible
-    fitBoundsOptions: { padding: 40 },
     // No maxBounds — user can pan anywhere on the globe.
     // No minZoom/maxZoom — user can zoom from world view to street level freely.
-    // Mapbox's defaults (0–22) are fine.
     attributionControl: false,
     pitchWithRotate: false,
     dragRotate: false,
-  });
+    // Bump Mapbox's in-memory tile cache so more of what we've viewed
+    // stays available without re-fetching (helps when the signal drops).
+    maxTileCacheSize: 2000,
+  };
+  if (ROLE === 'passenger') {
+    // Passengers open at street level on the tour start point so PATHS are
+    // visible immediately (and those detail tiles load while online — so if
+    // the signal drops, the zoomed-in view still renders). Fitting the whole
+    // multi-stop tour zoomed them out so far that streets/paths didn't draw.
+    // Once their first GPS fix lands, onGpsSuccess re-centers on them at this
+    // same zoom.
+    mapOpts.center = [TOUR.home.lng, TOUR.home.lat];
+    mapOpts.zoom = 15.5;
+  } else {
+    // Guides keep the whole-tour overview.
+    mapOpts.bounds = bounds;
+    mapOpts.fitBoundsOptions = { padding: 40 };
+  }
+  map = new mapboxgl.Map(mapOpts);
   map.touchZoomRotate.disableRotation();
   map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
 

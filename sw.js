@@ -44,6 +44,14 @@ const CDN_URLS = [
 
 const NAV_FALLBACK = '/v0.5';
 
+// Mapbox map data (style JSON, sprite, glyph fonts, vector tiles) gets its
+// own cache so previously-viewed areas keep rendering when the signal drops.
+// Stale-while-revalidate + a size cap (LRU-ish via insertion order). This is
+// what makes "lost internet, zoom in, paths still show" work — for tiles the
+// device fetched while it was online.
+const TILE_CACHE = 'fieldnote-tiles-v1';
+const TILE_CACHE_MAX = 1500;
+
 const NOTIFICATION_DEFAULTS = {
   title: 'New stop activated',
   body: 'Tap to see the new pins.',
@@ -69,9 +77,12 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    // Drop stale shell caches from prior versions.
+    // Drop stale caches from prior versions, but KEEP the current shell +
+    // tile caches (deleting the tile cache every activate would defeat
+    // offline maps).
+    const keep = new Set([SHELL_CACHE, TILE_CACHE]);
     const names = await caches.keys();
-    await Promise.all(names.map((n) => (n !== SHELL_CACHE ? caches.delete(n) : null)));
+    await Promise.all(names.map((n) => (keep.has(n) ? null : caches.delete(n))));
     await self.clients.claim();
   })());
 });
@@ -126,9 +137,47 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 4. Everything else (Supabase REST/realtime, Mapbox tiles, font files) —
+  // 4. Mapbox map data — style JSON, sprite, glyph fonts, vector tiles
+  //    (everything else on api.mapbox.com that isn't the gl-js library,
+  //    which case 3 already handled). Stale-while-revalidate into the
+  //    capped tile cache so viewed areas render offline. Telemetry
+  //    (events.mapbox.com) is POST and was skipped above.
+  if (url.hostname === 'api.mapbox.com' && !url.pathname.startsWith('/mapbox-gl-js/')) {
+    event.respondWith(staleWhileRevalidate(req, TILE_CACHE, TILE_CACHE_MAX));
+    return;
+  }
+
+  // 5. Everything else (Supabase REST/realtime, font binaries) —
   //    passthrough. Not cached; fails offline and the app handles it.
 });
+
+// Serve from cache immediately if present (revalidating in the background),
+// else fall back to the network. Caps the cache by entry count, evicting
+// the oldest entries (Cache Storage keys() preserves insertion order).
+async function staleWhileRevalidate(req, cacheName, cap) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(req);
+  const networkFetch = fetch(req).then((net) => {
+    if (net && (net.ok || net.type === 'opaque')) {
+      cache.put(req, net.clone())
+        .then(() => trimCache(cacheName, cap))
+        .catch(() => { /* opaque/uncacheable — ignore */ });
+    }
+    return net;
+  }).catch(() => null);
+  if (cached) return cached;            // stale hit; networkFetch revalidates
+  const net = await networkFetch;
+  return net || Response.error();
+}
+
+async function trimCache(cacheName, cap) {
+  try {
+    const cache = await caches.open(cacheName);
+    const keys = await cache.keys();
+    const over = keys.length - cap;
+    for (let i = 0; i < over; i++) await cache.delete(keys[i]);
+  } catch (_e) { /* ignore */ }
+}
 
 async function cacheFirst(req) {
   const cache = await caches.open(SHELL_CACHE);
