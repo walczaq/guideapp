@@ -1301,6 +1301,83 @@
     display: flex; padding: 14px 20px 18px;
   }
 
+  /* ── First-run intro wizard ─────────────────────────────────────────
+     Full-screen passenger onboarding shown once per browser. Steps are
+     toggled with the [hidden] attribute by JS. */
+  .intro-overlay {
+    position: absolute; inset: 0;
+    background: var(--paper);
+    z-index: 60;     /* above HUD + banners + popups, below nothing */
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 24px;
+    padding-top: max(env(safe-area-inset-top, 0px), 30px);
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 24px);
+    overflow-y: auto;
+  }
+  .intro-overlay.show { display: flex; }
+  .intro-card {
+    width: 100%; max-width: 380px;
+    display: flex; flex-direction: column;
+  }
+  .intro-progress {
+    display: flex; gap: 6px; margin-bottom: 22px;
+  }
+  .intro-progress span {
+    flex: 1; height: 3px; border-radius: 2px;
+    background: var(--rule-soft);
+  }
+  .intro-progress span.on { background: var(--mark); }
+  .intro-stamp {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--mark); margin-bottom: 10px;
+  }
+  .intro-title {
+    font-family: 'Fraunces', serif; font-weight: 400;
+    font-size: 30px; line-height: 1.1; color: var(--ink);
+    font-variation-settings: "opsz" 90;
+    margin-bottom: 14px;
+  }
+  .intro-body {
+    font-family: 'Fraunces', serif;
+    font-size: 16px; line-height: 1.5; color: #3a3a3a;
+    margin-bottom: 18px;
+  }
+  .intro-point {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 12px 0;
+    border-top: 1px solid var(--rule-soft);
+    font-family: 'Fraunces', serif;
+    font-size: 14px; line-height: 1.45; color: #3a3a3a;
+  }
+  .intro-point-icon { flex: 0 0 auto; font-size: 20px; line-height: 1.3; }
+  .intro-status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; line-height: 1.4; letter-spacing: 0.02em;
+    color: var(--rule);
+    min-height: 16px; margin: 4px 0 2px;
+  }
+  .intro-status.ok { color: var(--signal-good); }
+  .intro-status.warn { color: var(--mark); }
+  .intro-actions {
+    display: flex; gap: 10px; margin-top: 26px;
+  }
+  .intro-btn {
+    flex: 1; padding: 14px 16px;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.15s;
+    border: 1px solid var(--ink);
+  }
+  .intro-btn:active { transform: scale(0.97); }
+  .intro-btn.primary { background: var(--ink); color: var(--paper); }
+  .intro-btn.ghost { background: var(--paper); color: var(--ink); }
+  .intro-btn.ghost { flex: 0 0 auto; padding: 14px 18px; }
+  .intro-btn[disabled] { opacity: 0.5; cursor: default; }
+
   /* ── HUD right column + persistent departure timer ──────────────────
      Right-side stack inside .map-hud. The timer card sits ABOVE the
      signal pill and is only shown when an active stop has a departure.
@@ -2063,6 +2140,83 @@
     </div>
   </div>
 
+  <!-- FIRST-RUN INTRO WIZARD — passenger-only, shown once per browser on the
+       first session open. Explains why location is needed and that installing
+       is safe, then walks through notifications / location / install, and
+       closes with a "when it works" note. Step panels toggled by JS. -->
+  <div class="intro-overlay" id="intro-overlay">
+    <div class="intro-card">
+      <div class="intro-progress" id="intro-progress"></div>
+
+      <!-- Step 1 — welcome + why -->
+      <div class="intro-step" data-step="welcome">
+        <div class="intro-stamp">Welcome to Fieldnote</div>
+        <h2 class="intro-title">Your live tour companion</h2>
+        <p class="intro-body">Fieldnote shows you on the tour map and reveals each stop as your guide activates it — plus warnings and "time to head back to the bus" alerts.</p>
+        <div class="intro-point">
+          <span class="intro-point-icon">📍</span>
+          <span><b>Why location?</b> So you appear on the map and stops light up near you. It's only shared during this tour — never in the background.</span>
+        </div>
+        <div class="intro-point">
+          <span class="intro-point-icon">📲</span>
+          <span><b>Adding to your home screen is safe.</b> It only runs while you're using it or during the tour — it can't track you in the background — and you can delete it in one tap, like any app.</span>
+        </div>
+        <div class="intro-actions">
+          <button class="intro-btn ghost" id="intro-skip-all">Skip</button>
+          <button class="intro-btn primary" data-intro-next>Get started</button>
+        </div>
+      </div>
+
+      <!-- Step 2 — notifications -->
+      <div class="intro-step" data-step="notify" hidden>
+        <div class="intro-stamp">Step 1 of 3</div>
+        <h2 class="intro-title">Stay notified</h2>
+        <p class="intro-body">Get a buzz when your guide starts a stop, sends a warning, calls everyone back to the bus, or changes the departure time — even with your phone locked.</p>
+        <div class="intro-status" id="intro-notify-status"></div>
+        <div class="intro-actions">
+          <button class="intro-btn ghost" data-intro-next>Skip</button>
+          <button class="intro-btn primary" id="intro-enable-notify">Enable notifications</button>
+        </div>
+      </div>
+
+      <!-- Step 3 — location -->
+      <div class="intro-step" data-step="location" hidden>
+        <div class="intro-stamp">Step 2 of 3</div>
+        <h2 class="intro-title">Share your location</h2>
+        <p class="intro-body">Allow location so you show up on the map and stops reveal as you reach them. Only shared with your guide during this tour.</p>
+        <div class="intro-status" id="intro-location-status"></div>
+        <div class="intro-actions">
+          <button class="intro-btn ghost" data-intro-next>Skip</button>
+          <button class="intro-btn primary" id="intro-allow-location">Allow location</button>
+        </div>
+      </div>
+
+      <!-- Step 4 — install -->
+      <div class="intro-step" data-step="install" hidden>
+        <div class="intro-stamp">Step 3 of 3</div>
+        <h2 class="intro-title">Add to home screen</h2>
+        <p class="intro-body">Install Fieldnote for reliable notifications even when the app is closed. Safe to add, easy to remove.</p>
+        <div class="intro-status" id="intro-install-status"></div>
+        <div class="intro-actions">
+          <button class="intro-btn ghost" data-intro-next>Skip</button>
+          <button class="intro-btn primary" id="intro-install">Install</button>
+        </div>
+      </div>
+
+      <!-- Step 5 — when it works + done -->
+      <div class="intro-step" data-step="done" hidden>
+        <div class="intro-stamp">You're set</div>
+        <h2 class="intro-title">When notifications reach you</h2>
+        <div class="intro-point"><span class="intro-point-icon">✅</span><span><b>Android:</b> work even with the app closed once notifications are on.</span></div>
+        <div class="intro-point"><span class="intro-point-icon">🍏</span><span><b>iPhone:</b> work when you've added Fieldnote to your home screen. In a plain Safari tab, keep it open during the tour.</span></div>
+        <div class="intro-point"><span class="intro-point-icon">🔋</span><span>If your phone aggressively closes apps, keep Fieldnote open during key moments to be safe.</span></div>
+        <div class="intro-actions">
+          <button class="intro-btn primary" id="intro-done">Start the tour</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Tour-ended screen (session controls) — full-screen state passengers
        see when the guide ends the session. Realtime UPDATE on sessions
        carrying a non-null ended_at flips this on. -->
@@ -2170,7 +2324,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · offline app shell + in-place session resume · build 2026-06-02-1658';
+const BUILD_VERSION = '0.5 · first-run intro wizard (why + permissions + install) · build 2026-06-02-1705';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3088,9 +3242,15 @@ async function loadSessionAndTour(sessionId) {
   // menu. Independent of push (different browser capability), so wired
   // for both roles regardless of pushSupported().
   wireMenuInstallBtn();
-  // Chunk D: register the SW + silently refresh the push subscription if
-  // permission was already granted on a prior visit. Passenger-only — guides
-  // don't need push (they're the source of activations).
+  // Register the service worker for EVERYONE (offline app shell), even
+  // where Web Push isn't supported (e.g. iOS Safari tab). Idempotent.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .catch(err => console.warn('[sw] registration failed', err));
+  }
+  // Chunk D: refresh the push subscription if permission was already
+  // granted on a prior visit. Passenger-only — guides don't need push
+  // (they're the source of activations).
   if (ROLE === 'passenger') {
     initPushSubscription().catch(err => console.warn('[push] init failed', err));
   }
@@ -3824,14 +3984,19 @@ function initMap(token) {
     // What differs by role is what gets *broadcast* (queued + synced):
     //   passenger → always queues their fixes
     //   guide     → only queues when "Visible to passengers" is on (chunk F)
-    // For now (chunks B–E), guide queueing is suppressed in onGpsSuccess.
-    startGeolocation();
+    // For first-time passengers we DEFER startGeolocation to the intro
+    // wizard's "Allow location" step, so the explanation comes before the
+    // OS prompt. The intro guarantees GPS starts on completion.
     if (ROLE === 'guide') {
+      startGeolocation();
       startGuideShell();
     } else {
-      // Passengers listen for the guide's broadcasts (chunk F pass 2).
-      // Guide self-rendering is local; only passengers need this.
       startPassengerGuideListening();
+      if (introNeeded()) {
+        maybeShowIntro();   // intro drives the location/notif/install asks
+      } else {
+        startGeolocation();
+      }
     }
   });
   map.on('move', renderAll);
@@ -5331,6 +5496,7 @@ function bindSheetDrag() {
 }
 
 function startGeolocation() {
+  if (geoWatchId !== null) return;   // idempotent — already watching
   if (!('geolocation' in navigator)) {
     state.gpsMode = 'unavailable';
     showGpsBanner('Your browser does not support geolocation. Use the "skip" option to test with a simulated walker.');
@@ -7239,6 +7405,154 @@ function urlBase64ToUint8Array(base64String) {
   return out;
 }
 
+// ── First-run intro wizard ────────────────────────────────────────────
+// Passenger-only, once per browser. Explains why location is needed and
+// that installing is safe, then walks through notifications / location /
+// install, and closes with a "when it works" note. Shown from the map
+// load handler (which also defers GPS to the wizard's location step).
+const INTRO_SEEN_KEY = 'fn_intro_seen_v1';
+const INTRO_STEPS = ['welcome', 'notify', 'location', 'install', 'done'];
+let _introIdx = 0;
+let _introWired = false;
+
+function introSeen() {
+  try { return !!localStorage.getItem(INTRO_SEEN_KEY); } catch (_e) { return false; }
+}
+function markIntroSeen() {
+  try { localStorage.setItem(INTRO_SEEN_KEY, '1'); } catch (_e) {}
+}
+function introNeeded() {
+  return ROLE === 'passenger' && !!SESSION && !introSeen();
+}
+
+function maybeShowIntro() {
+  const overlay = document.getElementById('intro-overlay');
+  if (!overlay || !introNeeded()) { startGeolocation(); return; }
+  wireIntro();
+  _introIdx = 0;
+  renderIntroStep();
+  overlay.classList.add('show');
+}
+
+function renderIntroStep() {
+  const overlay = document.getElementById('intro-overlay');
+  if (!overlay) return;
+  // Skip the install step when already installed or unsupported.
+  let key = INTRO_STEPS[_introIdx];
+  if (key === 'install' && (runningAsInstalledPWA() || !('serviceWorker' in navigator))) {
+    _introIdx++; key = INTRO_STEPS[_introIdx];
+  }
+  overlay.querySelectorAll('.intro-step').forEach(el => {
+    el.hidden = el.getAttribute('data-step') !== key;
+  });
+  const prog = document.getElementById('intro-progress');
+  if (prog) {
+    prog.innerHTML = '';
+    for (let i = 0; i < INTRO_STEPS.length; i++) {
+      const s = document.createElement('span');
+      if (i <= _introIdx) s.className = 'on';
+      prog.appendChild(s);
+    }
+  }
+  if (key === 'notify') {
+    const st = document.getElementById('intro-notify-status');
+    const btn = document.getElementById('intro-enable-notify');
+    if (!pushSupported()) {
+      if (st) { st.textContent = 'Notifications aren’t supported on this browser.'; st.className = 'intro-status warn'; }
+      if (btn) btn.disabled = true;
+    } else if (Notification.permission === 'granted') {
+      if (st) { st.textContent = 'Notifications are on ✓'; st.className = 'intro-status ok'; }
+      if (btn) { btn.disabled = true; btn.textContent = 'Enabled'; }
+    } else if (Notification.permission === 'denied') {
+      if (st) { st.textContent = 'Blocked in your browser settings.'; st.className = 'intro-status warn'; }
+      if (btn) btn.disabled = true;
+    }
+  }
+}
+
+function introNext() {
+  _introIdx++;
+  if (_introIdx >= INTRO_STEPS.length) { finishIntro(); return; }
+  renderIntroStep();
+}
+
+function finishIntro() {
+  markIntroSeen();
+  const overlay = document.getElementById('intro-overlay');
+  if (overlay) overlay.classList.remove('show');
+  // The app needs GPS regardless of whether the user tapped the location
+  // step — start it now if it hasn't been (startGeolocation is idempotent).
+  startGeolocation();
+  // Fallback nudge banners can now appear (gated on permission state).
+  try { renderNotifPrompt(); } catch (_e) {}
+  try { renderInstallPrompt(); } catch (_e) {}
+}
+
+function wireIntro() {
+  if (_introWired) return;
+  const overlay = document.getElementById('intro-overlay');
+  if (!overlay) return;
+  _introWired = true;
+  overlay.querySelectorAll('[data-intro-next]').forEach(b => b.addEventListener('click', introNext));
+  const skipAll = document.getElementById('intro-skip-all');
+  if (skipAll) skipAll.addEventListener('click', finishIntro);
+  const done = document.getElementById('intro-done');
+  if (done) done.addEventListener('click', finishIntro);
+
+  const notifyBtn = document.getElementById('intro-enable-notify');
+  if (notifyBtn) notifyBtn.addEventListener('click', async () => {
+    const st = document.getElementById('intro-notify-status');
+    notifyBtn.disabled = true;
+    if (st) { st.textContent = 'Asking…'; st.className = 'intro-status'; }
+    const result = await subscribePushAndSave();
+    if (result && result.error) {
+      if (st) { st.textContent = result.error; st.className = 'intro-status warn'; }
+      notifyBtn.disabled = false;
+      return;
+    }
+    if (st) { st.textContent = 'Notifications are on ✓'; st.className = 'intro-status ok'; }
+    setTimeout(introNext, 600);
+  });
+
+  const locBtn = document.getElementById('intro-allow-location');
+  if (locBtn) locBtn.addEventListener('click', () => {
+    const st = document.getElementById('intro-location-status');
+    locBtn.disabled = true;
+    if (st) { st.textContent = 'Check your screen for the location prompt…'; st.className = 'intro-status'; }
+    startGeolocation();   // fires the OS permission prompt
+    setTimeout(introNext, 800);
+  });
+
+  const installBtn = document.getElementById('intro-install');
+  if (installBtn) installBtn.addEventListener('click', async () => {
+    const st = document.getElementById('intro-install-status');
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) && !/Android/.test(ua);
+    if (runningAsInstalledPWA()) {
+      if (st) { st.textContent = 'Already installed ✓'; st.className = 'intro-status ok'; }
+      setTimeout(introNext, 600); return;
+    }
+    if (isIOS) {
+      if (st) { st.textContent = 'In Safari: tap Share, then “Add to Home Screen”.'; st.className = 'intro-status'; }
+      return;   // user does it manually, then taps Skip to continue
+    }
+    if (_deferredInstallPromptEvent) {
+      const evt = _deferredInstallPromptEvent; _deferredInstallPromptEvent = null;
+      try {
+        await evt.prompt();
+        const choice = await evt.userChoice;
+        if (st) {
+          if (choice && choice.outcome === 'accepted') { st.textContent = 'Installing…'; st.className = 'intro-status ok'; }
+          else { st.textContent = 'You can install later from the menu.'; st.className = 'intro-status'; }
+        }
+      } catch (_e) { /* ignore */ }
+      setTimeout(introNext, 800);
+      return;
+    }
+    if (st) { st.textContent = 'Use your browser menu (⋮) → “Install app”.'; st.className = 'intro-status'; }
+  });
+}
+
 // Register the SW, then re-subscribe silently if permission was already
 // granted in a previous visit. Idempotent and safe to call on every boot.
 async function initPushSubscription() {
@@ -7284,6 +7598,8 @@ function renderNotifPrompt() {
     el.classList.remove('show');
     return;
   }
+  // While the first-run intro is still pending, it owns the asks.
+  if (introNeeded()) { el.classList.remove('show'); return; }
   if (Notification.permission !== 'default') {
     el.classList.remove('show');
     return;
@@ -7379,6 +7695,8 @@ function renderInstallPrompt() {
   if (!el) return;
   // Passenger-only — guides don't need the PWA install path.
   if (ROLE !== 'passenger' || !SESSION) { el.classList.remove('show'); return; }
+  // While the first-run intro is still pending, it owns the install ask.
+  if (introNeeded()) { el.classList.remove('show'); return; }
   // Already installed → never show.
   if (runningAsInstalledPWA()) { el.classList.remove('show'); return; }
   // No deferred event captured → browser hasn't deemed us installable
