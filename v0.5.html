@@ -1760,6 +1760,23 @@
   }
   .install-hint:empty { display: none; }
 
+  /* Notifications-blocked recovery steps inside the burger menu. Hidden
+     until the blocked item is tapped. */
+  .menu-notif-hint {
+    padding: 12px 14px;
+    margin: 0 0 4px;
+    background: rgba(199, 148, 40, 0.10);
+    border: 1px solid var(--armed);
+    border-radius: 8px;
+    font-family: 'Fraunces', serif;
+    font-size: 13px; line-height: 1.5; color: #5a3a00;
+  }
+  .menu-notif-hint b { font-weight: 700; }
+  .menu-notif-hint ol {
+    margin: 6px 0 0; padding-left: 18px;
+  }
+  .menu-notif-hint li { margin: 3px 0; }
+
   /* "Tour ended" full-screen state shown to passengers when sessions.ended_at
      is set (realtime UPDATE). Replaces the map view entirely. */
   .session-ended-screen {
@@ -1990,6 +2007,10 @@
           <div class="menu-label" id="menu-enable-notifications-label">Enable notifications</div>
           <span class="menu-chevron">›</span>
         </button>
+        <!-- Recovery steps shown when notifications are blocked (denied) —
+             the page can't re-request, so we tell the user how to reset it
+             in their browser. Revealed by tapping the blocked menu item. -->
+        <div class="menu-notif-hint" id="menu-notif-hint" hidden></div>
         <button class="menu-item" data-action="reset">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2324,7 +2345,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · first-run intro wizard (why + permissions + install) · build 2026-06-02-1705';
+const BUILD_VERSION = '0.5 · blocked-notif recovery steps + bus-departing-now timer · build 2026-06-02-1721';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -5921,9 +5942,21 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
       while (screenStack.length) closeScreen();
       showEditNameForm();
     } else if (action === 'enable-notifications') {
-      // Wire the burger-menu shortcut to the same subscribe path used by
-      // the persistent banner. After grant/deny, refresh both the menu
-      // label and the banner so they reflect the new permission state.
+      // If notifications are blocked (denied), the page can't re-request —
+      // reveal recovery steps instead of silently failing.
+      if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+        const hint = document.getElementById('menu-notif-hint');
+        if (hint) {
+          if (hint.hidden || !hint.innerHTML) {
+            hint.innerHTML = notificationRecoveryHTML();
+            hint.hidden = false;
+          } else {
+            hint.hidden = true;   // tap again to collapse
+          }
+        }
+        return;
+      }
+      // Otherwise use the same subscribe path as the persistent banner.
       const result = await subscribePushAndSave();
       if (result && result.error) {
         console.warn('[push] enable from menu failed:', result.error);
@@ -7151,8 +7184,16 @@ function renderHudTimer() {
     const absSec = Math.max(0, Math.floor(Math.abs(diffMs) / 1000));
     const mm = Math.floor(absSec / 60);
     const ss = absSec % 60;
-    const text = `${mm}:${String(ss).padStart(2, '0')}`;
-    cdEl.textContent = past ? `-${text}` : text;
+    if (!past) {
+      // Counting down to departure.
+      cdEl.textContent = `${mm}:${String(ss).padStart(2, '0')}`;
+    } else if (absSec <= 120) {
+      // At 00:00 and the first couple of minutes after — the bus is leaving.
+      cdEl.textContent = 'Bus departing now';
+    } else {
+      // Well past departure — show how long ago.
+      cdEl.textContent = `Departed ${mm} min ago`;
+    }
     cdEl.classList.toggle('urgent', isUrgent);
     cdEl.classList.toggle('past', past);
   }
@@ -7464,7 +7505,14 @@ function renderIntroStep() {
       if (st) { st.textContent = 'Notifications are on ✓'; st.className = 'intro-status ok'; }
       if (btn) { btn.disabled = true; btn.textContent = 'Enabled'; }
     } else if (Notification.permission === 'denied') {
-      if (st) { st.textContent = 'Blocked in your browser settings.'; st.className = 'intro-status warn'; }
+      if (st) {
+        const ua = navigator.userAgent || '';
+        const where = (/iPad|iPhone|iPod/.test(ua) && !/Android/.test(ua))
+          ? 'Settings → Notifications'
+          : 'the lock icon → Notifications → Allow';
+        st.textContent = 'Blocked in your browser. To turn on: ' + where + ', then tap Skip below.';
+        st.className = 'intro-status warn';
+      }
       if (btn) btn.disabled = true;
     }
   }
@@ -7899,23 +7947,52 @@ function refreshNotificationsMenuItem() {
     item.style.display = 'none';
     return;
   }
+  const hint = document.getElementById('menu-notif-hint');
   const perm = Notification.permission;
   if (perm === 'granted') {
     item.style.display = '';
     label.textContent = 'Notifications · on';
     item.disabled = true;
     item.style.opacity = '0.6';
+    if (hint) { hint.hidden = true; hint.innerHTML = ''; }
   } else if (perm === 'denied') {
+    // Denied → the page can't re-request. Keep the item TAPPABLE so the
+    // user can reveal recovery steps (handled in the menu click handler).
     item.style.display = '';
-    label.textContent = 'Notifications · blocked in browser';
-    item.disabled = true;
-    item.style.opacity = '0.6';
+    label.textContent = 'Notifications blocked · tap to fix';
+    item.disabled = false;
+    item.style.opacity = '';
   } else {
     item.style.display = '';
     label.textContent = 'Enable notifications';
     item.disabled = false;
     item.style.opacity = '';
+    if (hint) { hint.hidden = true; hint.innerHTML = ''; }
   }
+}
+
+// Browser-aware recovery steps for re-enabling notifications after a block.
+// The page itself cannot re-request once denied — only the browser's site
+// settings can reset it — so we tell the user exactly where to tap.
+function notificationRecoveryHTML() {
+  const ua = navigator.userAgent || '';
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !/Android/.test(ua);
+  const isSamsung = /SamsungBrowser/.test(ua);
+  let steps;
+  if (isIOS) {
+    steps = '<li>Open <b>Settings → Notifications</b> (or Safari → this site) and allow notifications.</li>'
+          + '<li>For reliable alerts, add Fieldnote to your Home Screen.</li>';
+  } else if (isSamsung) {
+    steps = '<li>Tap the <b>⋮</b> menu → <b>Settings → Sites and downloads → Site permissions → Notifications</b>.</li>'
+          + '<li>Find this site and switch it to <b>Allow</b>.</li>'
+          + '<li>Come back and tap <b>Enable notifications</b> again.</li>';
+  } else {
+    steps = '<li>Tap the <b>lock</b> (or tune) icon next to the address bar.</li>'
+          + '<li>Open <b>Permissions / Site settings → Notifications</b> and set it to <b>Allow</b>.</li>'
+          + '<li>Come back and tap <b>Enable notifications</b> again.</li>';
+  }
+  return '<b>Notifications are blocked for this site.</b> To turn them back on:'
+       + '<ol>' + steps + '</ol>';
 }
 
 // Hook called from the arrival modal's "Got it" handler. Retained as a
