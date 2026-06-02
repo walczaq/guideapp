@@ -2484,7 +2484,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · pin popup gets a Continue button · build 2026-06-02-2027';
+const BUILD_VERSION = '0.6 · tour authoring phase 1 + Golden Circle default · build 2026-06-02-2051';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -2516,7 +2516,7 @@ const SUPABASE_KEY = 'sb_publishable_56-3xMMvHZFtw2LGKkcqew_09NhbiB0';
 // Default tour slug used when neither ?session nor ?tour is in the URL,
 // and the user hasn't yet created a session. Used by the "create session"
 // form as the tour to attach the new session to.
-const DEFAULT_TOUR_SLUG = 'fossvogsdalur-001';
+const DEFAULT_TOUR_SLUG = 'golden-circle';   // base tour; replaced by the tour picker (v0.6 phase 3)
 
 // Generate an 8-character nanoid (URL-safe, ~218 trillion possible values).
 // Not cryptographically perfect, but plenty for a session join token where
