@@ -2378,7 +2378,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.5 · passenger street-level start + offline map tiles · build 2026-06-02-1805';
+const BUILD_VERSION = '0.5 · passenger start zoom 16.5 (more detail) · build 2026-06-02-1808';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4037,7 +4037,7 @@ function initMap(token) {
     // Once their first GPS fix lands, onGpsSuccess re-centers on them at this
     // same zoom.
     mapOpts.center = [TOUR.home.lng, TOUR.home.lat];
-    mapOpts.zoom = 15.5;
+    mapOpts.zoom = 16.5;   // street/footpath detail — labels + paths render
   } else {
     // Guides keep the whole-tour overview.
     mapOpts.bounds = bounds;
