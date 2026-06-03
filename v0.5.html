@@ -2711,7 +2711,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · tour picker in Start session · build 2026-06-03-1836';
+const BUILD_VERSION = '0.6 · retire seeded tours; picker-only tour selection · build 2026-06-03-1858';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -2740,10 +2740,8 @@ const MAPBOX_TOKEN = 'pk.eyJ1IjoiZmllbGRub3RlMSIsImEiOiJjbW9mbmhtZmcwMGI2MnNzZmp
 const SUPABASE_URL = 'https://xgelrfdrdvrlltcsquqh.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_56-3xMMvHZFtw2LGKkcqew_09NhbiB0';
 
-// Default tour slug used when neither ?session nor ?tour is in the URL,
-// and the user hasn't yet created a session. Used by the "create session"
-// form as the tour to attach the new session to.
-const DEFAULT_TOUR_SLUG = 'golden-circle';   // base tour; replaced by the tour picker (v0.6 phase 3)
+// (Tour selection now comes from the Start-session tour picker, which lists
+// the guide's tours via list_guide_tours — no hardcoded default tour.)
 
 // Generate an 8-character nanoid (URL-safe, ~218 trillion possible values).
 // Not cryptographically perfect, but plenty for a session join token where
@@ -4934,23 +4932,27 @@ function showCreateSessionForm() {
       return;
     }
     const sel = document.getElementById('tour-select');
-    const tourSlug = (sel && sel.value) ? sel.value : DEFAULT_TOUR_SLUG;
+    const tourSlug = sel && sel.value;
+    if (!tourSlug) { if (sel) sel.style.borderColor = 'var(--mark)'; return; }
     await createSession(tourSlug, guideName);
   });
 }
 
 // Fill the start-session tour dropdown from the guide's available tours
-// (base + their own, via list_guide_tours). Defaults to Golden Circle if
-// present, else the first tour; falls back to DEFAULT_TOUR_SLUG if none.
+// (base + their own, via list_guide_tours), defaulting to the first. If the
+// guide has no tours, disable Start and prompt them to build one.
 async function populateTourPicker() {
   const sel = document.getElementById('tour-select');
   if (!sel) return;
+  const startBtn = document.getElementById('create-session-btn');
   let tours = [];
   try { tours = await tbListTours(); } catch (_e) { tours = []; }
   if (!tours.length) {
-    sel.innerHTML = `<option value="${DEFAULT_TOUR_SLUG}" selected>${DEFAULT_TOUR_SLUG}</option>`;
+    sel.innerHTML = `<option value="" disabled selected>No tours yet — build one first</option>`;
+    if (startBtn) { startBtn.disabled = true; startBtn.style.opacity = '0.5'; startBtn.style.cursor = 'default'; }
     return;
   }
+  if (startBtn) { startBtn.disabled = false; startBtn.style.opacity = ''; startBtn.style.cursor = 'pointer'; }
   sel.innerHTML = tours.map(t => {
     const mine = t.owner_guide_id ? ' (yours)' : '';
     const n = Number(t.stop_count) || 0;
@@ -4959,8 +4961,7 @@ async function populateTourPicker() {
     const name = (t.name || t.slug || 'Untitled').replace(/</g, '&lt;');
     return `<option value="${slug}">${name} · ${stops}${mine}</option>`;
   }).join('');
-  const gc = tours.find(t => t.slug === DEFAULT_TOUR_SLUG);
-  sel.value = gc ? DEFAULT_TOUR_SLUG : tours[0].slug;
+  sel.value = tours[0].slug;
 }
 
 // Insert a new session row, then redirect the page to ?session=<newId>.
