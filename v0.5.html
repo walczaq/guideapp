@@ -2711,7 +2711,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · overview icon → fit-to-area corner frame · build 2026-06-03-1158';
+const BUILD_VERSION = '0.6 · preset zoom lands exactly (no follow interrupt); ov 14 · build 2026-06-03-1207';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3346,10 +3346,11 @@ const state = {
   zoomPreset: 'overview',  // 'overview' | 'detail'
   autoDetailDone: false,   // only auto-switch to detail once
   walkAnchor: null,        // {lng,lat} first fix, to measure "started walking"
+  presetAnimating: false,  // true during a preset easeTo (suppresses follow recenter)
 };
 
 // Photo-3 wide survey vs photo-1 street detail. Tune here.
-const ZOOM_OVERVIEW = 15;
+const ZOOM_OVERVIEW = 14;
 const ZOOM_DETAIL = 16.1;
 
 // ── 3. DOM REFERENCES ──
@@ -6936,11 +6937,11 @@ function onGpsSuccess(pos) {
   }
 
   // first fix in this session — center the map on us
-  if (map && !state._everCentered) {
+  if (map && !state._everCentered && !state.presetAnimating) {
     map.easeTo({ center: [state.youLng, state.youLat], duration: 800 });
     state._everCentered = true;
   }
-  if (state.following && map) {
+  if (state.following && map && !state.presetAnimating) {
     map.setCenter([state.youLng, state.youLat]);
   }
   renderYou();
@@ -7309,7 +7310,13 @@ function applyZoomPreset(preset, opts = {}) {
     state.following = false;
     document.getElementById('recenter').classList.remove('active');
   }
+  // Guard the animation: follow-mode setCenter (and the first-fix recenter)
+  // would otherwise fire on the next GPS tick and interrupt this easeTo,
+  // leaving the zoom stuck partway (the "lands on ~15" bug).
+  state.presetAnimating = true;
   map.easeTo(ease);
+  map.once('moveend', () => { state.presetAnimating = false; });
+  setTimeout(() => { state.presetAnimating = false; }, 800);  // fallback if no movement
   updateZoomPresetButtons();
 }
 function updateZoomPresetButtons() {
@@ -10130,7 +10137,7 @@ function startJoystickLoop() {
     if (ROLE === 'guide' && SESSION) checkStopGeofences();
     updateSignal();
     renderYou();
-    if (state.following && map) {
+    if (state.following && map && !state.presetAnimating) {
       map.setCenter([state.youLng, state.youLat]);
     }
 
