@@ -533,6 +533,14 @@
   .pin-popup.warn { border-color: #dc2626; box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 0 0 8px rgba(220,38,38,0.14); }
   .pin-popup.warn .popup-header { border-bottom-color: rgba(220,38,38,0.4); }
   .pin-popup.warn .popup-stamp { color: #dc2626; }
+  /* On-time bus arrival — celebratory popup */
+  .pin-popup.reward { border-color: #25d366; box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 0 0 8px rgba(37,211,102,0.16); }
+  .pin-popup.reward .popup-header { border-bottom-color: rgba(37,211,102,0.4); }
+  .pin-popup.reward .popup-stamp { color: #1a9e4b; }
+  /* Confetti burst */
+  .confetti-wrap { position: absolute; inset: 0; pointer-events: none; z-index: 30; overflow: hidden; }
+  .confetti-piece { position: absolute; top: -14px; width: 9px; height: 14px; border-radius: 2px; opacity: 0.92; animation: confettiFall 2.6s linear forwards; }
+  @keyframes confettiFall { to { transform: translateY(115vh) rotate(680deg); opacity: 0.6; } }
   .popup-body { padding: 18px 20px 22px; }
   .popup-body h2 {
     font-weight: 400; font-size: 24px; line-height: 1.15;
@@ -675,15 +683,21 @@
      they're sharing their location with passengers (phone or bus_pin mode).
      Hidden by default; updateBroadcastBanner() flips display + text. */
   .broadcast-banner {
-    position: absolute; left: 16px; right: 16px;
-    top: calc(max(env(safe-area-inset-top, 0px), 30px) + 88px);
+    /* Sits in the top row, horizontally BETWEEN the burger (left) and the
+       departure timer (right) — width constrained so it never overlaps
+       either. */
+    position: absolute;
+    top: calc(max(env(safe-area-inset-top, 0px), 30px) + 10px);
+    left: 50%; transform: translateX(-50%);
+    width: max-content; max-width: calc(100% - 180px);
     background: #2563eb;       /* beacon blue — same family as guide identity */
     color: var(--paper);
-    padding: 10px 14px;
+    padding: 8px 12px;
     border-radius: 10px;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.06em;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    line-height: 1.3;
     text-align: center;
     box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
     z-index: 8;
@@ -2745,7 +2759,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · "in bus" = sticky passenger-declared state (pushed) · build 2026-06-03-1956';
+const BUILD_VERSION = '0.6 · in-bus: no nag + on-time reward; guide WhatsApp; strip placement · build 2026-06-03-2005';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -5084,9 +5098,9 @@ function showGroupChatEditor() {
 function refreshGroupChatButton() {
   const btn = document.getElementById('map-chat-btn');
   if (!btn) return;
-  const url = (ROLE === 'passenger' && SESSION && SESSION.chat_url) ? normalizeChatUrl(SESSION.chat_url) : '';
+  const url = (SESSION && SESSION.chat_url) ? normalizeChatUrl(SESSION.chat_url) : '';
   btn.dataset.url = url || '';
-  btn.style.display = url ? '' : 'none';   // '' → falls back to .zoom-btn's flex
+  btn.style.display = url ? '' : 'none';   // '' → falls back to .zoom-btn's flex; shown for guide + passenger
 }
 
 function applyTourMetadata() {
@@ -7383,6 +7397,10 @@ function checkBusArrival() {
   if (metersBetween(bus.lng, bus.lat, state.youLng, state.youLat) <= HEADCOUNT_RADIUS_M) {
     _inBusDeclared = true;        // optimistic — only push once
     markPassengerInBus();
+    // Reward an on-time return — before the soonest active-stop departure.
+    let soonest = Infinity;
+    for (const sid of ACTIVE_STOP_IDS) { const d = departureMsForStop(sid); if (d != null && d < soonest) soonest = d; }
+    if (soonest === Infinity || Date.now() < soonest) showBusArrivalReward();
   }
 }
 async function markPassengerInBus() {
@@ -7390,6 +7408,32 @@ async function markPassengerInBus() {
   const { error } = await supabaseClient.rpc('mark_passenger_in_bus',
     { p_session_id: SESSION.id, p_passenger_id: PASSENGER_ID });
   if (error) { console.warn('mark_passenger_in_bus failed', error); _inBusDeclared = false; }  // allow retry
+}
+
+// Little celebration when a passenger gets back to the bus on time.
+function showBusArrivalReward() {
+  popup.classList.remove('warn');
+  popup.classList.add('reward');
+  popupStamp.textContent = '🎉 On time!';
+  popupTitle.textContent = 'Nice — you made it back!';
+  popupBodyEl.textContent = "You're at the bus with time to spare. Sit back and enjoy the ride.";
+  popup.classList.add('show');
+  playChime();
+  burstConfetti();
+}
+function burstConfetti() {
+  const host = document.getElementById('phone'); if (!host) return;
+  const colors = ['#f0b24b', '#74d99f', '#dc2626', '#2563eb', '#7c3aed', '#25d366'];
+  const wrap = document.createElement('div'); wrap.className = 'confetti-wrap';
+  for (let i = 0; i < 18; i++) {
+    const c = document.createElement('div'); c.className = 'confetti-piece';
+    c.style.left = Math.round(Math.random() * 100) + '%';
+    c.style.background = colors[i % colors.length];
+    c.style.animationDelay = (Math.random() * 0.35).toFixed(2) + 's';
+    wrap.appendChild(c);
+  }
+  host.appendChild(wrap);
+  setTimeout(() => { try { wrap.remove(); } catch (_e) {} }, 2800);
 }
 
 function showPopup(pin) {
@@ -7415,7 +7459,7 @@ function showCategoryPopup(p) {
   popupBodyEl.textContent = p.body || (warn ? 'Marked by your guide — take care here.' : '');
   popup.classList.add('show');
 }
-function closePopup() { popup.classList.remove('show'); popup.classList.remove('warn'); }
+function closePopup() { popup.classList.remove('show'); popup.classList.remove('warn'); popup.classList.remove('reward'); }
 popupClose.addEventListener('click', closePopup);
 const popupOk = document.getElementById('popup-ok');
 if (popupOk) popupOk.addEventListener('click', closePopup);
@@ -8728,7 +8772,7 @@ function formatTimeLeft(departureAt) {
     return `${absMin} min`;
   }
   if (absMin === 0) return 'Departing now';
-  return `Departed ${absMin} min ago`;
+  return `Departure was ${absMin} min ago`;
 }
 
 function departureMsForStop(stopId) {
@@ -8776,7 +8820,9 @@ function tickCountdown() {
     const remaining = dep - now;
     if (remaining <= ALARM_THRESHOLD_MS && remaining > 0) {
       _alarmFiredFor.add(stopId);
-      fire5MinAlarm(stopId, remaining);
+      // Skip the "<5 min to departure" alarm for passengers already in the bus
+      // — they've made it back; no need to nag them.
+      if (!(ROLE === 'passenger' && _inBusDeclared)) fire5MinAlarm(stopId, remaining);
     }
   }
 }
@@ -8875,7 +8921,7 @@ function renderHudTimer() {
       cdEl.textContent = 'Bus departing now';
     } else {
       // Well past departure — show how long ago.
-      cdEl.textContent = `Departed ${mm} min ago`;
+      cdEl.textContent = `Departure was ${mm} min ago`;
     }
     cdEl.classList.toggle('urgent', isUrgent);
     cdEl.classList.toggle('past', past);
