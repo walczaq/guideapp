@@ -212,6 +212,18 @@
   .zoom-btn.active {
     background: var(--ink); color: var(--paper); border-color: var(--ink);
   }
+  /* Overview/Detail preset toggle, stacked above the +/- buttons */
+  .zoom-btn.preset.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .zoom-sep { height: 10px; }
+  /* Live zoom readout — mirrors the builder's badge so the guide can map a
+     builder zoom to what a passenger sees, and vice versa. */
+  .map-zoom-readout {
+    position: absolute; left: 16px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 40px);
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 4px 9px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12); z-index: 5; pointer-events: none;
+  }
 
   /* pins */
   .pin-group { cursor: pointer; }
@@ -2201,7 +2213,23 @@
         <div class="joystick-knob" id="joystick-knob"></div>
       </div>
 
+      <div class="map-zoom-readout" id="map-zoom-readout">z —</div>
+
       <div class="zoom-controls">
+        <button class="zoom-btn preset" id="zoom-overview" title="Overview">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 19 L9 9 L12.5 14.5 L16 8 L21 19 Z"/>
+          </svg>
+        </button>
+        <button class="zoom-btn preset" id="zoom-detail" title="Detail (walking)">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="13" cy="4.5" r="2" fill="currentColor" stroke="none"/>
+            <path d="M13 8 l-2.5 5 l1.5 3 l-1 4"/>
+            <path d="M10.5 13 l4 1.5"/>
+            <path d="M11 11.5 l-3.5 2"/>
+          </svg>
+        </button>
+        <div class="zoom-sep"></div>
         <button class="zoom-btn" id="zoom-in">+</button>
         <button class="zoom-btn" id="zoom-out">−</button>
         <button class="zoom-btn" id="recenter" style="margin-top: 4px;" title="Follow me">
@@ -2680,7 +2708,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · save/Done un-pinned into scroll; taller map · build 2026-06-03-1129';
+const BUILD_VERSION = '0.6 · zoom presets: Overview start → Detail on walk + toggle · build 2026-06-03-1150';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3309,7 +3337,17 @@ const state = {
 
   // UI
   following: false,      // map auto-centers on YOU when true
+
+  // Zoom presets: tour opens at OVERVIEW; auto-switches to DETAIL once the
+  // passenger starts walking. The right-side toggle flips between them.
+  zoomPreset: 'overview',  // 'overview' | 'detail'
+  autoDetailDone: false,   // only auto-switch to detail once
+  walkAnchor: null,        // {lng,lat} first fix, to measure "started walking"
 };
+
+// Photo-3 wide survey vs photo-1 street detail. Tune here.
+const ZOOM_OVERVIEW = 14;
+const ZOOM_DETAIL = 16;
 
 // ── 3. DOM REFERENCES ──
 const overlay = document.getElementById('overlay');
@@ -5194,12 +5232,12 @@ function initMap(token) {
     maxTileCacheSize: 2000,
   };
   if (ROLE === 'passenger') {
-    // Passengers open at street level on the first stop so PATHS are visible
-    // immediately (those detail tiles load while online → still render if the
-    // signal drops). Their first GPS fix re-centers on them at this zoom.
+    // Passengers open at the OVERVIEW scale (whole-area survey) centred on the
+    // first stop, then auto-zoom to DETAIL once they start walking. The
+    // right-side Overview/Detail toggle flips between the two presets.
     const firstStop = (TOUR.stops || [])[0];
     mapOpts.center = firstStop ? [firstStop.lng, firstStop.lat] : [framePoints[0].lng, framePoints[0].lat];
-    mapOpts.zoom = 16.5;   // street/footpath detail — labels + paths render
+    mapOpts.zoom = ZOOM_OVERVIEW;
   } else {
     // Guides keep the whole-tour overview, framed on the stops.
     mapOpts.bounds = bounds;
@@ -5212,6 +5250,7 @@ function initMap(token) {
   map.on('load', () => {
     loosenPoiLayers(map);
     renderAll();
+    updateZoomPresetButtons();
     // GPS runs for everyone — guides need to see their own location too.
     // What differs by role is what gets *broadcast* (queued + synced):
     //   passenger → always queues their fixes
@@ -6848,6 +6887,7 @@ function onGpsSuccess(pos) {
   if (ROLE === 'passenger') {
     checkTriggers();
     checkDangerZones();
+    maybeAutoDetailZoom();
   }
 
   // Stop geofence (chunk B, guide only) — prompts "Activate this stop?"
@@ -6970,6 +7010,7 @@ function renderAll() {
   renderPins();
   renderPassengers();
   renderYou();
+  updateMapZoomReadout();
 }
 
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -7248,6 +7289,48 @@ document.getElementById('recenter').addEventListener('click', () => {
     map.easeTo({ center: [state.youLng, state.youLat], duration: 300 });
   }
 });
+
+// ── Zoom presets: Overview (wide survey) ↔ Detail (street, when walking) ──
+function applyZoomPreset(preset, opts = {}) {
+  if (!map) return;
+  state.zoomPreset = preset;
+  state.autoDetailDone = true;   // any explicit/auto change ends auto-switching
+  const zoom = preset === 'detail' ? ZOOM_DETAIL : ZOOM_OVERVIEW;
+  const ease = { zoom, duration: 500 };
+  if (preset === 'detail' && state.youLng != null) {
+    ease.center = [state.youLng, state.youLat];
+    state.following = true;
+    document.getElementById('recenter').classList.add('active');
+  } else if (preset === 'overview') {
+    // Survey view — stop following so they can look around freely.
+    state.following = false;
+    document.getElementById('recenter').classList.remove('active');
+  }
+  map.easeTo(ease);
+  updateZoomPresetButtons();
+}
+function updateZoomPresetButtons() {
+  const o = document.getElementById('zoom-overview');
+  const d = document.getElementById('zoom-detail');
+  if (o) o.classList.toggle('on', state.zoomPreset === 'overview');
+  if (d) d.classList.toggle('on', state.zoomPreset === 'detail');
+}
+function updateMapZoomReadout() {
+  const el = document.getElementById('map-zoom-readout');
+  if (el && map) el.textContent = 'z ' + map.getZoom().toFixed(1);
+}
+// First real movement after start → jump to street detail (once).
+function maybeAutoDetailZoom() {
+  if (ROLE !== 'passenger' || state.autoDetailDone || state.youLng == null) return;
+  if (!state.walkAnchor) { state.walkAnchor = { lng: state.youLng, lat: state.youLat }; return; }
+  if (metersBetween(state.walkAnchor.lng, state.walkAnchor.lat, state.youLng, state.youLat) >= 18) {
+    applyZoomPreset('detail');
+  }
+}
+const _zoOv = document.getElementById('zoom-overview');
+const _zoDe = document.getElementById('zoom-detail');
+if (_zoOv) _zoOv.addEventListener('click', () => applyZoomPreset('overview'));
+if (_zoDe) _zoDe.addEventListener('click', () => applyZoomPreset('detail'));
 
 // ── 12. SCREEN STACK ──
 const screenStack = [];
@@ -10040,7 +10123,7 @@ function startJoystickLoop() {
 
     // Mirror the onGpsSuccess side-effects (minus the queue, which we do
     // separately at a throttled cadence).
-    if (ROLE === 'passenger') { checkTriggers(); checkDangerZones(); }
+    if (ROLE === 'passenger') { checkTriggers(); checkDangerZones(); maybeAutoDetailZoom(); }
     if (ROLE === 'guide' && SESSION) checkStopGeofences();
     updateSignal();
     renderYou();
