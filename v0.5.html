@@ -1734,6 +1734,16 @@
   }
   .stop-timer-countdown.urgent { color: var(--mark); font-weight: 700; }
   .stop-timer-countdown.past   { color: var(--mark); font-weight: 700; }
+  /* Guide-only "N/M back at the bus" headcount (shown when the bus pin is down).
+     Amber/red until everyone's near the bus, green once they all are. Uses
+     theme vars so it reads on both the light and dark card. */
+  .stop-timer-headcount {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.03em;
+    margin-top: 4px; color: var(--mark); line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  .stop-timer-headcount.all-back { color: var(--you); }
 
   /* The timer stays neutral dark ink while a stop is simply active. It only
      goes red in the alarm window — ≤5 min before departure, or once
@@ -2136,6 +2146,7 @@
             <div class="stop-timer-label">Departure</div>
             <div class="stop-timer-time" id="stop-timer-time">—:—</div>
             <div class="stop-timer-countdown" id="stop-timer-countdown">—:—</div>
+            <div class="stop-timer-headcount" id="stop-timer-headcount" style="display:none;"></div>
             <div class="stop-timer-bus-hint" id="stop-timer-bus-hint" aria-hidden="true">
               <span>tap to send</span>
               <svg viewBox="0 0 24 18" width="22" height="18" aria-hidden="true">
@@ -2711,7 +2722,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · retire seeded tours; picker-only tour selection · build 2026-06-03-1858';
+const BUILD_VERSION = '0.6 · guide headcount: N/M back at the bus pin · build 2026-06-03-1920';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -6187,6 +6198,7 @@ function updatePassengerCount() {
   const listEl = document.getElementById('guide-sheet-list');
   if (emptyEl) emptyEl.style.display = count === 0 ? '' : 'none';
   if (listEl) listEl.style.display = count === 0 ? 'none' : '';
+  updateBusHeadcount();   // keep the "N/M back at bus" glance fresh as passengers move
   // Toggle row visibility: only show "Show names" toggle when there are passengers.
   const namesToggle = document.getElementById('names-toggle-row');
   if (namesToggle) namesToggle.style.display = count === 0 ? 'none' : '';
@@ -8646,9 +8658,30 @@ function hasBusSignalFor(stopId) {
   return false;
 }
 
+// Guide safety glance: how many located passengers are within HEADCOUNT_RADIUS_M
+// of the bus pin. Shown in the timer card only when the bus pin is placed.
+// Green once everyone's back; amber/red while someone's still out.
+const HEADCOUNT_RADIUS_M = 50;
+function updateBusHeadcount() {
+  const hcEl = document.getElementById('stop-timer-headcount');
+  if (!hcEl) return;
+  if (ROLE !== 'guide' || !BUS_PIN_ON || !BUS_PIN) { hcEl.style.display = 'none'; return; }
+  let near = 0, total = 0;
+  for (const [, p] of PASSENGERS) {
+    if (p.lng == null || p.lat == null) continue;
+    total++;
+    if (metersBetween(BUS_PIN.lng, BUS_PIN.lat, p.lng, p.lat) <= HEADCOUNT_RADIUS_M) near++;
+  }
+  if (total === 0) { hcEl.style.display = 'none'; return; }
+  hcEl.textContent = `${near}/${total} back at bus`;
+  hcEl.classList.toggle('all-back', near === total);
+  hcEl.style.display = '';
+}
+
 function renderHudTimer() {
   const el = document.getElementById('stop-timer');
   if (!el) return;
+  updateBusHeadcount();
   const labelEl = document.querySelector('#stop-timer .stop-timer-label');
   const timeEl = document.getElementById('stop-timer-time');
   const cdEl = document.getElementById('stop-timer-countdown');
