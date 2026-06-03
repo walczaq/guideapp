@@ -1527,7 +1527,7 @@
   .tb-footer { padding:14px 16px calc(16px + env(safe-area-inset-bottom,0px)); border-top:1px solid var(--rule-soft); }
 
   /* Editor: map on top, scrollable panel below */
-  .tb-map { flex: 0 0 46%; position: relative; }
+  .tb-map { flex: 0 0 calc(46% + 60px); position: relative; }
   .tb-map .mapboxgl-ctrl-bottom-left, .tb-map .mapboxgl-ctrl-top-right { display:none !important; }
   .tb-panel { flex: 1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 16px calc(16px + env(safe-area-inset-bottom,0px)); }
   .tb-section-label { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); margin:10px 0 8px; }
@@ -1649,9 +1649,9 @@
     padding:3px 9px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink);
     box-shadow:0 1px 4px rgba(0,0,0,0.15); pointer-events:none;
   }
-  /* Editor footer with an obvious Done/save affordance */
+  /* Save-state + Done — sits at the end of the scrolling panel (not pinned) */
   .tb-edfoot {
-    flex:0 0 auto; padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px));
+    margin-top:18px; padding-top:14px;
     border-top:1px solid var(--rule-soft);
     display:flex; align-items:center; gap:12px;
   }
@@ -2680,7 +2680,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · editor map flush to top (drop beige strip) · build 2026-06-03-1123';
+const BUILD_VERSION = '0.6 · save/Done un-pinned into scroll; taller map · build 2026-06-03-1129';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4402,14 +4402,9 @@ async function openTourEditor(tourId) {
       <div class="tb-place-banner" id="tb-place-banner"><span id="tb-place-text">Tap the map</span><button type="button" class="tb-place-cancel" id="tb-place-cancel">Cancel</button></div>
       <div class="tb-zoom" id="tb-zoom">z —</div>
     </div>
-    <div class="tb-panel" id="tb-panel"></div>
-    <div class="tb-edfoot">
-      <span class="tb-saved">✓ Changes save automatically</span>
-      <button class="tb-donebtn" id="tb-ed-done">Done</button>
-    </div>`;
+    <div class="tb-panel" id="tb-panel"></div>`;
   document.getElementById('phone').appendChild(el);
   document.getElementById('tb-ed-back').addEventListener('click', tbCloseEditor);
-  document.getElementById('tb-ed-done').addEventListener('click', tbCloseEditor);
   document.getElementById('tb-place-cancel').addEventListener('click', tbCancelPlace);
   document.getElementById('tb-add-btn').addEventListener('click', (ev) => { ev.stopPropagation(); tbToggleAddMenu(); });
   tbBuildAddMenu();
@@ -4627,6 +4622,14 @@ function renderTbEditorPanel() {
   const addStop = document.createElement('div'); addStop.style.marginTop = '12px';
   addStop.appendChild(smMakeBtn('+ Add stop', 'primary', () => tbArmPlace('stop')));
   panel.appendChild(addStop);
+
+  // Save-state + Done now live at the END of the scroll (not a pinned bar).
+  const foot = document.createElement('div'); foot.className = 'tb-edfoot';
+  const saved = document.createElement('span'); saved.className = 'tb-saved'; saved.textContent = '✓ Changes save automatically';
+  const done = document.createElement('button'); done.className = 'tb-donebtn'; done.textContent = 'Done';
+  done.addEventListener('click', tbCloseEditor);
+  foot.appendChild(saved); foot.appendChild(done);
+  panel.appendChild(foot);
 }
 
 // ── "Add" dropdown (top-right of the editor map) ──
