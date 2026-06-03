@@ -2218,7 +2218,10 @@
       <div class="zoom-controls">
         <button class="zoom-btn preset" id="zoom-overview" title="Overview">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 19 L9 9 L12.5 14.5 L16 8 L21 19 Z"/>
+            <polyline points="4 9 4 4 9 4"/>
+            <polyline points="15 4 20 4 20 9"/>
+            <polyline points="20 15 20 20 15 20"/>
+            <polyline points="9 20 4 20 4 15"/>
           </svg>
         </button>
         <button class="zoom-btn preset" id="zoom-detail" title="Detail (walking)">
@@ -2708,7 +2711,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · zoom presets tuned: overview 15 / detail 16.1 · build 2026-06-03-1153';
+const BUILD_VERSION = '0.6 · overview icon → fit-to-area corner frame · build 2026-06-03-1158';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
