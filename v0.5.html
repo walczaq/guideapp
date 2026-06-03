@@ -218,11 +218,11 @@
   /* Live zoom readout — mirrors the builder's badge so the guide can map a
      builder zoom to what a passenger sees, and vice versa. */
   .map-zoom-readout {
-    position: absolute; left: 16px;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 40px);
-    background: var(--paper); border: 1px solid var(--rule); border-radius: 8px;
-    padding: 4px 9px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.12); z-index: 5; pointer-events: none;
+    position: absolute; left: 14px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 6px);
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink);
+    text-shadow: 0 0 4px var(--paper), 0 0 8px var(--paper), 0 1px 2px var(--paper);
+    z-index: 5; pointer-events: none;
   }
 
   /* pins */
@@ -2711,7 +2711,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · presets = zoom only (no centering/follow changes) · build 2026-06-03-1309';
+const BUILD_VERSION = '0.6 · zoom text lower/no-pill; tap-to-teleport in sim · build 2026-06-03-1319';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -5861,6 +5861,11 @@ function bindMapDeselectHandler() {
     if (BUS_PIN_PLACING && ROLE === 'guide' && SESSION) {
       BUS_PIN_PLACING = false;
       placeBusPin(e.lngLat.lng, e.lngLat.lat);
+      return;
+    }
+    // Joystick/sim on → tap to teleport the dot (skip the slow walk).
+    if (JOYSTICK_MODE) {
+      teleportSimTo(e.lngLat.lng, e.lngLat.lat);
       return;
     }
     // Otherwise: clicking empty map = deselect any selected passenger.
@@ -10091,6 +10096,26 @@ function disableJoystick() {
   if (knob) knob.style.transform = 'translate(-50%, -50%)';
   const joy = document.getElementById('joystick');
   if (joy) joy.classList.remove('on');
+}
+
+// Joystick teleport — while sim mode is on, tapping the map jumps the dot
+// straight there so testers can skip the slow walk to a far stop. Runs the
+// same side-effects as a sim step (triggers, zones, geofences, queue).
+function teleportSimTo(lng, lat) {
+  state.youLng = lng;
+  state.youLat = lat;
+  state.gpsMode = 'simulated';
+  state.accuracy = 5;
+  if (ROLE === 'passenger') { checkTriggers(); checkDangerZones(); maybeAutoDetailZoom(); }
+  if (ROLE === 'guide' && SESSION) checkStopGeofences();
+  updateSignal();
+  renderAll();
+  const nowMs = Date.now();
+  if (SESSION && ROLE === 'passenger' && nowMs - _lastQueuedAt >= QUEUE_INTERVAL_MS) {
+    _lastQueuedAt = nowMs;
+    queueLocation({ lng, lat, accuracy: 5, client_recorded_at: new Date(nowMs).toISOString() })
+      .catch(err => console.warn('queueLocation (teleport) failed', err));
+  }
 }
 
 // Drive the walker each animation frame while the knob is deflected. Same
