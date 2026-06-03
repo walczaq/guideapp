@@ -1571,24 +1571,51 @@
   .tb-form-err { color:var(--mark); font-family:'JetBrains Mono',monospace; font-size:11px; min-height:14px; margin-top:8px; }
   .tb-form-actions { display:flex; gap:10px; margin-top:16px; }
 
-  /* Slim editor top bar (replaces the tall header in the editor) */
-  .tb-edbar {
-    display:flex; align-items:center; gap:10px;
-    padding:8px 12px; border-bottom:1px solid var(--rule-soft); flex:0 0 auto;
+  /* Editor chrome floats over the map (no solid top bar) */
+  .tb-float-tl {
+    position:absolute; top:calc(8px + max(env(safe-area-inset-top,0px), 0px)); left:10px; z-index:6;
+    display:flex; align-items:center; gap:8px; max-width:calc(100% - 110px);
   }
-  .tb-backbtn {
-    flex:0 0 auto; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.06em;
-    padding:7px 12px; background:var(--paper); color:var(--ink);
-    border:1px solid var(--rule); border-radius:7px; cursor:pointer;
+  .tb-float-back {
+    flex:0 0 auto; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.04em;
+    padding:7px 11px; background:rgba(255,255,255,0.9); color:var(--ink);
+    border:1px solid rgba(0,0,0,0.12); border-radius:8px; cursor:pointer;
+    -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); box-shadow:0 1px 4px rgba(0,0,0,0.18);
   }
-  .tb-backbtn:active { transform:scale(0.97); }
-  .tb-edname {
-    flex:1; min-width:0; font-family:'Fraunces',serif; font-weight:700; font-size:16px; color:var(--ink);
+  .tb-float-back:active { transform:scale(0.97); }
+  .tb-float-name {
+    min-width:0; font-family:'Fraunces',serif; font-weight:700; font-size:16px; color:var(--ink);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    text-shadow:0 0 4px var(--paper), 0 0 8px var(--paper), 0 1px 2px var(--paper);
   }
-  .tb-edbar-stamp {
-    flex:0 0 auto; font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.1em;
-    text-transform:uppercase; color:var(--rule);
+  .tb-float-tr { position:absolute; top:calc(8px + max(env(safe-area-inset-top,0px), 0px)); right:10px; z-index:7; }
+  .tb-add-btn {
+    font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:0.06em; font-weight:700;
+    padding:8px 14px; background:var(--ink); color:var(--paper);
+    border:none; border-radius:8px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.28);
+  }
+  .tb-add-btn:active { transform:scale(0.97); }
+  .tb-add-menu {
+    position:absolute; top:42px; right:0; min-width:208px;
+    background:var(--paper); border:1px solid var(--rule); border-radius:10px; overflow:hidden;
+    box-shadow:0 12px 36px rgba(0,0,0,0.28); display:none; flex-direction:column;
+  }
+  .tb-add-menu.show { display:flex; }
+  .tb-add-item {
+    display:flex; align-items:center; gap:10px; width:100%; text-align:left; cursor:pointer;
+    padding:10px 12px; background:var(--paper); border:none; border-bottom:1px solid var(--rule-soft);
+    font-family:'Fraunces',serif; font-size:14px; color:var(--ink);
+  }
+  .tb-add-item:last-child { border-bottom:none; }
+  .tb-add-item:active { background:var(--paper-2); }
+  .tb-add-emoji {
+    flex:0 0 auto; width:24px; height:24px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:13px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.25);
+  }
+  .tb-pin-dot {
+    display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%;
+    font-size:11px; margin-right:8px; vertical-align:middle; box-shadow:0 1px 2px rgba(0,0,0,0.2);
   }
   /* Live zoom readout on the editor map */
   .tb-zoom {
@@ -2628,7 +2655,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · builder: POIs from z14 + numbered pins + total path · build 2026-06-03-1035';
+const BUILD_VERSION = '0.6 · builder: floating ‹Tours + Add menu (typed markers) · build 2026-06-03-1057';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4169,10 +4196,10 @@ async function tbDeleteStop(id) {
   const { error } = await supabaseClient.rpc('delete_stop', { p_guide_token: token, p_stop_id: id });
   return error ? { error: error.message } : { ok: true };
 }
-async function tbCreatePin(stopId, title, body, lng, lat, radius) {
+async function tbCreatePin(stopId, title, body, lng, lat, radius, category) {
   const token = getStoredGuideToken();
   const { data, error } = await supabaseClient.rpc('create_pin',
-    { p_guide_token: token, p_stop_id: stopId, p_title: title, p_body: body, p_lng: lng, p_lat: lat, p_trigger_radius_m: radius });
+    { p_guide_token: token, p_stop_id: stopId, p_title: title, p_body: body, p_lng: lng, p_lat: lat, p_trigger_radius_m: radius, p_category: category || 'pin' });
   return error ? { error: error.message } : { ok: true, row: data };
 }
 async function tbUpdatePin(id, f) {
@@ -4296,6 +4323,18 @@ let _tbPinMarkers = [];
 let _tbStopDeleteConfirm = null;
 let _tbPinDeleteConfirm = null;
 
+// Typed map markers the "Add" menu can place. All stored as pins with a
+// `category` (migration 012); colour-coded on the map, labelled in the panel.
+const TB_CATEGORIES = [
+  { key: 'pin',      label: 'Pin',                 emoji: '📍', color: '#2563eb', radius: 25 },
+  { key: 'danger',   label: 'Dangerous Zone',      emoji: '⚠️', color: '#dc2626', radius: 40 },
+  { key: 'border',   label: "Border / Don't go",   emoji: '⛔', color: '#7f1d1d', radius: 30 },
+  { key: 'toilet',   label: 'Toilet (free/paid)',  emoji: '🚻', color: '#0891b2', radius: 20 },
+  { key: 'cafe',     label: 'Café / Restaurant',   emoji: '☕', color: '#b45309', radius: 20 },
+  { key: 'souvenir', label: 'Souvenirs',           emoji: '🛍️', color: '#7c3aed', radius: 20 },
+];
+function tbCat(key) { return TB_CATEGORIES.find(c => c.key === key) || TB_CATEGORIES[0]; }
+
 async function openTourEditor(tourId) {
   const mgr = document.getElementById('tour-manager');
   if (mgr) mgr.remove();
@@ -4310,12 +4349,15 @@ async function openTourEditor(tourId) {
   el.id = 'tour-editor';
   el.className = 'tb-editor';
   el.innerHTML = `
-    <div class="tb-edbar">
-      <button class="tb-backbtn" id="tb-ed-back">‹ Tours</button>
-      <div class="tb-edname" id="tb-ed-title">…</div>
-      <span class="tb-edbar-stamp">Editing</span>
-    </div>
     <div class="tb-map" id="tb-map">
+      <div class="tb-float-tl">
+        <button class="tb-float-back" id="tb-ed-back">‹ Tours</button>
+        <span class="tb-float-name" id="tb-ed-title">…</span>
+      </div>
+      <div class="tb-float-tr">
+        <button class="tb-add-btn" id="tb-add-btn">＋ Add</button>
+        <div class="tb-add-menu" id="tb-add-menu"></div>
+      </div>
       <div class="tb-place-banner" id="tb-place-banner"><span id="tb-place-text">Tap the map</span><button type="button" class="tb-place-cancel" id="tb-place-cancel">Cancel</button></div>
       <div class="tb-zoom" id="tb-zoom">z —</div>
     </div>
@@ -4328,6 +4370,8 @@ async function openTourEditor(tourId) {
   document.getElementById('tb-ed-back').addEventListener('click', tbCloseEditor);
   document.getElementById('tb-ed-done').addEventListener('click', tbCloseEditor);
   document.getElementById('tb-place-cancel').addEventListener('click', tbCancelPlace);
+  document.getElementById('tb-add-btn').addEventListener('click', (ev) => { ev.stopPropagation(); tbToggleAddMenu(); });
+  tbBuildAddMenu();
 
   // Dedicated editor map — framed on the tour's stops (+pins) if any,
   // otherwise centered on the home seed (current GPS at creation).
@@ -4402,6 +4446,7 @@ function renderTbMarkers() {
     if (s.id === _tbSelStopId) {
       for (const p of (s.pins || [])) {
         const pe = document.createElement('div'); pe.className = 'tb-pin-marker';
+        pe.style.background = tbCat(p.category).color;
         pe.textContent = String(p.ordinal);
         _tbPinMarkers.push(new mapboxgl.Marker({ element: pe, anchor: 'center' }).setLngLat([p.lng, p.lat]).addTo(_tbEditorMap));
       }
@@ -4470,7 +4515,10 @@ function renderTbEditorPanel() {
     if (s.id === _tbSelStopId) {
       for (const p of (s.pins || [])) {
         const pr = document.createElement('div'); pr.className = 'tb-pin-row';
-        const pt = document.createElement('div'); pt.className = 'tb-rowtitle'; pt.textContent = p.title || ''; pr.appendChild(pt);
+        const cat = tbCat(p.category);
+        const pt = document.createElement('div'); pt.className = 'tb-rowtitle';
+        pt.innerHTML = `<span class="tb-pin-dot" style="background:${cat.color}">${cat.emoji}</span>${(p.title || '').replace(/</g, '&lt;')}`;
+        pr.appendChild(pt);
         if (p.body) { const pb = document.createElement('div'); pb.className = 'tb-rowbody'; pb.textContent = p.body; pr.appendChild(pb); }
         const pa = document.createElement('div'); pa.className = 'tb-actions';
         pa.appendChild(smMakeBtn('Edit', '', () => tbEditPinForm(p)));
@@ -4487,9 +4535,6 @@ function renderTbEditorPanel() {
         pr.appendChild(pa);
         panel.appendChild(pr);
       }
-      const addPin = smMakeBtn('+ Add pin here', 'primary', () => tbArmPlace('pin'));
-      addPin.style.marginLeft = '14px';
-      panel.appendChild(addPin);
     }
   }
 
@@ -4498,14 +4543,52 @@ function renderTbEditorPanel() {
   panel.appendChild(addStop);
 }
 
-function tbArmPlace(kind, id) {
-  _tbPlace = { kind, id };
+// ── "Add" dropdown (top-right of the editor map) ──
+function tbBuildAddMenu() {
+  const menu = document.getElementById('tb-add-menu');
+  if (!menu) return;
+  menu.innerHTML = '';
+  for (const c of TB_CATEGORIES) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'tb-add-item';
+    item.innerHTML = `<span class="tb-add-emoji" style="background:${c.color}">${c.emoji}</span><span>${c.label}</span>`;
+    item.addEventListener('click', (ev) => { ev.stopPropagation(); tbCloseAddMenu(); tbArmPlace('pin', null, c.key); });
+    menu.appendChild(item);
+  }
+}
+function tbToggleAddMenu() {
+  const menu = document.getElementById('tb-add-menu');
+  if (!menu) return;
+  if (menu.classList.contains('show')) { tbCloseAddMenu(); return; }
+  menu.classList.add('show');
+  // One-shot outside-tap close.
+  setTimeout(() => { document.addEventListener('click', tbCloseAddMenu, { once: true }); }, 0);
+}
+function tbCloseAddMenu() {
+  const menu = document.getElementById('tb-add-menu');
+  if (menu) menu.classList.remove('show');
+}
+
+function tbArmPlace(kind, id, category) {
+  tbCloseAddMenu();
+  // Typed pins need a stop to live under (stops are the container).
+  if (kind === 'pin' && !tbSelStop()) {
+    const banner = document.getElementById('tb-place-banner');
+    const text = document.getElementById('tb-place-text');
+    if (text) text.textContent = 'Add or select a stop first (＋ Add stop, below)';
+    if (banner) banner.classList.add('show');
+    setTimeout(tbCancelPlace, 2600);
+    return;
+  }
+  _tbPlace = { kind, id, category: category || 'pin' };
   const banner = document.getElementById('tb-place-banner');
   const text = document.getElementById('tb-place-text');
   if (text) {
+    const cat = tbCat(category);
     text.textContent =
       kind === 'stop' ? 'Tap the map to place the new stop' :
-      kind === 'pin' ? 'Tap the map to place the new pin' :
+      kind === 'pin' ? `Tap the map to place: ${cat.label}` :
       kind === 'move-stop' ? 'Tap the map to move this stop' :
       'Tap the map to move this pin';
   }
@@ -4541,16 +4624,18 @@ async function tbOnMapClick(e) {
   }
   if (place.kind === 'pin') {
     const stop = tbSelStop(); if (!stop) return;
+    const cat = tbCat(place.category);
+    const isToilet = cat.key === 'toilet';
     tbShowForm({
-      title: 'New pin',
+      title: `New ${cat.label}`,
       fields: [
-        { key: 'title', label: 'Title', type: 'text', value: '' },
-        { key: 'body', label: 'Description', type: 'textarea', value: '' },
-        { key: 'radius', label: 'Trigger radius (m)', type: 'number', value: 25 },
+        { key: 'title', label: 'Title', type: 'text', value: cat.key === 'pin' ? '' : cat.label },
+        { key: 'body', label: isToilet ? 'Detail (free / paid, where…)' : 'Description', type: 'textarea', value: '' },
+        { key: 'radius', label: 'Trigger radius (m)', type: 'number', value: cat.radius },
       ],
       onSave: async (v, err) => {
         if (!v.title.trim()) { err('Title required'); return false; }
-        const r = await tbCreatePin(stop.id, v.title.trim(), v.body || '', lng, lat, parseInt(v.radius, 10) || 25);
+        const r = await tbCreatePin(stop.id, v.title.trim(), v.body || '', lng, lat, parseInt(v.radius, 10) || cat.radius, cat.key);
         if (r.error) { err(r.error); return false; }
         stop.pins.push(r.row);
         tbCloseForm(); renderTbMarkers(); renderTbEditorPanel(); return true;
