@@ -2711,7 +2711,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · bind map-click for all roles (teleport works for passengers) · build 2026-06-03-1325';
+const BUILD_VERSION = '0.6 · tour picker in Start session · build 2026-06-03-1836';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4909,17 +4909,21 @@ function showCreateSessionForm() {
       value="${GUIDE ? GUIDE.name.replace(/"/g, '&quot;') : ''}"
       style="font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:6px; text-align:center;"
     />
+    <div id="tour-picker-wrap" style="display:flex; flex-direction:column; gap:8px; align-items:center;">
+      <label for="tour-select" style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule);">Tour</label>
+      <select id="tour-select" style="font-family:'JetBrains Mono',monospace; font-size:13px; padding:11px 14px; border:1px solid var(--rule); background:var(--paper-2); color:var(--ink); width:272px; border-radius:6px; text-align:center; cursor:pointer;">
+        <option value="" disabled selected>Loading tours…</option>
+      </select>
+    </div>
     <button
       id="create-session-btn"
       style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
     >
       Start Session
     </button>
-    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); opacity:0.5;">
-      Tour: <code>${DEFAULT_TOUR_SLUG}</code>
-    </div>
   `;
   document.getElementById('phone').appendChild(el);
+  populateTourPicker();
 
   document.getElementById('create-session-btn').addEventListener('click', async () => {
     const nameInput = document.getElementById('guide-name-input');
@@ -4929,8 +4933,34 @@ function showCreateSessionForm() {
       nameInput.style.borderColor = 'var(--mark)';
       return;
     }
-    await createSession(DEFAULT_TOUR_SLUG, guideName);
+    const sel = document.getElementById('tour-select');
+    const tourSlug = (sel && sel.value) ? sel.value : DEFAULT_TOUR_SLUG;
+    await createSession(tourSlug, guideName);
   });
+}
+
+// Fill the start-session tour dropdown from the guide's available tours
+// (base + their own, via list_guide_tours). Defaults to Golden Circle if
+// present, else the first tour; falls back to DEFAULT_TOUR_SLUG if none.
+async function populateTourPicker() {
+  const sel = document.getElementById('tour-select');
+  if (!sel) return;
+  let tours = [];
+  try { tours = await tbListTours(); } catch (_e) { tours = []; }
+  if (!tours.length) {
+    sel.innerHTML = `<option value="${DEFAULT_TOUR_SLUG}" selected>${DEFAULT_TOUR_SLUG}</option>`;
+    return;
+  }
+  sel.innerHTML = tours.map(t => {
+    const mine = t.owner_guide_id ? ' (yours)' : '';
+    const n = Number(t.stop_count) || 0;
+    const stops = `${n} stop${n === 1 ? '' : 's'}`;
+    const slug = (t.slug || '').replace(/"/g, '&quot;');
+    const name = (t.name || t.slug || 'Untitled').replace(/</g, '&lt;');
+    return `<option value="${slug}">${name} · ${stops}${mine}</option>`;
+  }).join('');
+  const gc = tours.find(t => t.slug === DEFAULT_TOUR_SLUG);
+  sel.value = gc ? DEFAULT_TOUR_SLUG : tours[0].slug;
 }
 
 // Insert a new session row, then redirect the page to ?session=<newId>.
