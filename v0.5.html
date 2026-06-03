@@ -2745,7 +2745,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · group-chat button: WhatsApp icon + "Group" caption · build 2026-06-03-1940';
+const BUILD_VERSION = '0.6 · "in bus" = sticky passenger-declared state (pushed) · build 2026-06-03-1956';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -6303,7 +6303,7 @@ async function catchUpPassengerNames() {
   if (!SESSION) return;
   const { data, error } = await supabaseClient
     .from('session_passengers')
-    .select('passenger_id, name')
+    .select('passenger_id, name, in_bus')
     .eq('session_id', SESSION.id);
   if (error) {
     console.warn('session_passengers catch-up failed', error);
@@ -6322,10 +6322,12 @@ async function catchUpPassengerNames() {
     } else {
       p.name = row.name;
     }
+    p.inBus = !!row.in_bus;
   }
   // Re-render dots (for labels) and the bottom-sheet list.
   renderPassengers();
   renderPassengerList();
+  updateBusHeadcount();
 }
 
 function startPassengerNamesSubscription() {
@@ -6353,8 +6355,10 @@ function startPassengerNamesSubscription() {
         } else {
           p.name = row.name;
         }
+        p.inBus = !!row.in_bus;
         renderPassengers();
         renderPassengerList();
+        updateBusHeadcount();
       }
     )
     .subscribe((status) => {
@@ -7025,6 +7029,7 @@ function onGpsSuccess(pos) {
   if (ROLE === 'passenger') {
     checkTriggers();
     checkDangerZones();
+    checkBusArrival();
     maybeAutoDetailZoom();
   }
 
@@ -7363,6 +7368,28 @@ function checkDangerZones() {
       state.zonesInside.delete(z.id);
     }
   }
+}
+
+// Passenger declares "I'm in the bus" once they reach the broadcast bus pin
+// (GUIDE_VIEW.bus). Sticky + one-way: pushed once, never retracted, so a
+// boarded passenger who pockets/loses their phone stays counted on the guide
+// side. The guide reads the flag — it does NOT compute distances.
+let _inBusDeclared = false;
+function checkBusArrival() {
+  if (ROLE !== 'passenger' || _inBusDeclared || !SESSION) return;
+  if (state.youLng == null) return;
+  const bus = GUIDE_VIEW && GUIDE_VIEW.bus;
+  if (!bus || bus.lng == null) return;
+  if (metersBetween(bus.lng, bus.lat, state.youLng, state.youLat) <= HEADCOUNT_RADIUS_M) {
+    _inBusDeclared = true;        // optimistic — only push once
+    markPassengerInBus();
+  }
+}
+async function markPassengerInBus() {
+  if (!SESSION) return;
+  const { error } = await supabaseClient.rpc('mark_passenger_in_bus',
+    { p_session_id: SESSION.id, p_passenger_id: PASSENGER_ID });
+  if (error) { console.warn('mark_passenger_in_bus failed', error); _inBusDeclared = false; }  // allow retry
 }
 
 function showPopup(pin) {
@@ -8770,23 +8797,27 @@ function hasBusSignalFor(stopId) {
   return false;
 }
 
-// Guide safety glance: how many located passengers are within HEADCOUNT_RADIUS_M
-// of the bus pin. Shown in the timer card only when the bus pin is placed.
-// Green once everyone's back; amber/red while someone's still out.
+// Radius (m) within which a PASSENGER declares itself "in the bus". The
+// passenger pushes the sticky in_bus state (see checkBusArrival); the guide
+// only reads it — no guide-side distance maths.
 const HEADCOUNT_RADIUS_M = 10;
+
+// Guide safety glance: how many passengers have declared themselves in the bus.
+// Counts the sticky in_bus state (set once they reach the bus pin, never unset),
+// so a boarded passenger whose phone goes quiet stays counted. Shown in the
+// timer card only when the guide has placed the bus pin.
 function updateBusHeadcount() {
   const hcEl = document.getElementById('stop-timer-headcount');
   if (!hcEl) return;
   if (ROLE !== 'guide' || !BUS_PIN_ON || !BUS_PIN) { hcEl.style.display = 'none'; return; }
-  let near = 0, total = 0;
+  let inBus = 0, total = 0;
   for (const [, p] of PASSENGERS) {
-    if (p.lng == null || p.lat == null) continue;
     total++;
-    if (metersBetween(BUS_PIN.lng, BUS_PIN.lat, p.lng, p.lat) <= HEADCOUNT_RADIUS_M) near++;
+    if (p.inBus) inBus++;
   }
   if (total === 0) { hcEl.style.display = 'none'; return; }
-  hcEl.textContent = `${near}/${total} back at bus`;
-  hcEl.classList.toggle('all-back', near === total);
+  hcEl.textContent = `${inBus}/${total} in bus`;
+  hcEl.classList.toggle('all-back', inBus === total);
   hcEl.style.display = '';
 }
 
@@ -10287,7 +10318,7 @@ function teleportSimTo(lng, lat) {
   state.youLat = lat;
   state.gpsMode = 'simulated';
   state.accuracy = 5;
-  if (ROLE === 'passenger') { checkTriggers(); checkDangerZones(); maybeAutoDetailZoom(); }
+  if (ROLE === 'passenger') { checkTriggers(); checkDangerZones(); checkBusArrival(); maybeAutoDetailZoom(); }
   if (ROLE === 'guide' && SESSION) checkStopGeofences();
   updateSignal();
   renderAll();
@@ -10330,7 +10361,7 @@ function startJoystickLoop() {
 
     // Mirror the onGpsSuccess side-effects (minus the queue, which we do
     // separately at a throttled cadence).
-    if (ROLE === 'passenger') { checkTriggers(); checkDangerZones(); maybeAutoDetailZoom(); }
+    if (ROLE === 'passenger') { checkTriggers(); checkDangerZones(); checkBusArrival(); maybeAutoDetailZoom(); }
     if (ROLE === 'guide' && SESSION) checkStopGeofences();
     updateSignal();
     renderYou();
