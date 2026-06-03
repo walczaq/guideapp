@@ -2711,7 +2711,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · preset zoom lands exactly (no follow interrupt); ov 14 · build 2026-06-03-1207';
+const BUILD_VERSION = '0.6 · presets = zoom only (no centering/follow changes) · build 2026-06-03-1309';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -7295,26 +7295,17 @@ document.getElementById('recenter').addEventListener('click', () => {
 });
 
 // ── Zoom presets: Overview (wide survey) ↔ Detail (street, when walking) ──
-function applyZoomPreset(preset, opts = {}) {
+function applyZoomPreset(preset) {
   if (!map) return;
   state.zoomPreset = preset;
   state.autoDetailDone = true;   // any explicit/auto change ends auto-switching
   const zoom = preset === 'detail' ? ZOOM_DETAIL : ZOOM_OVERVIEW;
-  const ease = { zoom, duration: 500 };
-  if (preset === 'detail' && state.youLng != null) {
-    ease.center = [state.youLng, state.youLat];
-    state.following = true;
-    document.getElementById('recenter').classList.add('active');
-  } else if (preset === 'overview') {
-    // Survey view — stop following so they can look around freely.
-    state.following = false;
-    document.getElementById('recenter').classList.remove('active');
-  }
-  // Guard the animation: follow-mode setCenter (and the first-fix recenter)
-  // would otherwise fire on the next GPS tick and interrupt this easeTo,
-  // leaving the zoom stuck partway (the "lands on ~15" bug).
+  // ZOOM ONLY — keep the current centre and leave follow mode alone.
+  // Centering is the recenter button's job; mixing the two tested poorly.
+  // Still guard the animation so a follow-mode setCenter on the next GPS
+  // tick doesn't interrupt the easeTo and leave the zoom stuck partway.
   state.presetAnimating = true;
-  map.easeTo(ease);
+  map.easeTo({ zoom, duration: 500 });
   map.once('moveend', () => { state.presetAnimating = false; });
   setTimeout(() => { state.presetAnimating = false; }, 800);  // fallback if no movement
   updateZoomPresetButtons();
