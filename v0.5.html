@@ -1532,7 +1532,12 @@
     font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700;
   }
   .tb-stop-marker.sel { background:var(--mark); }
-  .tb-pin-marker { width:14px; height:14px; border-radius:50%; background:var(--mark); border:2px solid var(--paper); box-shadow:0 1px 4px rgba(0,0,0,0.3); }
+  .tb-pin-marker {
+    width:18px; height:18px; border-radius:50%; background:var(--mark); border:2px solid var(--paper);
+    box-shadow:0 1px 4px rgba(0,0,0,0.3);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--paper); font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:700;
+  }
   /* Placement banner */
   .tb-place-banner {
     position:absolute; left:12px; right:12px; top:12px; z-index:5;
@@ -2623,7 +2628,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · builder: slim bar + zoom readout + Done button · build 2026-06-02-2140';
+const BUILD_VERSION = '0.6 · builder: POIs from z14 + numbered pins + total path · build 2026-06-03-1035';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4346,7 +4351,7 @@ async function openTourEditor(tourId) {
   }
   try {
     _tbEditorMap = new mapboxgl.Map(edOpts);
-    _tbEditorMap.on('load', () => { setTimeout(() => { try { _tbEditorMap.resize(); } catch (_e) {} }, 50); renderTbMarkers(); updateTbZoom(); });
+    _tbEditorMap.on('load', () => { loosenPoiLayers(_tbEditorMap); setTimeout(() => { try { _tbEditorMap.resize(); } catch (_e) {} }, 50); renderTbMarkers(); updateTbZoom(); });
     _tbEditorMap.on('zoom', updateTbZoom);
     _tbEditorMap.on('click', tbOnMapClick);
   } catch (e) { console.warn('[tb] editor map failed', e); }
@@ -4367,6 +4372,22 @@ function updateTbZoom() {
   if (el && _tbEditorMap) el.textContent = 'z ' + _tbEditorMap.getZoom().toFixed(1);
 }
 
+// Total walking path length = sum of straight-line distances between
+// consecutive stops (in order). Straight-line, so it's a lower bound on the
+// real walked distance, but a useful at-a-glance figure while building.
+function tbTotalPathMeters() {
+  const stops = (_tbTour && _tbTour.stops) || [];
+  let total = 0;
+  for (let i = 1; i < stops.length; i++) {
+    total += metersBetween(stops[i - 1].lng, stops[i - 1].lat, stops[i].lng, stops[i].lat);
+  }
+  return total;
+}
+function tbFmtDist(m) {
+  if (m < 1000) return Math.round(m) + ' m';
+  return (m / 1000).toFixed(m < 10000 ? 1 : 0) + ' km';
+}
+
 function renderTbMarkers() {
   if (!_tbEditorMap) return;
   _tbStopMarkers.forEach(m => { try { m.remove(); } catch (_e) {} });
@@ -4381,6 +4402,7 @@ function renderTbMarkers() {
     if (s.id === _tbSelStopId) {
       for (const p of (s.pins || [])) {
         const pe = document.createElement('div'); pe.className = 'tb-pin-marker';
+        pe.textContent = String(p.ordinal);
         _tbPinMarkers.push(new mapboxgl.Marker({ element: pe, anchor: 'center' }).setLngLat([p.lng, p.lat]).addTo(_tbEditorMap));
       }
     }
@@ -4412,7 +4434,10 @@ function renderTbEditorPanel() {
   panel.appendChild(top);
 
   // Stops.
-  const sl = document.createElement('div'); sl.className = 'tb-section-label'; sl.textContent = 'Stops'; panel.appendChild(sl);
+  const sl = document.createElement('div'); sl.className = 'tb-section-label';
+  const nStops = (_tbTour.stops || []).length;
+  sl.textContent = `Stops (${nStops})` + (nStops > 1 ? ` · ${tbFmtDist(tbTotalPathMeters())} total path` : '');
+  panel.appendChild(sl);
   if (!(_tbTour.stops || []).length) {
     const e = document.createElement('div'); e.className = 'tb-empty'; e.style.padding = '12px'; e.textContent = 'No stops yet — add one.'; panel.appendChild(e);
   }
@@ -4914,6 +4939,23 @@ function showFatalError(msg) {
 boot();
 
 // ── 5. MAP INIT ──
+// Make built-in amenity POIs (toilets, parking, cafés…) appear at a lower
+// zoom than the Mapbox style's default. Best-effort: lowers the minzoom on
+// the style's POI symbol layers. (Density is also gated by the style's
+// filterrank, so this surfaces more but Mapbox still prioritises by
+// importance — and it reads internal layer ids, which can shift on a style
+// update, hence the try/catch.)
+function loosenPoiLayers(m) {
+  try {
+    const layers = (m.getStyle() && m.getStyle().layers) || [];
+    for (const l of layers) {
+      if (l.type === 'symbol' && /poi/i.test(l.id)) {
+        try { m.setLayerZoomRange(l.id, 13, 24); } catch (_e) { /* layer gone — ignore */ }
+      }
+    }
+  } catch (_e) { /* style not ready — ignore */ }
+}
+
 function initMap(token) {
   mapboxgl.accessToken = token;
 
@@ -4970,6 +5012,7 @@ function initMap(token) {
   map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
 
   map.on('load', () => {
+    loosenPoiLayers(map);
     renderAll();
     // GPS runs for everyone — guides need to see their own location too.
     // What differs by role is what gets *broadcast* (queued + synced):
