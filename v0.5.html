@@ -1548,11 +1548,12 @@
   }
   .tb-stop-marker.sel { background:var(--mark); }
   .tb-pin-marker {
-    width:18px; height:18px; border-radius:50%; background:var(--mark); border:2px solid var(--paper);
+    width:20px; height:20px; border-radius:50%; background:var(--mark); border:2px solid var(--paper);
     box-shadow:0 1px 4px rgba(0,0,0,0.3);
     display:flex; align-items:center; justify-content:center;
-    color:var(--paper); font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:700;
+    color:var(--paper); font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700;
   }
+  .tb-pin-marker.emoji { font-size:12px; }
   /* Placement banner */
   .tb-place-banner {
     position:absolute; left:12px; right:12px; top:12px; z-index:5;
@@ -1585,6 +1586,12 @@
   .tb-form textarea { min-height:64px; resize:vertical; }
   .tb-form-err { color:var(--mark); font-family:'JetBrains Mono',monospace; font-size:11px; min-height:14px; margin-top:8px; }
   .tb-form-actions { display:flex; gap:10px; margin-top:16px; }
+  .tb-choice-row { display:flex; gap:8px; }
+  .tb-choice {
+    flex:1; padding:11px; border:1px solid var(--rule); border-radius:6px; background:var(--paper); cursor:pointer;
+    font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:0.06em; color:var(--ink);
+  }
+  .tb-choice.on { background:var(--ink); color:var(--paper); border-color:var(--ink); }
 
   /* Editor chrome floats over the map (no solid top bar) */
   .tb-float-tl {
@@ -2670,7 +2677,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · typed markers live: danger zones warn + amenity icons · build 2026-06-03-1108';
+const BUILD_VERSION = '0.6 · per-type icons + forms (numbers route-pins only) · build 2026-06-03-1120';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4352,13 +4359,17 @@ let _tbPinDeleteConfirm = null;
 
 // Typed map markers the "Add" menu can place. All stored as pins with a
 // `category` (migration 012); colour-coded on the map, labelled in the panel.
+// trigger → has a description + trigger radius (route pins + the two zones).
+// numbered → carries a sequence number (route pins only).
+// form     → which placement form: 'note' (title+desc+radius),
+//            'toilet' (free/paid toggle), 'name' (name only).
 const TB_CATEGORIES = [
-  { key: 'pin',      label: 'Pin',                 emoji: '📍', color: '#2563eb', radius: 25 },
-  { key: 'danger',   label: 'Dangerous Zone',      emoji: '⚠️', color: '#dc2626', radius: 40 },
-  { key: 'border',   label: "Border / Don't go",   emoji: '⛔', color: '#7f1d1d', radius: 30 },
-  { key: 'toilet',   label: 'Toilet (free/paid)',  emoji: '🚻', color: '#0891b2', radius: 20 },
-  { key: 'cafe',     label: 'Café / Restaurant',   emoji: '☕', color: '#b45309', radius: 20 },
-  { key: 'souvenir', label: 'Souvenirs',           emoji: '🛍️', color: '#7c3aed', radius: 20 },
+  { key: 'pin',      label: 'Pin',                 emoji: '📍', color: '#2563eb', radius: 25, trigger: true,  numbered: true,  form: 'note' },
+  { key: 'danger',   label: 'Dangerous Zone',      emoji: '⚠️', color: '#dc2626', radius: 40, trigger: true,  numbered: false, form: 'note' },
+  { key: 'border',   label: "Border / Don't go",   emoji: '🚫', color: '#7f1d1d', radius: 30, trigger: true,  numbered: false, form: 'note' },
+  { key: 'toilet',   label: 'Toilet',              emoji: '🚻', color: '#0891b2', radius: 20, trigger: false, numbered: false, form: 'toilet' },
+  { key: 'cafe',     label: 'Café / Restaurant',   emoji: '🍽️', color: '#b45309', radius: 20, trigger: false, numbered: false, form: 'name' },
+  { key: 'souvenir', label: 'Souvenirs',           emoji: '🛍️', color: '#7c3aed', radius: 20, trigger: false, numbered: false, form: 'name' },
 ];
 function tbCat(key) { return TB_CATEGORIES.find(c => c.key === key) || TB_CATEGORIES[0]; }
 
@@ -4514,9 +4525,11 @@ function renderTbMarkers() {
     _tbStopMarkers.push(new mapboxgl.Marker({ element: elm, anchor: 'center' }).setLngLat([s.lng, s.lat]).addTo(_tbEditorMap));
     if (s.id === _tbSelStopId) {
       for (const p of (s.pins || [])) {
+        const cat = tbCat(p.category);
         const pe = document.createElement('div'); pe.className = 'tb-pin-marker';
-        pe.style.background = tbCat(p.category).color;
-        pe.textContent = String(p.ordinal);
+        pe.style.background = cat.color;
+        if (cat.numbered) { pe.textContent = String(p.ordinal); }
+        else { pe.textContent = cat.emoji; pe.classList.add('emoji'); }
         _tbPinMarkers.push(new mapboxgl.Marker({ element: pe, anchor: 'center' }).setLngLat([p.lng, p.lat]).addTo(_tbEditorMap));
       }
     }
@@ -4585,8 +4598,9 @@ function renderTbEditorPanel() {
       for (const p of (s.pins || [])) {
         const pr = document.createElement('div'); pr.className = 'tb-pin-row';
         const cat = tbCat(p.category);
+        const glyph = cat.numbered ? String(p.ordinal) : cat.emoji;
         const pt = document.createElement('div'); pt.className = 'tb-rowtitle';
-        pt.innerHTML = `<span class="tb-pin-dot" style="background:${cat.color}">${cat.emoji}</span>${(p.title || '').replace(/</g, '&lt;')}`;
+        pt.innerHTML = `<span class="tb-pin-dot" style="background:${cat.color}">${glyph}</span>${(p.title || '').replace(/</g, '&lt;')}`;
         pr.appendChild(pt);
         if (p.body) { const pb = document.createElement('div'); pb.className = 'tb-rowbody'; pb.textContent = p.body; pr.appendChild(pb); }
         const pa = document.createElement('div'); pa.className = 'tb-actions';
@@ -4694,17 +4708,28 @@ async function tbOnMapClick(e) {
   if (place.kind === 'pin') {
     const stop = tbSelStop(); if (!stop) return;
     const cat = tbCat(place.category);
-    const isToilet = cat.key === 'toilet';
+    let fields, build;
+    if (cat.form === 'toilet') {
+      fields = [{ key: 'fee', label: 'Free or paid?', type: 'choice', value: 'Free', options: ['Free', 'Paid'] }];
+      build = (v) => ({ title: 'Toilet', body: v.fee || 'Free', radius: cat.radius });
+    } else if (cat.form === 'name') {
+      fields = [{ key: 'name', label: 'Name', type: 'text', value: '' }];
+      build = (v) => ({ title: (v.name || '').trim(), body: '', radius: cat.radius });
+    } else { // 'note' — route pins + danger/border zones
+      fields = [
+        { key: 'title', label: 'Title', type: 'text', value: cat.key === 'pin' ? '' : cat.label },
+        { key: 'body', label: 'Description', type: 'textarea', value: '' },
+        { key: 'radius', label: 'Trigger radius (m)', type: 'number', value: cat.radius },
+      ];
+      build = (v) => ({ title: (v.title || '').trim(), body: v.body || '', radius: parseInt(v.radius, 10) || cat.radius });
+    }
     tbShowForm({
       title: `New ${cat.label}`,
-      fields: [
-        { key: 'title', label: 'Title', type: 'text', value: cat.key === 'pin' ? '' : cat.label },
-        { key: 'body', label: isToilet ? 'Detail (free / paid, where…)' : 'Description', type: 'textarea', value: '' },
-        { key: 'radius', label: 'Trigger radius (m)', type: 'number', value: cat.radius },
-      ],
+      fields,
       onSave: async (v, err) => {
-        if (!v.title.trim()) { err('Title required'); return false; }
-        const r = await tbCreatePin(stop.id, v.title.trim(), v.body || '', lng, lat, parseInt(v.radius, 10) || cat.radius, cat.key);
+        const b = build(v);
+        if (!b.title) { err('Name required'); return false; }
+        const r = await tbCreatePin(stop.id, b.title, b.body, lng, lat, b.radius, cat.key);
         if (r.error) { err(r.error); return false; }
         stop.pins.push(r.row);
         tbCloseForm(); renderTbMarkers(); renderTbEditorPanel(); return true;
@@ -4768,6 +4793,11 @@ function tbShowForm(opts) {
   bd.id = 'tb-form-backdrop';
   const fieldsHtml = opts.fields.map((f, i) => {
     const id = 'tb-f-' + i;
+    if (f.type === 'choice') {
+      const btns = (f.options || []).map(o =>
+        `<button type="button" class="tb-choice${o === f.value ? ' on' : ''}" data-choice="${id}" data-val="${o.replace(/"/g, '&quot;')}">${o}</button>`).join('');
+      return `<label>${f.label}</label><div class="tb-choice-row">${btns}</div><input type="hidden" id="${id}" value="${(f.value ?? '').toString().replace(/"/g, '&quot;')}" />`;
+    }
     if (f.type === 'textarea') return `<label for="${id}">${f.label}</label><textarea id="${id}">${(f.value || '').toString().replace(/</g, '&lt;')}</textarea>`;
     const type = f.type === 'number' ? 'number' : 'text';
     return `<label for="${id}">${f.label}</label><input id="${id}" type="${type}" value="${(f.value ?? '').toString().replace(/"/g, '&quot;')}" />`;
@@ -4786,6 +4816,14 @@ function tbShowForm(opts) {
   document.getElementById('phone').appendChild(bd);
   const errEl = document.getElementById('tb-form-err');
   const setErr = (m) => { if (errEl) errEl.textContent = m || ''; };
+  bd.querySelectorAll('.tb-choice').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-choice');
+      const hid = document.getElementById(key);
+      if (hid) hid.value = btn.getAttribute('data-val');
+      bd.querySelectorAll(`.tb-choice[data-choice="${key}"]`).forEach(b => b.classList.toggle('on', b === btn));
+    });
+  });
   document.getElementById('tb-form-cancel').addEventListener('click', tbCloseForm);
   document.getElementById('tb-form-save').addEventListener('click', async () => {
     const vals = {};
