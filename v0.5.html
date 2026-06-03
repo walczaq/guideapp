@@ -1496,8 +1496,11 @@
     position: absolute; inset: 0; z-index: 92;
     background: var(--paper);
     display: flex; flex-direction: column;
-    padding-top: max(env(safe-area-inset-top, 0px), 30px);
   }
+  /* Tour-list screen has a real header → keep it clear of the status bar.
+     The editor is map-first (floating controls handle the inset themselves),
+     so it goes flush to the top — no beige strip above the map. */
+  .tb-screen { padding-top: max(env(safe-area-inset-top, 0px), 30px); }
   .tb-header { padding: 16px 20px 12px; border-bottom: 1px solid var(--rule-soft); }
   .tb-stamp {
     font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em;
@@ -2677,7 +2680,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · per-type icons + forms (numbers route-pins only) · build 2026-06-03-1120';
+const BUILD_VERSION = '0.6 · editor map flush to top (drop beige strip) · build 2026-06-03-1123';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
