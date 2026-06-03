@@ -224,6 +224,18 @@
     text-shadow: 0 0 4px var(--paper), 0 0 8px var(--paper), 0 1px 2px var(--paper);
     z-index: 5; pointer-events: none;
   }
+  /* Passenger group-chat button — prominent, WhatsApp-green, bottom-centre */
+  .map-chat-btn {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+    display: flex; align-items: center; gap: 8px;
+    padding: 11px 18px; border: none; border-radius: 22px;
+    background: #25d366; color: #fff; cursor: pointer;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.28); z-index: 6;
+  }
+  .map-chat-btn:active { transform: translateX(-50%) scale(0.97); }
+  .map-chat-btn svg { width: 18px; height: 18px; }
 
   /* pins */
   .pin-group { cursor: pointer; }
@@ -2127,6 +2139,14 @@
         <g id="passengers-layer"></g>
       </svg>
 
+      <!-- Passenger-facing group-chat button (shown when the guide set a link). -->
+      <button class="map-chat-btn" id="map-chat-btn" type="button" style="display:none;" aria-label="Open group chat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+        </svg>
+        <span>Group chat</span>
+      </button>
+
       <div class="map-hud">
         <button class="icon-btn" id="burger-btn" aria-label="Menu">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -2731,7 +2751,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · per-session group chat link (WhatsApp) · build 2026-06-03-1925';
+const BUILD_VERSION = '0.6 · headcount 10m + on-map group-chat button · build 2026-06-03-1930';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -5060,9 +5080,19 @@ function showGroupChatEditor() {
       if (r.error) { err(r.error); return false; }
       if (SESSION) SESSION.chat_url = norm || null;
       tbCloseForm();
+      refreshGroupChatButton();
       return true;
     },
   });
+}
+
+// Show/hide the on-map "Group chat" button (passengers, when a link is set).
+function refreshGroupChatButton() {
+  const btn = document.getElementById('map-chat-btn');
+  if (!btn) return;
+  const url = (ROLE === 'passenger' && SESSION && SESSION.chat_url) ? normalizeChatUrl(SESSION.chat_url) : '';
+  btn.dataset.url = url || '';
+  btn.style.display = url ? 'flex' : 'none';
 }
 
 function applyTourMetadata() {
@@ -5353,6 +5383,7 @@ function initMap(token) {
     loosenPoiLayers(map);
     renderAll();
     updateZoomPresetButtons();
+    refreshGroupChatButton();
     // GPS runs for everyone — guides need to see their own location too.
     // What differs by role is what gets *broadcast* (queued + synced):
     //   passenger → always queues their fixes
@@ -7454,6 +7485,14 @@ function closeScreen() {
 }
 document.querySelectorAll('[data-close-screen]').forEach(b => b.addEventListener('click', closeScreen));
 
+{
+  const mapChatBtn = document.getElementById('map-chat-btn');
+  if (mapChatBtn) mapChatBtn.addEventListener('click', () => {
+    const u = mapChatBtn.dataset.url;
+    if (u) window.open(u, '_blank', 'noopener,noreferrer');
+  });
+}
+
 document.getElementById('burger-btn').addEventListener('click', () => {
   // Reveal the "share invite" menu item whenever we're in an active session,
   // regardless of role — passengers may want to invite a friend, guides may
@@ -8740,7 +8779,7 @@ function hasBusSignalFor(stopId) {
 // Guide safety glance: how many located passengers are within HEADCOUNT_RADIUS_M
 // of the bus pin. Shown in the timer card only when the bus pin is placed.
 // Green once everyone's back; amber/red while someone's still out.
-const HEADCOUNT_RADIUS_M = 50;
+const HEADCOUNT_RADIUS_M = 10;
 function updateBusHeadcount() {
   const hcEl = document.getElementById('stop-timer-headcount');
   if (!hcEl) return;
