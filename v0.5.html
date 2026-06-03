@@ -245,6 +245,17 @@
     fill: var(--paper); text-anchor: middle; pointer-events: none;
   }
 
+  /* Typed markers (danger/border zones + amenity icons) */
+  .zone-group, .amenity-group { cursor: pointer; }
+  .zone-circle {
+    fill-opacity: 0.16; stroke-width: 2; stroke-dasharray: 6 4;
+    pointer-events: none;
+  }
+  .marker-emoji {
+    font-size: 13px; text-anchor: middle; pointer-events: none;
+    -webkit-user-select: none; user-select: none;
+  }
+
   /* you dot — accuracy halo + heading */
   .you-accuracy {
     fill: rgba(72, 131, 90, 0.15);
@@ -500,6 +511,10 @@
     padding: 4px 8px; margin: -4px -8px;
     color: var(--ink);
   }
+  /* Danger / border zone entry — warning-styled popup */
+  .pin-popup.warn { border-color: #dc2626; box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 0 0 8px rgba(220,38,38,0.14); }
+  .pin-popup.warn .popup-header { border-bottom-color: rgba(220,38,38,0.4); }
+  .pin-popup.warn .popup-stamp { color: #dc2626; }
   .popup-body { padding: 18px 20px 22px; }
   .popup-body h2 {
     font-weight: 400; font-size: 24px; line-height: 1.15;
@@ -2655,7 +2670,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · builder: floating ‹Tours + Add menu (typed markers) · build 2026-06-03-1057';
+const BUILD_VERSION = '0.6 · typed markers live: danger zones warn + amenity icons · build 2026-06-03-1108';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3221,6 +3236,7 @@ function reshapeTour(raw) {
             lng: p.lng,
             lat: p.lat,
             radius: p.trigger_radius_m,
+            category: p.category || 'pin',
           })),
       })),
   };
@@ -3237,6 +3253,17 @@ function activePins() {
   }
   return out;
 }
+
+// Pin categories split by behaviour:
+//   content pins ('pin' / legacy null) → numbered, guide-revealed, arrival popup
+//   zones        ('danger' / 'border') → drawn circle + warn on entry
+//   amenities    ('toilet'/'cafe'/'souvenir') → static info icon on the map
+function isZoneCat(c) { return c === 'danger' || c === 'border'; }
+function isAmenityCat(c) { return c === 'toilet' || c === 'cafe' || c === 'souvenir'; }
+function isContentCat(c) { return !c || c === 'pin'; }
+function activeContentPins() { return activePins().filter(p => isContentCat(p.category)); }
+function activeZones() { return activePins().filter(p => isZoneCat(p.category)); }
+function activeAmenities() { return activePins().filter(p => isAmenityCat(p.category)); }
 
 // Flat list of all pins regardless of activation. Used by initMap to compute
 // the initial bounds (we want to fit the whole tour even if pins are hidden).
@@ -3527,7 +3554,7 @@ async function loadSessionAndTour(sessionId) {
       stops (
         id, ordinal, name, subtitle, lng, lat, activation_radius_m,
         pins (
-          id, ordinal, title, body, lng, lat, trigger_radius_m
+          id, ordinal, title, body, lng, lat, trigger_radius_m, category
         )
       )
     `)
@@ -3842,7 +3869,7 @@ async function loadTourDirectly(slug) {
       stops (
         id, ordinal, name, subtitle, lng, lat, activation_radius_m,
         pins (
-          id, ordinal, title, body, lng, lat, trigger_radius_m
+          id, ordinal, title, body, lng, lat, trigger_radius_m, category
         )
       )
     `)
@@ -4432,11 +4459,53 @@ function tbFmtDist(m) {
   return (m / 1000).toFixed(m < 10000 ? 1 : 0) + ' km';
 }
 
+// A GeoJSON polygon approximating a metric circle — used to draw danger/border
+// zones at their real radius on the (Mapbox) builder map.
+function circlePolygon(lng, lat, radiusM, n = 64) {
+  const R = 6371000, latRad = lat * Math.PI / 180, ring = [];
+  for (let i = 0; i <= n; i++) {
+    const ang = 2 * Math.PI * i / n;
+    const dLat = (radiusM * Math.cos(ang) / R) * (180 / Math.PI);
+    const dLng = (radiusM * Math.sin(ang) / (R * Math.cos(latRad))) * (180 / Math.PI);
+    ring.push([lng + dLng, lat + dLat]);
+  }
+  return { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring] } };
+}
+
+// Lazily add the zone fill/line layers to the editor map (once style is up).
+function tbEnsureZoneLayers() {
+  const m = _tbEditorMap;
+  if (!m || !m.isStyleLoaded || !m.isStyleLoaded()) return false;
+  if (!m.getSource('tb-zones')) {
+    m.addSource('tb-zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    m.addLayer({ id: 'tb-zones-fill', type: 'fill', source: 'tb-zones', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.16 } });
+    m.addLayer({ id: 'tb-zones-line', type: 'line', source: 'tb-zones', paint: { 'line-color': ['get', 'color'], 'line-width': 2, 'line-dasharray': [2, 1.5] } });
+  }
+  return true;
+}
+
 function renderTbMarkers() {
   if (!_tbEditorMap) return;
   _tbStopMarkers.forEach(m => { try { m.remove(); } catch (_e) {} });
   _tbPinMarkers.forEach(m => { try { m.remove(); } catch (_e) {} });
   _tbStopMarkers = []; _tbPinMarkers = [];
+
+  // Danger/border zone circles for the selected stop (real-radius polygons).
+  if (tbEnsureZoneLayers()) {
+    const feats = [];
+    for (const s of (_tbTour.stops || [])) {
+      if (s.id !== _tbSelStopId) continue;
+      for (const p of (s.pins || [])) {
+        if (!isZoneCat(p.category)) continue;
+        const f = circlePolygon(p.lng, p.lat, p.trigger_radius_m || 30);
+        f.properties.color = tbCat(p.category).color;
+        feats.push(f);
+      }
+    }
+    const src = _tbEditorMap.getSource('tb-zones');
+    if (src) src.setData({ type: 'FeatureCollection', features: feats });
+  }
+
   for (const s of (_tbTour.stops || [])) {
     const elm = document.createElement('div');
     elm.className = 'tb-stop-marker' + (s.id === _tbSelStopId ? ' sel' : '');
@@ -4686,7 +4755,7 @@ function tbEditPinForm(p) {
       const r = await tbUpdatePin(p.id, { title: v.title.trim(), body: v.body || '', radius: parseInt(v.radius, 10) || p.trigger_radius_m });
       if (r.error) { err(r.error); return false; }
       p.title = v.title.trim(); p.body = v.body || ''; p.trigger_radius_m = parseInt(v.radius, 10) || p.trigger_radius_m;
-      tbCloseForm(); renderTbEditorPanel(); return true;
+      tbCloseForm(); renderTbMarkers(); renderTbEditorPanel(); return true;
     },
   });
 }
@@ -6734,6 +6803,7 @@ function onGpsSuccess(pos) {
   // by their own tour pins. They're observers, not participants.
   if (ROLE === 'passenger') {
     checkTriggers();
+    checkDangerZones();
   }
 
   // Stop geofence (chunk B, guide only) — prompts "Activate this stop?"
@@ -6858,13 +6928,60 @@ function renderAll() {
   renderYou();
 }
 
+const SVGNS = 'http://www.w3.org/2000/svg';
+
 function renderPins() {
   pinsLayer.innerHTML = '';
   const ppm = pxPerMeter();
-  // Iterate only pins of activated stops. In chunk A, all stops are active
-  // (parity with v0.4). In chunks B/C this naturally scopes to whatever the
-  // guide has activated.
-  activePins().forEach((pin, i) => {
+
+  // ── Danger / border ZONES — drawn first (underneath everything) as a
+  //    filled circle at real-meter radius, so passengers see the area. ──
+  for (const z of activeZones()) {
+    const cat = tbCat(z.category);
+    const { x, y } = project(z.lng, z.lat);
+    const g = document.createElementNS(SVGNS, 'g');
+    g.setAttribute('class', 'zone-group');
+    g.setAttribute('transform', `translate(${x}, ${y})`);
+    const zr = Math.max(14, Math.min(220, z.radius * ppm));
+    const circle = document.createElementNS(SVGNS, 'circle');
+    circle.setAttribute('class', 'zone-circle');
+    circle.setAttribute('r', zr);
+    circle.setAttribute('fill', cat.color);
+    circle.setAttribute('stroke', cat.color);
+    g.appendChild(circle);
+    const badge = document.createElementNS(SVGNS, 'circle');
+    badge.setAttribute('r', 13); badge.setAttribute('fill', cat.color);
+    badge.setAttribute('stroke', '#fff'); badge.setAttribute('stroke-width', '2');
+    g.appendChild(badge);
+    const glyph = document.createElementNS(SVGNS, 'text');
+    glyph.setAttribute('class', 'marker-emoji'); glyph.setAttribute('y', 5);
+    glyph.textContent = cat.emoji;
+    g.appendChild(glyph);
+    g.addEventListener('click', (e) => { e.stopPropagation(); showCategoryPopup(z); });
+    pinsLayer.appendChild(g);
+  }
+
+  // ── Amenity icons (toilet / café / souvenir) — static info markers. ──
+  for (const a of activeAmenities()) {
+    const cat = tbCat(a.category);
+    const { x, y } = project(a.lng, a.lat);
+    const g = document.createElementNS(SVGNS, 'g');
+    g.setAttribute('class', 'amenity-group');
+    g.setAttribute('transform', `translate(${x}, ${y})`);
+    const badge = document.createElementNS(SVGNS, 'circle');
+    badge.setAttribute('r', 12); badge.setAttribute('fill', cat.color);
+    badge.setAttribute('stroke', '#fff'); badge.setAttribute('stroke-width', '2');
+    g.appendChild(badge);
+    const glyph = document.createElementNS(SVGNS, 'text');
+    glyph.setAttribute('class', 'marker-emoji'); glyph.setAttribute('y', 4);
+    glyph.textContent = cat.emoji;
+    g.appendChild(glyph);
+    g.addEventListener('click', (e) => { e.stopPropagation(); showCategoryPopup(a); });
+    pinsLayer.appendChild(g);
+  }
+
+  // ── Content pins — numbered, guide-revealed (unchanged behaviour). ──
+  activeContentPins().forEach((pin, i) => {
     const { x, y } = project(pin.lng, pin.lat);
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     let classes = 'pin-group';
@@ -6984,7 +7101,7 @@ function checkTriggers() {
   // Pins of non-activated stops are skipped here — activePins() handles the
   // scoping, so an inactive stop's pins can't fire even if the passenger
   // happens to walk through one of them.
-  for (const p of activePins()) {
+  for (const p of activeContentPins()) {
     if (state.firedPinIds.has(p.id)) continue;
     const d = metersBetween(state.youLng, state.youLat, p.lng, p.lat);
     if (d < p.radius && d < closestDist) {
@@ -7008,17 +7125,47 @@ function firePin(pin) {
   playChime();
 }
 
+// Warn the passenger when they cross into a marked danger / border zone.
+// Fires once per entry (re-arms after they leave the circle).
+function checkDangerZones() {
+  if (state.youLng == null) return;
+  if (!state.zonesInside) state.zonesInside = new Set();
+  for (const z of activeZones()) {
+    const inside = metersBetween(state.youLng, state.youLat, z.lng, z.lat) < z.radius;
+    if (inside && !state.zonesInside.has(z.id)) {
+      state.zonesInside.add(z.id);
+      showCategoryPopup(z);
+      playChime();
+    } else if (!inside) {
+      state.zonesInside.delete(z.id);
+    }
+  }
+}
+
 function showPopup(pin) {
   // Number pins by position in the activated set (matches the labels shown
   // by renderPins). Using activePins() rather than allPins() keeps the
   // popup's "Pin № 03" consistent with what the passenger sees on the map.
-  const idx = activePins().findIndex(p => p.id === pin.id);
+  const idx = activeContentPins().findIndex(p => p.id === pin.id);
+  popup.classList.remove('warn');
   popupStamp.textContent = `Pin № ${String(idx + 1).padStart(2, '0')} · Arrived`;
   popupTitle.textContent = pin.title;
   popupBodyEl.textContent = pin.body;
   popup.classList.add('show');
 }
-function closePopup() { popup.classList.remove('show'); }
+
+// Popup for a typed marker (zone or amenity) — tapped on the map, or auto-
+// shown when a passenger enters a danger/border zone. Warning-styled for zones.
+function showCategoryPopup(p) {
+  const cat = tbCat(p.category);
+  const warn = isZoneCat(p.category);
+  popup.classList.toggle('warn', warn);
+  popupStamp.textContent = `${cat.emoji} ${cat.label}`;
+  popupTitle.textContent = p.title || cat.label;
+  popupBodyEl.textContent = p.body || (warn ? 'Marked by your guide — take care here.' : '');
+  popup.classList.add('show');
+}
+function closePopup() { popup.classList.remove('show'); popup.classList.remove('warn'); }
 popupClose.addEventListener('click', closePopup);
 const popupOk = document.getElementById('popup-ok');
 if (popupOk) popupOk.addEventListener('click', closePopup);
@@ -9849,7 +9996,7 @@ function startJoystickLoop() {
 
     // Mirror the onGpsSuccess side-effects (minus the queue, which we do
     // separately at a throttled cadence).
-    if (ROLE === 'passenger') checkTriggers();
+    if (ROLE === 'passenger') { checkTriggers(); checkDangerZones(); }
     if (ROLE === 'guide' && SESSION) checkStopGeofences();
     updateSignal();
     renderYou();
