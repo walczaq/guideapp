@@ -2711,7 +2711,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · zoom text lower/no-pill; tap-to-teleport in sim · build 2026-06-03-1319';
+const BUILD_VERSION = '0.6 · bind map-click for all roles (teleport works for passengers) · build 2026-06-03-1325';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -5289,6 +5289,11 @@ function initMap(token) {
       document.getElementById('recenter').classList.remove('active');
     }
   });
+
+  // Map-click handler for ALL roles (was guide-only): passengers need it too
+  // for joystick tap-to-teleport. Its guide-only branches (bus-pin placement,
+  // passenger deselect) simply no-op for passengers.
+  bindMapDeselectHandler();
 }
 
 // ── Offline tile prefetch ─────────────────────────────────────────────
@@ -5414,7 +5419,7 @@ function startGuideShell() {
   if (recenter) recenter.style.display = 'none';
 
   mountGuideBottomSheet();
-  bindMapDeselectHandler();
+  // (map-click handler is now bound for all roles in initMap)
 
   // Catch-up first, then subscribe. Order matters: if we subscribed first,
   // any rows arriving during the catch-up query would be racing with our
