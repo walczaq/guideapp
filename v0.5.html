@@ -2872,7 +2872,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Map watchdog + visible load error; SW shell v4 · build 2026-06-04-2000';
+const BUILD_VERSION = '0.6 · Fix builder map token (set accessToken globally) · build 2026-06-04-2004';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -2898,6 +2898,12 @@ let _pushPromptShownThisLoad = false;
 // Supabase publishable key: protected by Row Level Security (RLS) policies
 // on the database — anon key can only do what the policies explicitly allow.
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiZmllbGRub3RlMSIsImEiOiJjbW9mbmhtZmcwMGI2MnNzZmpmOG95OTYyIn0.ZkANytVZy65-RZf4--aEzQ';
+// Set the Mapbox token globally as soon as the library is available. The tour
+// BUILDER map can be opened WITHOUT a live session (a guide builds a tour
+// directly from the menu), in which case initMap() — the only other place that
+// sets this — never runs, and the builder map fails with "an API access token
+// is required". Setting it here covers every entry path.
+if (typeof mapboxgl !== 'undefined') { try { mapboxgl.accessToken = MAPBOX_TOKEN; } catch (_e) {} }
 const SUPABASE_URL = 'https://xgelrfdrdvrlltcsquqh.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_56-3xMMvHZFtw2LGKkcqew_09NhbiB0';
 
