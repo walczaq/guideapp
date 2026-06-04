@@ -2430,6 +2430,17 @@
              the page can't re-request, so we tell the user how to reset it
              in their browser. Revealed by tapping the blocked menu item. -->
         <div class="menu-notif-hint" id="menu-notif-hint" hidden></div>
+        <button class="menu-item" data-action="guide-login" id="menu-guide-login" style="display:none;">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+              <polyline points="10 17 15 12 10 7"/>
+              <line x1="15" y1="12" x2="3" y2="12"/>
+            </svg>
+          </div>
+          <div class="menu-label">Guide login</div>
+          <span class="menu-chevron">›</span>
+        </button>
         <button class="menu-item" data-action="reset">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2791,7 +2802,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · invites = branded fieldnote.guide/j/<id> (QR + copy) · build 2026-06-04-1157';
+const BUILD_VERSION = '0.6 · build tours w/o session; guide login from menu · build 2026-06-04-1534';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4257,13 +4268,23 @@ async function showSessionManager() {
       ${backBtn}
     </div>
     <div class="sm-list" id="sm-list"><div class="sm-empty">Loading…</div></div>
-    <div class="sm-footer"><button class="sm-newbtn" id="sm-new">+ Start new session</button></div>
+    <div class="sm-footer">
+      <button class="sm-newbtn" id="sm-new">+ Start new session</button>
+      <button class="sm-btn" id="sm-build" style="width:100%; margin-top:8px;">Build / edit tours</button>
+    </div>
   `;
   document.getElementById('phone').appendChild(el);
   const back = document.getElementById('sm-back');
   if (back) back.addEventListener('click', () => {
     const m = document.getElementById('session-manager');
     if (m) m.remove();
+  });
+  // Build tours without needing a session first (breaks the "no tour → can't
+  // start → can't reach the builder" chicken-and-egg).
+  document.getElementById('sm-build').addEventListener('click', () => {
+    const m = document.getElementById('session-manager');
+    if (m) m.remove();
+    showTourManager();
   });
   document.getElementById('sm-new').addEventListener('click', () => {
     const m = document.getElementById('session-manager');
@@ -4451,7 +4472,9 @@ async function showTourManager() {
   el = document.createElement('div');
   el.id = 'tour-manager';
   el.className = 'tb-screen';
-  const backBtn = SESSION ? '<button class="sm-btn" id="tb-mgr-back" style="margin-top:10px;">‹ Back to tour</button>' : '';
+  const backBtn = SESSION
+    ? '<button class="sm-btn" id="tb-mgr-back" style="margin-top:10px;">‹ Back to tour</button>'
+    : (GUIDE ? '<button class="sm-btn" id="tb-mgr-back" style="margin-top:10px;">‹ My sessions</button>' : '');
   el.innerHTML = `
     <div class="tb-header">
       <div class="tb-stamp">Fieldnote · Tour builder</div>
@@ -4462,7 +4485,10 @@ async function showTourManager() {
     <div class="tb-footer"><button class="sm-newbtn" id="tb-new">+ New tour</button></div>`;
   document.getElementById('phone').appendChild(el);
   const back = document.getElementById('tb-mgr-back');
-  if (back) back.addEventListener('click', () => { const m = document.getElementById('tour-manager'); if (m) m.remove(); });
+  if (back) back.addEventListener('click', () => {
+    const m = document.getElementById('tour-manager'); if (m) m.remove();
+    if (!SESSION && GUIDE) showSessionManager();   // launched from My Sessions → go back there
+  });
   document.getElementById('tb-new').addEventListener('click', tbNewTourFlow);
   _tbTours = await tbListTours();
   _tbTourDeleteConfirm = null;
@@ -7777,6 +7803,12 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   if (buildToursItem) {
     buildToursItem.style.display = GUIDE ? '' : 'none';
   }
+  // "Guide login" — shown to anyone NOT logged in as a guide (e.g. a guide who
+  // landed in passenger view on this origin, since the token is per-origin).
+  const guideLoginItem = document.getElementById('menu-guide-login');
+  if (guideLoginItem) {
+    guideLoginItem.style.display = GUIDE ? 'none' : '';
+  }
   // "Your name" — passenger-only, only when in a session. Show current name
   // as a subtitle so they know what's stored without opening the form.
   const editNameItem = document.getElementById('menu-edit-name');
@@ -7825,6 +7857,9 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
     } else if (action === 'build-tours') {
       while (screenStack.length) closeScreen();
       showTourManager();
+    } else if (action === 'guide-login') {
+      while (screenStack.length) closeScreen();
+      showInviteCodeForm();
     } else if (action === 'edit-name') {
       // Close the menu, then show the edit form.
       while (screenStack.length) closeScreen();
