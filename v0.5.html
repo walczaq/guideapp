@@ -1641,6 +1641,11 @@
     display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%;
     background:var(--ink); color:var(--paper); font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; margin-right:8px; vertical-align:middle;
   }
+  /* Stop roll-up/down chevron */
+  .tb-chev {
+    display:inline-block; width:18px; margin-right:4px; cursor:pointer;
+    color:var(--rule); font-size:12px; vertical-align:middle; user-select:none;
+  }
   /* Map markers */
   .tb-stop-marker {
     width:28px; height:28px; border-radius:50%; background:var(--ink); color:var(--paper);
@@ -2848,7 +2853,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · reorder: live renumber + drag anywhere on tile · build 2026-06-04-1914';
+const BUILD_VERSION = '0.6 · duplicate tour (Copy) + collapsible stops · build 2026-06-04-1923';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4478,6 +4483,11 @@ async function tbDeleteTour(id) {
   const { error } = await supabaseClient.rpc('delete_tour', { p_guide_token: token, p_tour_id: id });
   return error ? { error: error.message } : { ok: true };
 }
+async function tbDuplicateTour(id) {
+  const token = getStoredGuideToken(); if (!token) return { error: 'Not signed in.' };
+  const { data, error } = await supabaseClient.rpc('duplicate_tour', { p_guide_token: token, p_tour_id: id });
+  return error ? { error: error.message } : { ok: true, tour: data };
+}
 async function tbCreateStop(tourId, name, lng, lat, radius) {
   const token = getStoredGuideToken();
   const { data, error } = await supabaseClient.rpc('create_stop',
@@ -4621,6 +4631,14 @@ function renderTbTourList() {
     row.appendChild(meta);
     const actions = document.createElement('div'); actions.className = 'tb-actions';
     actions.appendChild(smMakeBtn('Edit', 'primary', () => openTourEditor(t.id)));
+    // Copy → a new editable tour you own (the way to make your own version of
+    // a base tour, or a sandbox copy of your own). Opens the copy to edit.
+    actions.appendChild(smMakeBtn('Copy', '', async (ev) => {
+      const btn = ev && ev.currentTarget; if (btn) btn.textContent = 'Copying…';
+      const r = await tbDuplicateTour(t.id);
+      if (r.error) { if (btn) btn.textContent = 'Copy'; console.warn('[tb] duplicate failed', r.error); return; }
+      openTourEditor(r.tour.id);
+    }));
     if (own) {
       if (_tbTourDeleteConfirm === t.id) {
         actions.appendChild(smMakeBtn('Tap to confirm', 'danger', async () => {
@@ -4665,6 +4683,7 @@ let _tbTour = null;             // full detail {id,...,stops:[{...,pins:[]}]}
 let _tbSelStopId = null;
 let _tbHi = null;               // highlighted marker {kind:'stop'|'pin', id} — tap a map marker to locate it in the list
 let _tbInsertAfter = null;      // pin id: a new pin should be inserted right after it (the spot-tile "+ Extra")
+let _tbCollapsed = new Set();   // stop ids whose pin list is rolled up in the panel
 let _tbPlace = null;            // {kind:'stop'|'pin'|'move-stop'|'move-pin', id?}
 let _tbStopMarkers = [];
 let _tbPinMarkers = [];
@@ -4694,7 +4713,7 @@ async function openTourEditor(tourId) {
   _tbTour = await tbLoadTourDetail(tourId);
   if (!_tbTour) { showTourManager(); return; }
   _tbSelStopId = _tbTour.stops && _tbTour.stops[0] ? _tbTour.stops[0].id : null;
-  _tbPlace = null; _tbStopDeleteConfirm = null; _tbPinDeleteConfirm = null;
+  _tbPlace = null; _tbStopDeleteConfirm = null; _tbPinDeleteConfirm = null; _tbCollapsed = new Set(); _tbHi = null;
 
   let el = document.getElementById('tour-editor');
   if (el) el.remove();
@@ -4927,7 +4946,16 @@ function renderTbEditorPanel() {
     if (stopRowHi) row.id = 'tb-hi-row';
     row.addEventListener('click', () => { _tbSelStopId = s.id; renderTbMarkers(); renderTbEditorPanel(); });
     const title = document.createElement('div'); title.className = 'tb-rowtitle';
-    title.innerHTML = `<span class="tb-num">${s.ordinal}</span>${(s.name || '').replace(/</g, '&lt;')}`;
+    const expanded = (s.id === _tbSelStopId && !_tbCollapsed.has(s.id));
+    title.innerHTML = `<span class="tb-chev">${expanded ? '▾' : '▸'}</span><span class="tb-num">${s.ordinal}</span>${(s.name || '').replace(/</g, '&lt;')}`;
+    const chev = title.querySelector('.tb-chev');
+    if (chev) chev.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (_tbSelStopId !== s.id) { _tbSelStopId = s.id; _tbCollapsed.delete(s.id); }       // open & expand
+      else if (_tbCollapsed.has(s.id)) _tbCollapsed.delete(s.id);                            // expand
+      else _tbCollapsed.add(s.id);                                                           // collapse
+      renderTbMarkers(); renderTbEditorPanel();
+    });
     row.appendChild(title);
     const meta = document.createElement('div'); meta.className = 'tb-row-meta';
     meta.textContent = `${(s.pins || []).length} pin${(s.pins || []).length === 1 ? '' : 's'} · ${s.activation_radius_m} m radius`;
@@ -4954,8 +4982,8 @@ function renderTbEditorPanel() {
     // Pins of the selected stop, GROUPED: the walking route (route pins + side
     // quests, ordered) first, then amenities & zones in their own section.
     // Keeps route reordering from disturbing amenities, and new markers land
-    // in the right group.
-    if (s.id === _tbSelStopId) {
+    // in the right group. Hidden when the stop is rolled up (collapsed).
+    if (s.id === _tbSelStopId && !_tbCollapsed.has(s.id)) {
       const allP = s.pins || [];
       const seq = allP.filter(x => isSequencedCat(x.category)).slice().sort((a, b) => a.ordinal - b.ordinal);
       const others = allP.filter(x => !isSequencedCat(x.category)).slice().sort((a, b) => a.ordinal - b.ordinal);
