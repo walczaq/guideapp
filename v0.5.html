@@ -1629,6 +1629,16 @@
   .tb-map { flex: 0 0 calc(46% + 60px); position: relative; }
   .tb-map .mapboxgl-ctrl-bottom-left, .tb-map .mapboxgl-ctrl-top-right { display:none !important; }
   .tb-panel { flex: 1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 16px calc(16px + env(safe-area-inset-bottom,0px)); }
+  /* Roll the list panel up (full-map) / down. Toggle bar sits between map + list. */
+  .tb-panel-toggle {
+    flex: 0 0 auto; display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 7px 12px; background: var(--paper); cursor: pointer;
+    border: none; border-top: 1px solid var(--rule-soft); border-bottom: 1px solid var(--rule-soft);
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--rule);
+  }
+  .tb-panel-grip { display: inline-block; width: 34px; height: 4px; border-radius: 2px; background: var(--rule); opacity: 0.55; }
+  .tb-editor.panel-up .tb-map { flex: 1 1 auto; }
+  .tb-editor.panel-up .tb-panel { display: none; }
   .tb-section-label { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); margin:10px 0 8px; }
   .tb-stop-row, .tb-pin-row {
     border:1px solid var(--rule); border-radius:8px; padding:10px 12px; margin-bottom:8px; background:var(--paper); cursor:pointer;
@@ -1640,11 +1650,6 @@
   .tb-num {
     display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%;
     background:var(--ink); color:var(--paper); font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; margin-right:8px; vertical-align:middle;
-  }
-  /* Stop roll-up/down chevron */
-  .tb-chev {
-    display:inline-block; width:18px; margin-right:4px; cursor:pointer;
-    color:var(--rule); font-size:12px; vertical-align:middle; user-select:none;
   }
   /* Map markers */
   .tb-stop-marker {
@@ -2853,7 +2858,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · duplicate tour (Copy) + collapsible stops · build 2026-06-04-1923';
+const BUILD_VERSION = '0.6 · Duplicate tour label + roll-up list panel · build 2026-06-04-1929';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4631,14 +4636,16 @@ function renderTbTourList() {
     row.appendChild(meta);
     const actions = document.createElement('div'); actions.className = 'tb-actions';
     actions.appendChild(smMakeBtn('Edit', 'primary', () => openTourEditor(t.id)));
-    // Copy → a new editable tour you own (the way to make your own version of
-    // a base tour, or a sandbox copy of your own). Opens the copy to edit.
-    actions.appendChild(smMakeBtn('Copy', '', async (ev) => {
-      const btn = ev && ev.currentTarget; if (btn) btn.textContent = 'Copying…';
+    // Duplicate → a new editable tour you own — the way to make your own
+    // version of a base tour, or a sandbox copy of your own. Opens it to edit.
+    const dupBtn = smMakeBtn('Duplicate', '', async (ev) => {
+      const btn = ev && ev.currentTarget; if (btn) btn.textContent = 'Duplicating…';
       const r = await tbDuplicateTour(t.id);
-      if (r.error) { if (btn) btn.textContent = 'Copy'; console.warn('[tb] duplicate failed', r.error); return; }
+      if (r.error) { if (btn) btn.textContent = 'Duplicate'; console.warn('[tb] duplicate failed', r.error); return; }
       openTourEditor(r.tour.id);
-    }));
+    });
+    dupBtn.title = 'Make your own editable copy to customize — the original stays unchanged';
+    actions.appendChild(dupBtn);
     if (own) {
       if (_tbTourDeleteConfirm === t.id) {
         actions.appendChild(smMakeBtn('Tap to confirm', 'danger', async () => {
@@ -4683,7 +4690,6 @@ let _tbTour = null;             // full detail {id,...,stops:[{...,pins:[]}]}
 let _tbSelStopId = null;
 let _tbHi = null;               // highlighted marker {kind:'stop'|'pin', id} — tap a map marker to locate it in the list
 let _tbInsertAfter = null;      // pin id: a new pin should be inserted right after it (the spot-tile "+ Extra")
-let _tbCollapsed = new Set();   // stop ids whose pin list is rolled up in the panel
 let _tbPlace = null;            // {kind:'stop'|'pin'|'move-stop'|'move-pin', id?}
 let _tbStopMarkers = [];
 let _tbPinMarkers = [];
@@ -4713,7 +4719,7 @@ async function openTourEditor(tourId) {
   _tbTour = await tbLoadTourDetail(tourId);
   if (!_tbTour) { showTourManager(); return; }
   _tbSelStopId = _tbTour.stops && _tbTour.stops[0] ? _tbTour.stops[0].id : null;
-  _tbPlace = null; _tbStopDeleteConfirm = null; _tbPinDeleteConfirm = null; _tbCollapsed = new Set(); _tbHi = null;
+  _tbPlace = null; _tbStopDeleteConfirm = null; _tbPinDeleteConfirm = null; _tbHi = null;
 
   let el = document.getElementById('tour-editor');
   if (el) el.remove();
@@ -4733,11 +4739,19 @@ async function openTourEditor(tourId) {
       <div class="tb-place-banner" id="tb-place-banner"><span id="tb-place-text">Tap the map</span><button type="button" class="tb-place-cancel" id="tb-place-cancel">Cancel</button></div>
       <div class="tb-zoom" id="tb-zoom">z —</div>
     </div>
+    <button class="tb-panel-toggle" id="tb-panel-toggle" type="button" aria-label="Roll the list up or down"><span class="tb-panel-grip"></span><span id="tb-panel-toggle-label">Hide list</span></button>
     <div class="tb-panel" id="tb-panel"></div>`;
   document.getElementById('phone').appendChild(el);
   document.getElementById('tb-ed-back').addEventListener('click', tbCloseEditor);
   document.getElementById('tb-place-cancel').addEventListener('click', tbCancelPlace);
   document.getElementById('tb-add-btn').addEventListener('click', (ev) => { ev.stopPropagation(); tbToggleAddMenu(); });
+  // Roll the list panel up (full-map) / down (list).
+  document.getElementById('tb-panel-toggle').addEventListener('click', () => {
+    const up = el.classList.toggle('panel-up');
+    const lbl = document.getElementById('tb-panel-toggle-label');
+    if (lbl) lbl.textContent = up ? 'Show list' : 'Hide list';
+    if (_tbEditorMap) setTimeout(() => { try { _tbEditorMap.resize(); } catch (_e) {} }, 260);
+  });
   tbBuildAddMenu();
 
   // Dedicated editor map — framed on the tour's stops (+pins) if any,
@@ -4946,16 +4960,7 @@ function renderTbEditorPanel() {
     if (stopRowHi) row.id = 'tb-hi-row';
     row.addEventListener('click', () => { _tbSelStopId = s.id; renderTbMarkers(); renderTbEditorPanel(); });
     const title = document.createElement('div'); title.className = 'tb-rowtitle';
-    const expanded = (s.id === _tbSelStopId && !_tbCollapsed.has(s.id));
-    title.innerHTML = `<span class="tb-chev">${expanded ? '▾' : '▸'}</span><span class="tb-num">${s.ordinal}</span>${(s.name || '').replace(/</g, '&lt;')}`;
-    const chev = title.querySelector('.tb-chev');
-    if (chev) chev.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      if (_tbSelStopId !== s.id) { _tbSelStopId = s.id; _tbCollapsed.delete(s.id); }       // open & expand
-      else if (_tbCollapsed.has(s.id)) _tbCollapsed.delete(s.id);                            // expand
-      else _tbCollapsed.add(s.id);                                                           // collapse
-      renderTbMarkers(); renderTbEditorPanel();
-    });
+    title.innerHTML = `<span class="tb-num">${s.ordinal}</span>${(s.name || '').replace(/</g, '&lt;')}`;
     row.appendChild(title);
     const meta = document.createElement('div'); meta.className = 'tb-row-meta';
     meta.textContent = `${(s.pins || []).length} pin${(s.pins || []).length === 1 ? '' : 's'} · ${s.activation_radius_m} m radius`;
@@ -4982,8 +4987,8 @@ function renderTbEditorPanel() {
     // Pins of the selected stop, GROUPED: the walking route (route pins + side
     // quests, ordered) first, then amenities & zones in their own section.
     // Keeps route reordering from disturbing amenities, and new markers land
-    // in the right group. Hidden when the stop is rolled up (collapsed).
-    if (s.id === _tbSelStopId && !_tbCollapsed.has(s.id)) {
+    // in the right group.
+    if (s.id === _tbSelStopId) {
       const allP = s.pins || [];
       const seq = allP.filter(x => isSequencedCat(x.category)).slice().sort((a, b) => a.ordinal - b.ordinal);
       const others = allP.filter(x => !isSequencedCat(x.category)).slice().sort((a, b) => a.ordinal - b.ordinal);
