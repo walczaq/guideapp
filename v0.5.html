@@ -1561,6 +1561,34 @@
      The editor is map-first (floating controls handle the inset themselves),
      so it goes flush to the top — no beige strip above the map. */
   .tb-screen { padding-top: max(env(safe-area-inset-top, 0px), 30px); }
+
+  /* Drag-to-reorder fullscreen overlay */
+  .tb-ro-screen {
+    position: absolute; inset: 0; z-index: 96; background: var(--paper);
+    display: flex; flex-direction: column;
+    padding-top: max(env(safe-area-inset-top, 0px), 30px);
+  }
+  .tb-ro-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; border-bottom: 1px solid var(--rule-soft);
+  }
+  .tb-ro-title { font-family: 'Fraunces', serif; font-weight: 700; font-size: 19px; color: var(--ink); }
+  .tb-ro-done {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 10px 20px; background: var(--ink); color: var(--paper); border: none; border-radius: 8px; cursor: pointer;
+  }
+  .tb-ro-hint {
+    padding: 10px 16px 2px; font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    letter-spacing: 0.06em; color: var(--rule);
+  }
+  .tb-ro-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 14px calc(24px + env(safe-area-inset-bottom, 0px)); }
+  .tb-ro-tile {
+    display: flex; align-items: center; gap: 12px; padding: 14px 12px; margin-bottom: 8px;
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; user-select: none;
+  }
+  .tb-ro-tile.dragging { box-shadow: 0 10px 28px rgba(0,0,0,0.32); border-color: #2563eb; position: relative; z-index: 5; opacity: 0.97; }
+  .tb-ro-handle { font-size: 18px; color: var(--rule); cursor: grab; touch-action: none; padding: 2px 4px; }
+  .tb-ro-name { font-family: 'Fraunces', serif; font-size: 15px; color: var(--ink); flex: 1; min-width: 0; }
   .tb-header { padding: 16px 20px 12px; border-bottom: 1px solid var(--rule-soft); }
   .tb-stamp {
     font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em;
@@ -2809,7 +2837,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · builder: trigger-area on highlight + ＋Spot/＋Extra · build 2026-06-04-1645';
+const BUILD_VERSION = '0.6 · builder: drag-to-reorder route (fullscreen) · build 2026-06-04-1729';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4922,6 +4950,11 @@ function renderTbEditorPanel() {
       const others = allP.filter(x => !isSequencedCat(x.category)).slice().sort((a, b) => a.ordinal - b.ordinal);
       const seqLabels = computeSequenceLabels(seq);
       for (const p of seq) tbAppendPinRow(panel, s, p, seq, seqLabels);
+      if (seq.length >= 2) {
+        const roWrap = document.createElement('div'); roWrap.style.cssText = 'margin:2px 0 10px 14px;';
+        roWrap.appendChild(smMakeBtn('↕ Reorder route', '', () => tbOpenReorder()));
+        panel.appendChild(roWrap);
+      }
       if (others.length) {
         const ol = document.createElement('div'); ol.className = 'tb-section-label';
         ol.style.cssText = 'margin:8px 0 8px 14px;';
@@ -4979,6 +5012,98 @@ function tbAppendPinRow(panel, s, p, seqList, seqLabels) {
   }
   pr.appendChild(pa);
   panel.appendChild(pr);
+}
+
+// ── Drag-to-reorder mode (Spotify-style): fullscreen list, hold the handle
+//    and drag a tile to reposition it; the list auto-scrolls near the edges. ──
+function tbOpenReorder() {
+  const stop = tbSelStop(); if (!stop) return;
+  const seq = (stop.pins || []).filter(p => isSequencedCat(p.category)).slice().sort((a, b) => a.ordinal - b.ordinal);
+  if (seq.length < 2) return;
+  const labels = computeSequenceLabels(seq);
+  let el = document.getElementById('tb-reorder'); if (el) el.remove();
+  el = document.createElement('div'); el.id = 'tb-reorder'; el.className = 'tb-ro-screen';
+  el.innerHTML = `
+    <div class="tb-ro-header">
+      <div class="tb-ro-title">Reorder route</div>
+      <button class="tb-ro-done" id="tb-ro-done">Done</button>
+    </div>
+    <div class="tb-ro-hint">Hold ☰ and drag to reorder.</div>
+    <div class="tb-ro-list" id="tb-ro-list"></div>`;
+  document.getElementById('phone').appendChild(el);
+  const list = document.getElementById('tb-ro-list');
+  for (const p of seq) {
+    const cat = tbCat(p.category);
+    const tile = document.createElement('div'); tile.className = 'tb-ro-tile'; tile.dataset.id = String(p.id);
+    tile.innerHTML = `<span class="tb-ro-handle">☰</span>`
+      + `<span class="tb-pin-dot" style="background:${cat.color}">${labels[p.id] || cat.emoji}</span>`
+      + `<span class="tb-ro-name">${(p.title || '').replace(/</g, '&lt;')}</span>`;
+    list.appendChild(tile);
+  }
+  tbWireReorderDrag(list);
+  document.getElementById('tb-ro-done').addEventListener('click', () => tbCloseReorder(stop, list));
+}
+
+function tbCloseReorder(stop, list) {
+  const ids = Array.from(list.querySelectorAll('.tb-ro-tile')).map(t => Number(t.dataset.id));
+  const byId = {}; (stop.pins || []).forEach(p => { byId[p.id] = p; });
+  const newSeq = ids.map(id => byId[id]).filter(Boolean);
+  const others = (stop.pins || []).filter(p => !isSequencedCat(p.category));
+  stop.pins = newSeq.concat(others);
+  stop.pins.forEach((p, idx) => { p.ordinal = idx + 1; });
+  const el = document.getElementById('tb-reorder'); if (el) el.remove();
+  renderTbMarkers(); renderTbEditorPanel();
+  tbReorderPins(stop.id, stop.pins.map(p => p.id)).then(r => { if (r && r.error) console.warn('[tb] reorder failed', r.error); });
+}
+
+function tbWireReorderDrag(list) {
+  let dragEl = null, pid = null, startY = 0, lastY = 0, raf = 0;
+  const tiles = () => Array.from(list.querySelectorAll('.tb-ro-tile'));
+  function autoscroll() {
+    if (!dragEl) return;
+    const lr = list.getBoundingClientRect();
+    if (lastY < lr.top + 56) list.scrollTop -= 9;
+    else if (lastY > lr.bottom - 56) list.scrollTop += 9;
+    raf = requestAnimationFrame(autoscroll);
+  }
+  list.addEventListener('pointerdown', (e) => {
+    const tile = e.target.closest('.tb-ro-tile');
+    if (!tile || !e.target.closest('.tb-ro-handle')) return;   // drag starts on the handle only
+    e.preventDefault();
+    dragEl = tile; pid = e.pointerId; startY = e.clientY; lastY = e.clientY;
+    tile.classList.add('dragging');
+    try { tile.setPointerCapture(pid); } catch (_e) {}
+    raf = requestAnimationFrame(autoscroll);
+  });
+  list.addEventListener('pointermove', (e) => {
+    if (!dragEl) return;
+    e.preventDefault();
+    lastY = e.clientY;
+    dragEl.style.transform = `translateY(${e.clientY - startY}px)`;
+    const dr = dragEl.getBoundingClientRect();
+    const mid = dr.top + dr.height / 2;
+    for (const sib of tiles()) {
+      if (sib === dragEl) continue;
+      const r = sib.getBoundingClientRect();
+      const sibMid = r.top + r.height / 2;
+      const dragBefore = (sib.compareDocumentPosition(dragEl) & Node.DOCUMENT_POSITION_PRECEDING);
+      if (dragBefore && mid > sibMid) {
+        list.insertBefore(dragEl, sib.nextSibling); startY += r.height;
+        dragEl.style.transform = `translateY(${e.clientY - startY}px)`; break;
+      } else if (!dragBefore && mid < sibMid) {
+        list.insertBefore(dragEl, sib); startY -= r.height;
+        dragEl.style.transform = `translateY(${e.clientY - startY}px)`; break;
+      }
+    }
+  });
+  const end = () => {
+    if (!dragEl) return;
+    dragEl.style.transform = ''; dragEl.classList.remove('dragging');
+    try { dragEl.releasePointerCapture(pid); } catch (_e) {}
+    dragEl = null; cancelAnimationFrame(raf);
+  };
+  list.addEventListener('pointerup', end);
+  list.addEventListener('pointercancel', end);
 }
 
 // ── "Add" dropdown (top-right of the editor map) ──
