@@ -1570,6 +1570,59 @@
   }
   .sm-newbtn:active { transform: scale(0.98); }
 
+  /* ── Guides community chat (v0.6) ───────────────────────────────────── */
+  .gc-screen {
+    position: absolute; inset: 0; z-index: 94; background: var(--paper);
+    display: flex; flex-direction: column;
+    padding-top: max(env(safe-area-inset-top, 0px), 30px);
+  }
+  .gc-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; border-bottom: 1px solid var(--rule-soft);
+  }
+  .gc-back {
+    flex: 0 0 auto; font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    letter-spacing: 0.06em; padding: 8px 12px; background: transparent;
+    border: 1px solid var(--rule); border-radius: 8px; color: var(--ink); cursor: pointer;
+  }
+  .gc-titles { min-width: 0; }
+  .gc-title { font-family: 'Fraunces', serif; font-weight: 700; font-size: 19px; color: var(--ink); line-height: 1.1; }
+  .gc-sub { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--rule); margin-top: 3px; }
+  .gc-list {
+    flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 14px 14px 8px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .gc-empty { text-align: center; color: var(--rule); font-family: 'Fraunces', serif; font-style: italic; font-size: 15px; padding: 48px 20px; }
+  .gc-msg { max-width: 82%; align-self: flex-start; }
+  .gc-msg.mine { align-self: flex-end; }
+  .gc-meta {
+    font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.06em;
+    color: var(--rule); margin: 0 4px 3px; display: flex; gap: 8px;
+  }
+  .gc-msg.mine .gc-meta { justify-content: flex-end; }
+  .gc-bubble {
+    font-family: 'Fraunces', serif; font-size: 15px; line-height: 1.4; color: var(--ink);
+    background: var(--paper-2); border: 1px solid var(--rule-soft); border-radius: 12px;
+    padding: 9px 12px; white-space: pre-wrap; word-break: break-word;
+  }
+  .gc-msg.mine .gc-bubble { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .gc-composer {
+    display: flex; gap: 8px; align-items: flex-end;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--rule-soft); background: var(--paper);
+  }
+  .gc-input {
+    flex: 1; box-sizing: border-box; resize: none; max-height: 120px;
+    padding: 10px 12px; border: 1px solid var(--rule); border-radius: 10px;
+    font-family: 'Fraunces', serif; font-size: 15px; color: var(--ink); background: var(--paper);
+  }
+  .gc-send {
+    flex: 0 0 auto; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    letter-spacing: 0.1em; text-transform: uppercase; padding: 11px 16px;
+    background: var(--ink); color: var(--paper); border: none; border-radius: 10px; cursor: pointer;
+  }
+  .gc-send:disabled { opacity: 0.45; cursor: default; }
+
   /* ── Tour builder (v0.6) ────────────────────────────────────────────── */
   .tb-screen, .tb-editor {
     position: absolute; inset: 0; z-index: 92;
@@ -2495,6 +2548,15 @@
           <div class="menu-label">Build tours</div>
           <span class="menu-chevron">›</span>
         </button>
+        <button class="menu-item" data-action="guides-room" id="menu-guides-room" style="display:none;">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+            </svg>
+          </div>
+          <div class="menu-label">Guides room</div>
+          <span class="menu-chevron">›</span>
+        </button>
         <button class="menu-item" data-action="edit-name" id="menu-edit-name" style="display:none;">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2882,7 +2944,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Panel: speed-gated hide + free resize; fix place-banner overlap · build 2026-06-04-2023';
+const BUILD_VERSION = '0.6 · Guides-only community chat room · build 2026-06-04-2047';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4353,6 +4415,130 @@ function resumeSession(id) {
   window.location.href = `${window.location.pathname}?session=${encodeURIComponent(id)}&role=guide`;
 }
 
+// ── Guides community chat (v0.6) ──────────────────────────────────────────
+// One global room for every Fieldnote guide. Guides-only: both read + post go
+// through token-validated RPCs (passengers share the anon key but have no guide
+// token, so they get nothing). No realtime (that needs public-read RLS) — the
+// room polls while open.
+let _gcPollTimer = null;
+let _gcLastId = 0;
+
+async function gcFetch(afterId) {
+  const token = getStoredGuideToken();
+  if (!token) return null;
+  const { data, error } = await supabaseClient.rpc('list_guide_chat',
+    { p_guide_token: token, p_limit: 100, p_after_id: afterId || 0 });
+  if (error) { console.warn('[guidechat] list failed', error); return null; }
+  return data || [];
+}
+async function gcSend(body) {
+  const token = getStoredGuideToken();
+  if (!token) return { error: 'Not signed in as a guide.' };
+  const { error } = await supabaseClient.rpc('post_guide_chat', { p_guide_token: token, p_body: body });
+  if (error) return { error: error.message };
+  return { ok: true };
+}
+
+function gcMessageEl(m) {
+  const wrap = document.createElement('div');
+  wrap.className = 'gc-msg' + (m.mine ? ' mine' : '');
+  wrap.dataset.id = m.id;
+  let when = '';
+  try { when = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); } catch (_e) {}
+  const meta = document.createElement('div');
+  meta.className = 'gc-meta';
+  const nameSpan = document.createElement('span'); nameSpan.textContent = m.mine ? 'You' : (m.guide_name || 'Guide');
+  const timeSpan = document.createElement('span'); timeSpan.textContent = when;
+  meta.appendChild(nameSpan); meta.appendChild(timeSpan);
+  const bubble = document.createElement('div');
+  bubble.className = 'gc-bubble';
+  bubble.textContent = m.body;                 // textContent → no HTML injection
+  wrap.appendChild(meta); wrap.appendChild(bubble);
+  return wrap;
+}
+
+function gcNearBottom(list) {
+  return (list.scrollHeight - list.scrollTop - list.clientHeight) < 80;
+}
+
+async function gcRefresh(initial) {
+  const list = document.getElementById('gc-list');
+  if (!list) return;   // screen closed
+  const rows = await gcFetch(initial ? 0 : _gcLastId);
+  if (!document.getElementById('gc-list')) return;   // closed while awaiting
+  if (rows === null) return;
+  if (initial) { list.innerHTML = ''; _gcLastId = 0; }
+  const fresh = rows.filter(r => r.id > _gcLastId);
+  if (initial && !rows.length) {
+    list.innerHTML = '<div class="gc-empty">No messages yet.<br>Say hello to the other guides.</div>';
+    return;
+  }
+  if (!fresh.length) return;
+  const empty = list.querySelector('.gc-empty'); if (empty) empty.remove();
+  const stick = gcNearBottom(list) || initial;
+  for (const m of fresh) { list.appendChild(gcMessageEl(m)); _gcLastId = Math.max(_gcLastId, m.id); }
+  if (stick) list.scrollTop = list.scrollHeight;
+}
+
+function showGuideChat() {
+  if (!GUIDE) { return; }   // guide-only
+  let el = document.getElementById('guide-chat-screen');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'guide-chat-screen';
+  el.className = 'gc-screen';
+  el.innerHTML = `
+    <div class="gc-header">
+      <button class="gc-back" id="gc-back" aria-label="Back">‹ Back</button>
+      <div class="gc-titles">
+        <div class="gc-title">Guides room</div>
+        <div class="gc-sub">All Fieldnote guides · be kind</div>
+      </div>
+    </div>
+    <div class="gc-list" id="gc-list"><div class="gc-empty">Loading…</div></div>
+    <div class="gc-composer">
+      <textarea class="gc-input" id="gc-input" rows="1" placeholder="Message the guides…" maxlength="1000"></textarea>
+      <button class="gc-send" id="gc-send" disabled>Send</button>
+    </div>`;
+  document.getElementById('phone').appendChild(el);
+
+  const input = document.getElementById('gc-input');
+  const sendBtn = document.getElementById('gc-send');
+
+  function autoGrow() { input.style.height = 'auto'; input.style.height = Math.min(120, input.scrollHeight) + 'px'; }
+  function syncSend() { sendBtn.disabled = !input.value.trim(); }
+  input.addEventListener('input', () => { autoGrow(); syncSend(); });
+
+  async function doSend() {
+    const body = input.value.trim();
+    if (!body) return;
+    sendBtn.disabled = true;
+    const r = await gcSend(body);
+    if (r.error) { sendBtn.disabled = false; console.warn('[guidechat] send failed', r.error); return; }
+    input.value = ''; autoGrow(); syncSend();
+    gcRefresh(false);   // pull our own message right back
+  }
+  sendBtn.addEventListener('click', doSend);
+  input.addEventListener('keydown', (e) => {
+    // Enter sends; Shift+Enter newlines. On touch keyboards Enter usually
+    // inserts a newline anyway, so the Send button is the reliable path.
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
+  });
+
+  document.getElementById('gc-back').addEventListener('click', closeGuideChat);
+
+  _gcLastId = 0;
+  gcRefresh(true);
+  if (_gcPollTimer) clearInterval(_gcPollTimer);
+  _gcPollTimer = setInterval(() => gcRefresh(false), 4000);
+}
+
+function closeGuideChat() {
+  if (_gcPollTimer) { clearInterval(_gcPollTimer); _gcPollTimer = null; }
+  const el = document.getElementById('guide-chat-screen');
+  if (el) el.remove();
+}
+
 async function showSessionManager() {
   hideLoading();
   let el = document.getElementById('session-manager');
@@ -4376,6 +4562,7 @@ async function showSessionManager() {
     <div class="sm-footer">
       <button class="sm-newbtn" id="sm-new">+ Start new session</button>
       <button class="sm-btn" id="sm-build" style="width:100%; margin-top:8px;">Build / edit tours</button>
+      <button class="sm-btn" id="sm-chat" style="width:100%; margin-top:8px;">💬 Guides room</button>
     </div>
   `;
   document.getElementById('phone').appendChild(el);
@@ -4390,6 +4577,9 @@ async function showSessionManager() {
     const m = document.getElementById('session-manager');
     if (m) m.remove();
     showTourManager();
+  });
+  document.getElementById('sm-chat').addEventListener('click', () => {
+    showGuideChat();   // overlay; My Sessions stays underneath
   });
   document.getElementById('sm-new').addEventListener('click', () => {
     const m = document.getElementById('session-manager');
@@ -8388,6 +8578,10 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   if (buildToursItem) {
     buildToursItem.style.display = GUIDE ? '' : 'none';
   }
+  const guidesRoomItem = document.getElementById('menu-guides-room');
+  if (guidesRoomItem) {
+    guidesRoomItem.style.display = GUIDE ? '' : 'none';
+  }
   // "Guide login" — shown to anyone NOT logged in as a guide (e.g. a guide who
   // landed in passenger view on this origin, since the token is per-origin).
   const guideLoginItem = document.getElementById('menu-guide-login');
@@ -8442,6 +8636,9 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
     } else if (action === 'build-tours') {
       while (screenStack.length) closeScreen();
       showTourManager();
+    } else if (action === 'guides-room') {
+      while (screenStack.length) closeScreen();
+      showGuideChat();
     } else if (action === 'edit-name') {
       // Close the menu, then show the edit form.
       while (screenStack.length) closeScreen();
