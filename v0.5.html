@@ -2801,7 +2801,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · guide-login = discreet link at menu bottom · build 2026-06-04-1556';
+const BUILD_VERSION = '0.6 · fix: builder load now reads pin category · build 2026-06-04-1559';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4451,7 +4451,7 @@ async function tbDeletePin(id) {
 async function tbLoadTourDetail(tourId) {
   const { data, error } = await supabaseClient
     .from('tours')
-    .select('id, slug, name, subtitle, home_lng, home_lat, owner_guide_id, stops ( id, ordinal, name, subtitle, lng, lat, activation_radius_m, pins ( id, ordinal, title, body, lng, lat, trigger_radius_m ) )')
+    .select('id, slug, name, subtitle, home_lng, home_lat, owner_guide_id, stops ( id, ordinal, name, subtitle, lng, lat, activation_radius_m, pins ( id, ordinal, title, body, lng, lat, trigger_radius_m, category ) )')
     .eq('id', tourId).single();
   if (error) { console.warn('[tb] load detail failed', error); return null; }
   if (data && data.stops) {
