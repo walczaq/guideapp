@@ -2809,7 +2809,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · tap map marker → highlight + scroll to its list row · build 2026-06-04-1627';
+const BUILD_VERSION = '0.6 · builder: route vs amenities groups; clean reorder · build 2026-06-04-1637';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4482,20 +4482,22 @@ async function tbReorderStops(tourId, stopIds) {
 }
 // Move a pin / stop one step in the walking order; renumber + persist.
 async function tbMovePin(stop, pin, dir) {
-  const pins = stop.pins || [];
-  // Reorder within the walking SEQUENCE (route pins + side quests); amenities
-  // and zones keep their slots. Swap the two sequenced pins' slots in the full
-  // array, then renumber 1..N + persist.
-  const seq = pins.filter(p => isSequencedCat(p.category));
-  const ri = seq.findIndex(x => x.id === pin.id);
-  const rj = ri + dir;
-  if (ri < 0 || rj < 0 || rj >= seq.length) return;
-  const ai = pins.indexOf(seq[ri]);
-  const bi = pins.indexOf(seq[rj]);
-  [pins[ai], pins[bi]] = [pins[bi], pins[ai]];
-  pins.forEach((x, idx) => { x.ordinal = idx + 1; });
+  const all = stop.pins || [];
+  // Reorder within the walking SEQUENCE (route pins + side quests) only. Swap
+  // the two adjacent sequenced pins, then rebuild the full order as
+  // [sequence…, then amenities/zones] so the route stays contiguous and
+  // amenity markers never get dragged around. Renumber 1..N + persist.
+  const seq = all.filter(p => isSequencedCat(p.category)).slice().sort((a, b) => a.ordinal - b.ordinal);
+  const others = all.filter(p => !isSequencedCat(p.category)).slice().sort((a, b) => a.ordinal - b.ordinal);
+  const i = seq.findIndex(x => x.id === pin.id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= seq.length) return;
+  [seq[i], seq[j]] = [seq[j], seq[i]];
+  const ordered = seq.concat(others);
+  stop.pins = ordered;
+  ordered.forEach((x, idx) => { x.ordinal = idx + 1; });
   renderTbMarkers(); renderTbEditorPanel();
-  const r = await tbReorderPins(stop.id, pins.map(x => x.id));
+  const r = await tbReorderPins(stop.id, ordered.map(x => x.id));
   if (r.error) console.warn('[tb] reorder pins failed', r.error);
 }
 async function tbMoveStop(stop, dir) {
@@ -4887,41 +4889,22 @@ function renderTbEditorPanel() {
     row.appendChild(acts);
     panel.appendChild(row);
 
-    // Pins of the selected stop.
+    // Pins of the selected stop, GROUPED: the walking route (route pins + side
+    // quests, ordered) first, then amenities & zones in their own section.
+    // Keeps route reordering from disturbing amenities, and new markers land
+    // in the right group.
     if (s.id === _tbSelStopId) {
-      for (const p of (s.pins || [])) {
-        const pinRowHi = _tbHi && _tbHi.kind === 'pin' && _tbHi.id === p.id;
-        const pr = document.createElement('div'); pr.className = 'tb-pin-row' + (pinRowHi ? ' hi' : '');
-        if (pinRowHi) pr.id = 'tb-hi-row';
-        const cat = tbCat(p.category);
-        const _seqPr = computeSequenceLabels(s.pins || []);
-        const glyph = _seqPr[p.id] || cat.emoji;
-        const pt = document.createElement('div'); pt.className = 'tb-rowtitle';
-        pt.innerHTML = `<span class="tb-pin-dot" style="background:${cat.color}">${glyph}</span>${(p.title || '').replace(/</g, '&lt;')}`;
-        pr.appendChild(pt);
-        if (p.body) { const pb = document.createElement('div'); pb.className = 'tb-rowbody'; pb.textContent = p.body; pr.appendChild(pb); }
-        const pa = document.createElement('div'); pa.className = 'tb-actions';
-        // ↑/↓ on the walking sequence (route pins + side quests). Amenities
-        // and zones aren't ordered, so no arrows.
-        if (isSequencedCat(p.category)) {
-          const seq = (s.pins || []).filter(x => isSequencedCat(x.category));
-          const sqIdx = seq.findIndex(x => x.id === p.id);
-          if (sqIdx > 0) pa.appendChild(smMakeBtn('↑', '', () => tbMovePin(s, p, -1)));
-          if (sqIdx < seq.length - 1) pa.appendChild(smMakeBtn('↓', '', () => tbMovePin(s, p, +1)));
-        }
-        pa.appendChild(smMakeBtn('Edit', '', () => tbEditPinForm(p)));
-        pa.appendChild(smMakeBtn('Move', '', () => tbArmPlace('move-pin', p.id)));
-        if (_tbPinDeleteConfirm === p.id) {
-          pa.appendChild(smMakeBtn('Tap to confirm', 'danger', async () => {
-            const r = await tbDeletePin(p.id); _tbPinDeleteConfirm = null;
-            if (!r.error) s.pins = s.pins.filter(x => x.id !== p.id);
-            renderTbMarkers(); renderTbEditorPanel();
-          }));
-        } else {
-          pa.appendChild(smMakeBtn('Delete', 'danger', () => { _tbPinDeleteConfirm = p.id; renderTbEditorPanel(); }));
-        }
-        pr.appendChild(pa);
-        panel.appendChild(pr);
+      const allP = s.pins || [];
+      const seq = allP.filter(x => isSequencedCat(x.category)).slice().sort((a, b) => a.ordinal - b.ordinal);
+      const others = allP.filter(x => !isSequencedCat(x.category)).slice().sort((a, b) => a.ordinal - b.ordinal);
+      const seqLabels = computeSequenceLabels(seq);
+      for (const p of seq) tbAppendPinRow(panel, s, p, seq, seqLabels);
+      if (others.length) {
+        const ol = document.createElement('div'); ol.className = 'tb-section-label';
+        ol.style.cssText = 'margin:8px 0 8px 14px;';
+        ol.textContent = 'Amenities & zones';
+        panel.appendChild(ol);
+        for (const p of others) tbAppendPinRow(panel, s, p, seq, seqLabels);
       }
     }
   }
@@ -4937,6 +4920,40 @@ function renderTbEditorPanel() {
   done.addEventListener('click', tbCloseEditor);
   foot.appendChild(saved); foot.appendChild(done);
   panel.appendChild(foot);
+}
+
+// Render one pin row. seqList = ordered route+side pins (for ↑/↓ index),
+// seqLabels = id→label map. Amenities/zones get no arrows and an emoji glyph.
+function tbAppendPinRow(panel, s, p, seqList, seqLabels) {
+  const pinRowHi = _tbHi && _tbHi.kind === 'pin' && _tbHi.id === p.id;
+  const pr = document.createElement('div'); pr.className = 'tb-pin-row' + (pinRowHi ? ' hi' : '');
+  if (pinRowHi) pr.id = 'tb-hi-row';
+  const cat = tbCat(p.category);
+  const glyph = seqLabels[p.id] || cat.emoji;
+  const pt = document.createElement('div'); pt.className = 'tb-rowtitle';
+  pt.innerHTML = `<span class="tb-pin-dot" style="background:${cat.color}">${glyph}</span>${(p.title || '').replace(/</g, '&lt;')}`;
+  pr.appendChild(pt);
+  if (p.body) { const pb = document.createElement('div'); pb.className = 'tb-rowbody'; pb.textContent = p.body; pr.appendChild(pb); }
+  const pa = document.createElement('div'); pa.className = 'tb-actions';
+  // ↑/↓ only on the walking sequence (route pins + side quests).
+  if (isSequencedCat(p.category)) {
+    const idx = seqList.findIndex(x => x.id === p.id);
+    if (idx > 0) pa.appendChild(smMakeBtn('↑', '', () => tbMovePin(s, p, -1)));
+    if (idx < seqList.length - 1) pa.appendChild(smMakeBtn('↓', '', () => tbMovePin(s, p, +1)));
+  }
+  pa.appendChild(smMakeBtn('Edit', '', () => tbEditPinForm(p)));
+  pa.appendChild(smMakeBtn('Move', '', () => tbArmPlace('move-pin', p.id)));
+  if (_tbPinDeleteConfirm === p.id) {
+    pa.appendChild(smMakeBtn('Tap to confirm', 'danger', async () => {
+      const r = await tbDeletePin(p.id); _tbPinDeleteConfirm = null;
+      if (!r.error) s.pins = s.pins.filter(x => x.id !== p.id);
+      renderTbMarkers(); renderTbEditorPanel();
+    }));
+  } else {
+    pa.appendChild(smMakeBtn('Delete', 'danger', () => { _tbPinDeleteConfirm = p.id; renderTbEditorPanel(); }));
+  }
+  pr.appendChild(pa);
+  panel.appendChild(pr);
 }
 
 // ── "Add" dropdown (top-right of the editor map) ──
