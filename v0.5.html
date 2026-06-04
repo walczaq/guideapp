@@ -2847,7 +2847,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · warning category = dropdown (not tap-to-cycle) · build 2026-06-04-1814';
+const BUILD_VERSION = '0.6 · Reorder route button at top of list too · build 2026-06-04-1911';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4959,6 +4959,11 @@ function renderTbEditorPanel() {
       const seq = allP.filter(x => isSequencedCat(x.category)).slice().sort((a, b) => a.ordinal - b.ordinal);
       const others = allP.filter(x => !isSequencedCat(x.category)).slice().sort((a, b) => a.ordinal - b.ordinal);
       const seqLabels = computeSequenceLabels(seq);
+      if (seq.length >= 2) {
+        const roTop = document.createElement('div'); roTop.style.cssText = 'margin:2px 0 8px 14px;';
+        roTop.appendChild(smMakeBtn('↕ Reorder route', '', () => tbOpenReorder()));
+        panel.appendChild(roTop);
+      }
       for (const p of seq) tbAppendPinRow(panel, s, p, seq, seqLabels);
       if (seq.length >= 2) {
         const roWrap = document.createElement('div'); roWrap.style.cssText = 'margin:2px 0 10px 14px;';
