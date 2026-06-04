@@ -2791,7 +2791,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · chat reminder ≥10min + red note; "Your link" under guide name · build 2026-06-04-1014';
+const BUILD_VERSION = '0.6 · delete session (guide, My Sessions) · build 2026-06-04-1017';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4153,6 +4153,7 @@ function showInviteCodeForm() {
 let _smSessions = [];
 let _smRenamingId = null;
 let _smConfirmEndId = null;
+let _smConfirmDeleteId = null;
 
 async function listGuideSessions() {
   const token = getStoredGuideToken();
@@ -4180,6 +4181,14 @@ async function endSessionById(id) {
   if (!token) return { error: 'Not signed in.' };
   const { error } = await supabaseClient.rpc('end_session', { p_session_id: id, p_guide_token: token });
   if (error) return { error: error.message || 'Could not end session.' };
+  return { ok: true };
+}
+
+async function deleteSessionById(id) {
+  const token = getStoredGuideToken();
+  if (!token) return { error: 'Not signed in.' };
+  const { error } = await supabaseClient.rpc('delete_session', { p_session_id: id, p_guide_token: token });
+  if (error) return { error: error.message || 'Could not delete session.' };
   return { ok: true };
 }
 
@@ -4244,7 +4253,7 @@ async function showSessionManager() {
   // Auto-close the guide's stale (>12h) sessions, then list what remains.
   await cleanupStaleSessions();
   _smSessions = await listGuideSessions();
-  _smRenamingId = null; _smConfirmEndId = null;
+  _smRenamingId = null; _smConfirmEndId = null; _smConfirmDeleteId = null;
   renderSmList();
 }
 
@@ -4296,7 +4305,7 @@ function renderSmList() {
     const actions = document.createElement('div');
     actions.className = 'sm-actions';
     actions.appendChild(smMakeBtn('Resume', 'primary', () => resumeSession(s.id)));
-    actions.appendChild(smMakeBtn('Rename', '', () => { _smRenamingId = s.id; _smConfirmEndId = null; renderSmList(); }));
+    actions.appendChild(smMakeBtn('Rename', '', () => { _smRenamingId = s.id; _smConfirmEndId = null; _smConfirmDeleteId = null; renderSmList(); }));
     // Per-session group chat — open it (even after the session ended) or set/edit.
     if (s.chat_url) {
       actions.appendChild(smMakeBtn('Open chat', '', () => {
@@ -4316,7 +4325,20 @@ function renderSmList() {
           renderSmList();
         }));
       } else {
-        actions.appendChild(smMakeBtn('End', 'danger', () => { _smConfirmEndId = s.id; renderSmList(); }));
+        actions.appendChild(smMakeBtn('End', 'danger', () => { _smConfirmEndId = s.id; _smConfirmDeleteId = null; renderSmList(); }));
+      }
+    }
+    // Hard delete — two-tap confirm. Not offered for the session you're in.
+    if (!(SESSION && SESSION.id === s.id)) {
+      if (_smConfirmDeleteId === s.id) {
+        actions.appendChild(smMakeBtn('Tap to delete', 'danger', async () => {
+          const r = await deleteSessionById(s.id);
+          _smConfirmDeleteId = null;
+          if (!r.error) _smSessions = _smSessions.filter(x => x.id !== s.id);
+          renderSmList();
+        }));
+      } else {
+        actions.appendChild(smMakeBtn('Delete', 'danger', () => { _smConfirmDeleteId = s.id; _smConfirmEndId = null; renderSmList(); }));
       }
     }
     row.appendChild(actions);
