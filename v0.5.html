@@ -2597,6 +2597,16 @@
           <div class="menu-label">Guides room</div>
           <span class="menu-chevron">›</span>
         </button>
+        <button class="menu-item" data-action="guide-account" id="menu-guide-account" style="display:none;">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <div class="menu-label">Guide account</div>
+          <span class="menu-chevron">›</span>
+        </button>
         <button class="menu-item" data-action="edit-name" id="menu-edit-name" style="display:none;">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2984,7 +2994,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Guide signup: email + exclusive names · build 2026-06-04-2152';
+const BUILD_VERSION = '0.6 · Guide account screen (name/email/passkey) · build 2026-06-04-2205';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3265,6 +3275,27 @@ async function loginGuide(name, passkey) {
   if (error) throw new Error(error.message || 'Could not log in');
   if (!data || data.length === 0) throw new Error('Unexpected response from server');
   storeGuideToken(token);
+  return { id: data[0].guide_id, name: data[0].guide_name };
+}
+
+// Read the logged-in guide's own account (name, email, whether a passkey is set).
+async function getGuideAccount() {
+  const token = getStoredGuideToken();
+  if (!token) return null;
+  const { data, error } = await supabaseClient.rpc('get_guide_account', { p_guide_token: token });
+  if (error) { console.warn('[guide account] get failed', error); return null; }
+  return (data && data[0]) || null;
+}
+
+// Update the logged-in guide's name / email / passkey (passkey '' = keep current).
+async function updateGuideAccount(name, email, passkey) {
+  const token = getStoredGuideToken();
+  if (!token) throw new Error('Not signed in as a guide.');
+  const { data, error } = await supabaseClient.rpc('update_guide_account', {
+    p_guide_token: token, p_name: name.trim(), p_email: (email || '').trim(), p_passkey: passkey || '',
+  });
+  if (error) throw new Error(error.message || 'Could not save');
+  if (!data || data.length === 0) throw new Error('Unexpected response from server');
   return { id: data[0].guide_id, name: data[0].guide_name };
 }
 
@@ -4174,6 +4205,84 @@ function showNameEntryGate() {
 // Edit-name form, accessible from burger menu. Independent overlay (NOT part
 // of the screen-stack system) — same z-index pattern as the name gate so it
 // sits cleanly above everything. Removed via el.remove() on save or back.
+// Guide-only: edit your own name, email, and passkey. How EXISTING accounts add
+// the email that powers recovery/contact and set a passkey for name+passkey login.
+async function showGuideAccountForm() {
+  if (!GUIDE) return;
+  let el = document.getElementById('guide-account-overlay');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'guide-account-overlay';
+  el.style.cssText = 'position:absolute; inset:0; z-index:95; background:var(--paper); display:flex; flex-direction:column;';
+  const fld = "font-family:'JetBrains Mono',monospace; font-size:14px; padding:12px 14px; border:1px solid var(--rule); background:var(--paper-2); border-radius:6px;";
+  const lbl = "font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--rule); margin-top:4px;";
+  el.innerHTML = `
+    <div class="status-bar"></div>
+    <div class="screen-header">
+      <button class="back-btn" id="ga-back" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      </button>
+      <div class="screen-title">Guide account</div>
+    </div>
+    <div style="flex:1; padding:20px 28px calc(20px + env(safe-area-inset-bottom,0px)); display:flex; flex-direction:column; gap:8px; overflow-y:auto;">
+      <label style="${lbl}">Name (how other guides see you)</label>
+      <input id="ga-name" type="text" maxlength="40" placeholder="your name" style="${fld}" />
+      <label style="${lbl}">Email (for recovery + contact)</label>
+      <input id="ga-email" type="email" inputmode="email" autocapitalize="off" autocomplete="email" placeholder="email" style="${fld}" />
+      <label style="${lbl}">Passkey</label>
+      <input id="ga-pass" type="password" autocomplete="new-password" placeholder="leave blank to keep current" style="${fld}" />
+      <div id="ga-passnote" style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); line-height:1.5;"></div>
+      <button id="ga-save" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; margin-top:6px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;">Save</button>
+      <div id="ga-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
+      <div id="ga-ok" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); min-height:1em;"></div>
+    </div>`;
+  document.getElementById('phone').appendChild(el);
+
+  const nameI = document.getElementById('ga-name');
+  const emailI = document.getElementById('ga-email');
+  const passI = document.getElementById('ga-pass');
+  const passNote = document.getElementById('ga-passnote');
+  const errorEl = document.getElementById('ga-error');
+  const okEl = document.getElementById('ga-ok');
+  const btn = document.getElementById('ga-save');
+  document.getElementById('ga-back').addEventListener('click', () => el.remove());
+
+  nameI.value = (GUIDE && GUIDE.name) ? GUIDE.name : '';
+  try {
+    const acct = await getGuideAccount();
+    if (acct && document.getElementById('guide-account-overlay')) {
+      nameI.value = acct.guide_name || nameI.value;
+      emailI.value = acct.email || '';
+      passNote.textContent = acct.has_passkey
+        ? 'A passkey is set. Enter a new one only to change it.'
+        : 'No passkey yet — set one to log in by name + passkey on another device.';
+    }
+  } catch (_e) {}
+
+  async function trySave() {
+    const name = (nameI.value || '').trim();
+    const email = (emailI.value || '').trim();
+    const pass = passI.value || '';
+    errorEl.textContent = ''; okEl.textContent = '';
+    if (name.length < 2) { nameI.focus(); errorEl.textContent = 'Enter your name.'; return; }
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { emailI.focus(); errorEl.textContent = 'Enter a valid email.'; return; }
+    if (pass && pass.length < 4) { passI.focus(); errorEl.textContent = 'Passkey must be at least 4 characters.'; return; }
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      const r = await updateGuideAccount(name, email, pass);
+      if (GUIDE) GUIDE.name = r.name;
+      passI.value = '';
+      if (pass) passNote.textContent = 'A passkey is set. Enter a new one only to change it.';
+      okEl.textContent = 'Saved.';
+    } catch (err) {
+      errorEl.textContent = err.message || 'Could not save.';
+    }
+    btn.disabled = false; btn.textContent = 'Save';
+  }
+  btn.addEventListener('click', trySave);
+  [nameI, emailI, passI].forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') trySave(); }));
+}
+
 function showEditNameForm() {
   let el = document.getElementById('edit-name-overlay');
   if (el) el.remove();
@@ -8813,6 +8922,10 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   if (guidesRoomItem) {
     guidesRoomItem.style.display = GUIDE ? '' : 'none';
   }
+  const guideAccountItem = document.getElementById('menu-guide-account');
+  if (guideAccountItem) {
+    guideAccountItem.style.display = GUIDE ? '' : 'none';
+  }
   // "Guide login" — shown to anyone NOT logged in as a guide (e.g. a guide who
   // landed in passenger view on this origin, since the token is per-origin).
   const guideLoginItem = document.getElementById('menu-guide-login');
@@ -8870,6 +8983,9 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
     } else if (action === 'guides-room') {
       while (screenStack.length) closeScreen();
       showGuideChat();
+    } else if (action === 'guide-account') {
+      while (screenStack.length) closeScreen();
+      showGuideAccountForm();
     } else if (action === 'edit-name') {
       // Close the menu, then show the edit form.
       while (screenStack.length) closeScreen();
