@@ -124,6 +124,15 @@
   /* map */
   .map-stage { position: relative; flex: 1; overflow: hidden; }
   #mapbox-map { position: absolute; inset: 0; z-index: 0; }
+  /* Visible "map didn't load" notice — phones have no console, so a silent
+     blank map is undebuggable. Shown by a watchdog if load never fires. */
+  .map-load-err {
+    position: absolute; left: 14px; right: 14px; top: 50%; transform: translateY(-50%);
+    z-index: 6; text-align: center; font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; line-height: 1.55; color: var(--ink);
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 12px 14px; max-width: 320px; margin: 0 auto;
+  }
   .mapboxgl-ctrl-bottom-left,
   .mapboxgl-ctrl-top-right {
     display: none !important;
@@ -2863,7 +2872,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Fix blank guide map on mobile (fitBounds after load) · build 2026-06-04-1952';
+const BUILD_VERSION = '0.6 · Map watchdog + visible load error; SW shell v4 · build 2026-06-04-2000';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4786,7 +4795,18 @@ async function openTourEditor(tourId) {
   }
   try {
     _tbEditorMap = new mapboxgl.Map(edOpts);
+    // Watchdog: surface the reason on-screen if the editor map never loads.
+    let _edLoaded = false, _edLastErr = '';
+    _tbEditorMap.on('error', (e) => {
+      _edLastErr = (e && e.error && e.error.message) || (e && e.message) || 'unknown error';
+      console.error('[tb] map error', e && (e.error || e));
+    });
+    setTimeout(() => {
+      if (!_edLoaded) showMapLoadError(document.getElementById('tb-map'),
+        _edLastErr || 'no response. Check your connection, or that the browser/GPU allows WebGL.');
+    }, 8000);
     _tbEditorMap.on('load', () => {
+      _edLoaded = true;
       loosenPoiLayers(_tbEditorMap);
       setTimeout(() => { try {
         _tbEditorMap.resize();
@@ -4796,7 +4816,10 @@ async function openTourEditor(tourId) {
     });
     _tbEditorMap.on('zoom', updateTbZoom);
     _tbEditorMap.on('click', tbOnMapClick);
-  } catch (e) { console.warn('[tb] editor map failed', e); }
+  } catch (e) {
+    console.error('[tb] editor map failed', e);
+    showMapLoadError(document.getElementById('tb-map'), (e && e.message) || String(e));
+  }
 
   renderTbEditorPanel();
 }
@@ -5900,6 +5923,16 @@ boot();
 // filterrank, so this surfaces more but Mapbox still prioritises by
 // importance — and it reads internal layer ids, which can shift on a style
 // update, hence the try/catch.)
+// Overlay a visible "map didn't load" notice INTO a map container. Phones have
+// no console, so a silent blank map can't be diagnosed otherwise — this turns
+// the failure into a readable message (Mapbox error text, or a hint).
+function showMapLoadError(host, msg) {
+  if (!host) return;
+  let box = host.querySelector('.map-load-err');
+  if (!box) { box = document.createElement('div'); box.className = 'map-load-err'; host.appendChild(box); }
+  box.textContent = 'Map didn’t load — ' + msg;
+}
+
 function loosenPoiLayers(m) {
   try {
     const layers = (m.getStyle() && m.getStyle().layers) || [];
@@ -5975,7 +6008,20 @@ function initMap(token) {
   map.touchZoomRotate.disableRotation();
   map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
 
+  // Watchdog: capture the last Mapbox error and, if the map never finishes
+  // loading, surface it on-screen (a blank map gives no clue on a phone).
+  let _mapLoaded = false, _mapLastErr = '';
+  map.on('error', (e) => {
+    _mapLastErr = (e && e.error && e.error.message) || (e && e.message) || 'unknown error';
+    console.error('[map] error', e && (e.error || e));
+  });
+  setTimeout(() => {
+    if (!_mapLoaded) showMapLoadError(document.getElementById('mapbox-map'),
+      _mapLastErr || 'no response. Check your connection, or that the browser/GPU allows WebGL.');
+  }, 8000);
+
   map.on('load', () => {
+    _mapLoaded = true;
     // Container may have only just gained its real size on mobile — resize so
     // the canvas matches, then apply the guide's whole-tour framing now that
     // fitBounds has valid dimensions to compute a zoom from.
