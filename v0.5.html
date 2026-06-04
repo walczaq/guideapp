@@ -2791,7 +2791,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · fix Filip email; bare-domain → app redirect · build 2026-06-04-1151';
+const BUILD_VERSION = '0.6 · /j short-invite path read app-side (SW-proof) · build 2026-06-04-1153';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3505,6 +3505,19 @@ async function boot() {
   let sessionId = params.get('session');
   const tourSlug = params.get('tour');
   const role = params.get('role');
+
+  // Short invite path: /j/<sessionId>. The _redirects rule maps it to
+  // ?session=, but if the service worker intercepts the navigation the query
+  // can be dropped — so read the code from the path too, then normalise the
+  // URL to /v0.5?session= (so invite-link generation, which keys off
+  // location.pathname, stays correct).
+  if (!sessionId) {
+    const jm = window.location.pathname.match(/^\/j\/([A-Za-z0-9_-]+)/);
+    if (jm) {
+      sessionId = jm[1];
+      try { history.replaceState(null, '', '/v0.5?session=' + encodeURIComponent(sessionId)); } catch (_e) {}
+    }
+  }
 
   // Verify any stored guide token. Cheap — one RPC call. Result populates
   // module-level GUIDE so downstream code knows whether we're a logged-in guide.
