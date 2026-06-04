@@ -1609,6 +1609,11 @@
     font-family: 'Fraunces', serif; font-weight: 400; font-size: 26px; color: var(--ink);
     font-variation-settings: "opsz" 90;
   }
+  .tb-hint {
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; line-height: 1.5;
+    color: var(--rule); margin-top: 8px;
+  }
+  .tb-hint b { color: var(--ink); font-weight: 700; }
   .tb-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px 16px calc(16px + env(safe-area-inset-bottom,0px)); }
   .tb-empty { text-align:center; color:var(--rule); font-family:'Fraunces',serif; font-style:italic; font-size:15px; padding:40px 20px; }
   .tb-row { border:1px solid var(--rule); border-radius:10px; padding:12px 14px; margin-bottom:10px; background:var(--paper); }
@@ -2858,7 +2863,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Duplicate tour label + roll-up list panel · build 2026-06-04-1929';
+const BUILD_VERSION = '0.6 · Duplicate / Customize label + visible hint · build 2026-06-04-1933';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4600,6 +4605,7 @@ async function showTourManager() {
     <div class="tb-header">
       <div class="tb-stamp">Fieldnote · Tour builder</div>
       <div class="tb-title">Tours</div>
+      <div class="tb-hint">Edit changes a tour for everyone it's shared with. <b>Duplicate / Customize</b> makes your own editable copy — the original stays unchanged.</div>
       ${backBtn}
     </div>
     <div class="tb-list" id="tb-list"><div class="tb-empty">Loading…</div></div>
@@ -4638,13 +4644,12 @@ function renderTbTourList() {
     actions.appendChild(smMakeBtn('Edit', 'primary', () => openTourEditor(t.id)));
     // Duplicate → a new editable tour you own — the way to make your own
     // version of a base tour, or a sandbox copy of your own. Opens it to edit.
-    const dupBtn = smMakeBtn('Duplicate', '', async (ev) => {
+    const dupBtn = smMakeBtn('Duplicate / Customize', '', async (ev) => {
       const btn = ev && ev.currentTarget; if (btn) btn.textContent = 'Duplicating…';
       const r = await tbDuplicateTour(t.id);
-      if (r.error) { if (btn) btn.textContent = 'Duplicate'; console.warn('[tb] duplicate failed', r.error); return; }
+      if (r.error) { if (btn) btn.textContent = 'Duplicate / Customize'; console.warn('[tb] duplicate failed', r.error); return; }
       openTourEditor(r.tour.id);
     });
-    dupBtn.title = 'Make your own editable copy to customize — the original stays unchanged';
     actions.appendChild(dupBtn);
     if (own) {
       if (_tbTourDeleteConfirm === t.id) {
