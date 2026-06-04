@@ -2863,7 +2863,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Duplicate / Customize label + visible hint · build 2026-06-04-1933';
+const BUILD_VERSION = '0.6 · Back button on Start-session screen · build 2026-06-04-1947';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -5414,6 +5414,7 @@ function showCreateSessionForm() {
     'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
     'gap:24px; padding:40px; text-align:center;';
   el.innerHTML = `
+    <button id="cs-back" aria-label="Back to my sessions" style="position:absolute; top:calc(14px + env(safe-area-inset-top,0px)); left:14px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.1em; padding:8px 12px; background:transparent; border:1px solid var(--rule); border-radius:6px; color:var(--ink); cursor:pointer;">‹ Back</button>
     <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
       Fieldnote · Start a tour
     </div>
@@ -5449,6 +5450,12 @@ function showCreateSessionForm() {
   `;
   document.getElementById('phone').appendChild(el);
   populateTourPicker();
+
+  document.getElementById('cs-back').addEventListener('click', () => {
+    const m = document.getElementById('create-session-screen');
+    if (m) m.remove();
+    showSessionManager();
+  });
 
   document.getElementById('create-session-btn').addEventListener('click', async () => {
     const nameInput = document.getElementById('guide-name-input');
