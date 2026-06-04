@@ -1622,6 +1622,20 @@
     background: var(--ink); color: var(--paper); border: none; border-radius: 10px; cursor: pointer;
   }
   .gc-send:disabled { opacity: 0.45; cursor: default; }
+  /* Pinned house rules under the header. */
+  .gc-rules {
+    display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center;
+    padding: 8px 14px; border-bottom: 1px solid var(--rule-soft); background: var(--paper-2);
+    font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.04em; color: var(--rule);
+  }
+  .gc-rules-h { text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink); opacity: 0.7; }
+  /* Anonymous toggle in the composer. */
+  .gc-anon {
+    flex: 0 0 auto; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.02em;
+    padding: 11px 10px; background: var(--paper); color: var(--rule);
+    border: 1px solid var(--rule); border-radius: 10px; cursor: pointer; white-space: nowrap;
+  }
+  .gc-anon.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 
   /* ── Tour builder (v0.6) ────────────────────────────────────────────── */
   .tb-screen, .tb-editor {
@@ -2952,7 +2966,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Open guide signup (name + passkey) · build 2026-06-04-2110';
+const BUILD_VERSION = '0.6 · Guides room: house rules + anonymous toggle · build 2026-06-04-2122';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4473,6 +4487,7 @@ function resumeSession(id) {
 // room polls while open.
 let _gcPollTimer = null;
 let _gcLastId = 0;
+let _gcAnon = false;   // post-anonymously toggle (per open)
 
 async function gcFetch(afterId) {
   const token = getStoredGuideToken();
@@ -4482,10 +4497,10 @@ async function gcFetch(afterId) {
   if (error) { console.warn('[guidechat] list failed', error); return null; }
   return data || [];
 }
-async function gcSend(body) {
+async function gcSend(body, anon) {
   const token = getStoredGuideToken();
   if (!token) return { error: 'Not signed in as a guide.' };
-  const { error } = await supabaseClient.rpc('post_guide_chat', { p_guide_token: token, p_body: body });
+  const { error } = await supabaseClient.rpc('post_guide_chat', { p_guide_token: token, p_body: body, p_anon: !!anon });
   if (error) return { error: error.message };
   return { ok: true };
 }
@@ -4543,11 +4558,16 @@ function showGuideChat() {
       <button class="gc-back" id="gc-back" aria-label="Back">‹ Back</button>
       <div class="gc-titles">
         <div class="gc-title">Guides room</div>
-        <div class="gc-sub">All Fieldnote guides · be kind</div>
+        <div class="gc-sub">All Fieldnote guides</div>
       </div>
+    </div>
+    <div class="gc-rules" id="gc-rules">
+      <span class="gc-rules-h">House rules</span>
+      <span>1. Be kind</span><span>2. Help each other</span><span>3. No taboo</span><span>4. Sharing is caring</span>
     </div>
     <div class="gc-list" id="gc-list"><div class="gc-empty">Loading…</div></div>
     <div class="gc-composer">
+      <button class="gc-anon" id="gc-anon" type="button" role="switch" aria-checked="false" title="Hide your name on this message">🕶 Anonymous</button>
       <textarea class="gc-input" id="gc-input" rows="1" placeholder="Message the guides…" maxlength="1000"></textarea>
       <button class="gc-send" id="gc-send" disabled>Send</button>
     </div>`;
@@ -4555,6 +4575,16 @@ function showGuideChat() {
 
   const input = document.getElementById('gc-input');
   const sendBtn = document.getElementById('gc-send');
+  const anonBtn = document.getElementById('gc-anon');
+
+  _gcAnon = false;
+  function syncAnon() {
+    anonBtn.classList.toggle('on', _gcAnon);
+    anonBtn.setAttribute('aria-checked', _gcAnon ? 'true' : 'false');
+    input.placeholder = _gcAnon ? 'Message the guides (as Anonymous)…' : 'Message the guides…';
+  }
+  anonBtn.addEventListener('click', () => { _gcAnon = !_gcAnon; syncAnon(); });
+  syncAnon();
 
   function autoGrow() { input.style.height = 'auto'; input.style.height = Math.min(120, input.scrollHeight) + 'px'; }
   function syncSend() { sendBtn.disabled = !input.value.trim(); }
@@ -4564,7 +4594,7 @@ function showGuideChat() {
     const body = input.value.trim();
     if (!body) return;
     sendBtn.disabled = true;
-    const r = await gcSend(body);
+    const r = await gcSend(body, _gcAnon);
     if (r.error) { sendBtn.disabled = false; console.warn('[guidechat] send failed', r.error); return; }
     input.value = ''; autoGrow(); syncSend();
     gcRefresh(false);   // pull our own message right back
