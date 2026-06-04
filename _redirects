@@ -1,0 +1,11 @@
+# Cloudflare static-asset redirects (same engine as the _headers file).
+#
+# Bare domain → the app. So fieldnote.guide (and the workers.dev root) land
+# on /v0.5 instead of a 404. 302 (not 301) so browsers don't hard-pin it
+# while the app is still moving.
+/        /v0.5   302
+
+# Short invite links: fieldnote.guide/j/<sessionId> → the session.
+# (:splat is whatever follows /j/.) Lets invites read cleanly; the in-app
+# Share invite can be switched to emit these on request.
+/j/*     /v0.5?session=:splat   302
