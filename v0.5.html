@@ -2370,6 +2370,17 @@
           <div class="menu-label" id="menu-group-chat-label">Group chat</div>
           <span class="menu-chevron">›</span>
         </button>
+        <button class="menu-item" data-action="guide-card" id="menu-guide-card" style="display:none;">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/>
+              <line x1="3" y1="12" x2="21" y2="12"/>
+              <path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/>
+            </svg>
+          </div>
+          <div class="menu-label" id="menu-guide-card-label">Guide · contact</div>
+          <span class="menu-chevron">›</span>
+        </button>
         <button class="menu-item" data-action="my-sessions" id="menu-my-sessions" style="display:none;">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2776,7 +2787,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · menu logo left-aligned with session info · build 2026-06-04-0948';
+const BUILD_VERSION = '0.6 · guide card link (website/Linktree) menu item · build 2026-06-04-0958';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -2934,6 +2945,7 @@ function clearGuideToken() {
 //  - the role=guide gate (we know we're allowed in)
 //  - future v0.4 features that attach session ownership to a guide
 let GUIDE = null;  // shape: { id, name } when logged in, otherwise null
+let GUIDE_CARD_URL = null;  // the session guide's website/Linktree/contact link
 
 // Verify the stored token against the server. Returns the guide or null.
 // Network errors return null too (treat as logged-out, fail safe).
@@ -3685,6 +3697,8 @@ async function loadSessionAndTour(sessionId) {
   // Stash session + tour into module state.
   SESSION = session;
   TOUR = reshapeTour(tour);
+  // Fetch the guide's card link (website/Linktree/contact) for the menu item.
+  getSessionGuideCard(SESSION.id).then(u => { GUIDE_CARD_URL = u; });
 
   // Chunk C: both roles now seed ACTIVE_STOP_IDS from the stop_activations
   // catch-up query. Pins of inactive stops stay hidden — the guide controls
@@ -5090,6 +5104,37 @@ async function setSessionChatUrl(url) {
   const { error } = await supabaseClient.rpc('set_session_chat_url',
     { p_session_id: SESSION.id, p_guide_token: token, p_chat_url: url });
   return error ? { error: error.message } : { ok: true };
+}
+
+// Per-guide card link (website / Linktree / contact).
+async function getSessionGuideCard(sessionId) {
+  const { data, error } = await supabaseClient.rpc('get_session_guide_card', { p_session_id: sessionId });
+  if (error) { console.warn('get_session_guide_card failed', error); return null; }
+  return data || null;   // scalar text
+}
+async function setGuideCardUrl(url) {
+  const token = getStoredGuideToken();
+  if (!token) return { error: 'Not signed in.' };
+  const { error } = await supabaseClient.rpc('set_guide_card_url', { p_guide_token: token, p_card_url: url });
+  return error ? { error: error.message } : { ok: true };
+}
+// Guide-side editor for their card link (reuses the generic form modal).
+function showGuideCardEditor() {
+  tbShowForm({
+    title: 'Your link',
+    fields: [{ key: 'url', label: 'Website / Linktree / contact', type: 'text', value: GUIDE_CARD_URL || '' }],
+    note: 'Your card link — website, Linktree, booking, socials. Passengers can open it from the menu. Set once; shows in every tour you run. Leave blank to remove.',
+    onSave: async (v, err) => {
+      const raw = (v.url || '').trim();
+      const norm = raw ? normalizeChatUrl(raw) : '';
+      if (raw && !norm) { err('Enter a valid http(s) link.'); return false; }
+      const r = await setGuideCardUrl(norm);
+      if (r.error) { err(r.error); return false; }
+      GUIDE_CARD_URL = norm || null;
+      tbCloseForm();
+      return true;
+    },
+  });
 }
 
 // Guide-side editor for the per-session group-chat link (reuses the builder's
@@ -7600,6 +7645,21 @@ document.getElementById('burger-btn').addEventListener('click', () => {
       groupChatItem.style.display = 'none';
     }
   }
+  // "Guide · contact" — guides see it in a session (to set/edit their card
+  // link); passengers see it only once the guide has set one (to open it).
+  const guideCardItem = document.getElementById('menu-guide-card');
+  if (guideCardItem) {
+    const gcardLabel = document.getElementById('menu-guide-card-label');
+    if (SESSION && ROLE === 'guide') {
+      guideCardItem.style.display = '';
+      if (gcardLabel) gcardLabel.textContent = GUIDE_CARD_URL ? 'Your link · set' : 'Your link · add';
+    } else if (SESSION && GUIDE_CARD_URL) {
+      guideCardItem.style.display = '';
+      if (gcardLabel) gcardLabel.textContent = 'Guide · contact';
+    } else {
+      guideCardItem.style.display = 'none';
+    }
+  }
   // "My sessions" — guide-only (logged-in). Lets a guide switch/manage
   // sessions without leaving the current one.
   const mySessionsItem = document.getElementById('menu-my-sessions');
@@ -7648,6 +7708,14 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
         showGroupChatEditor();
       } else {
         const u = SESSION && SESSION.chat_url ? normalizeChatUrl(SESSION.chat_url) : '';
+        if (u) window.open(u, '_blank', 'noopener,noreferrer');
+      }
+    } else if (action === 'guide-card') {
+      if (ROLE === 'guide') {
+        while (screenStack.length) closeScreen();
+        showGuideCardEditor();
+      } else {
+        const u = GUIDE_CARD_URL ? normalizeChatUrl(GUIDE_CARD_URL) : '';
         if (u) window.open(u, '_blank', 'noopener,noreferrer');
       }
     } else if (action === 'my-sessions') {
