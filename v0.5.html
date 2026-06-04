@@ -1607,10 +1607,24 @@
   }
   .gc-msg.mine .gc-bubble { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   .gc-composer {
-    display: flex; gap: 8px; align-items: flex-end;
+    display: flex; flex-direction: column; gap: 8px;
     padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
     border-top: 1px solid var(--rule-soft); background: var(--paper);
   }
+  .gc-row { display: flex; gap: 8px; align-items: flex-end; }
+  .gc-tools { display: flex; gap: 8px; }
+  .gc-tool {
+    flex: 0 0 auto; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.02em;
+    padding: 7px 10px; background: var(--paper); color: var(--rule);
+    border: 1px solid var(--rule); border-radius: 10px; cursor: pointer; white-space: nowrap;
+  }
+  .gc-attach-preview { display: inline-flex; align-items: center; gap: 8px; }
+  .gc-attach-preview img { height: 56px; border-radius: 8px; border: 1px solid var(--rule-soft); }
+  .gc-attach-x {
+    width: 22px; height: 22px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--ink); color: var(--paper); font-size: 11px; line-height: 1;
+  }
+  .gc-attach-status { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--rule); }
   .gc-input {
     flex: 1; box-sizing: border-box; resize: none; max-height: 120px;
     padding: 10px 12px; border: 1px solid var(--rule); border-radius: 10px;
@@ -1632,10 +1646,14 @@
   /* Anonymous toggle in the composer. */
   .gc-anon {
     flex: 0 0 auto; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.02em;
-    padding: 11px 10px; background: var(--paper); color: var(--rule);
+    padding: 7px 10px; background: var(--paper); color: var(--rule);
     border: 1px solid var(--rule); border-radius: 10px; cursor: pointer; white-space: nowrap;
   }
   .gc-anon.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  /* Photo in a message bubble */
+  .gc-photo { display: block; margin: 2px 0; }
+  .gc-photo img { max-width: 220px; max-height: 260px; border-radius: 12px; border: 1px solid var(--rule-soft); display: block; }
+  .gc-msg.mine .gc-photo { margin-left: auto; }
 
   /* ── Tour builder (v0.6) ────────────────────────────────────────────── */
   .tb-screen, .tb-editor {
@@ -2966,7 +2984,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Guides room: remember anonymous choice · build 2026-06-04-2126';
+const BUILD_VERSION = '0.6 · Guides room: photo attachments · build 2026-06-04-2140';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4497,12 +4515,55 @@ async function gcFetch(afterId) {
   if (error) { console.warn('[guidechat] list failed', error); return null; }
   return data || [];
 }
-async function gcSend(body, anon) {
+async function gcSend(body, anon, mediaUrl) {
   const token = getStoredGuideToken();
   if (!token) return { error: 'Not signed in as a guide.' };
-  const { error } = await supabaseClient.rpc('post_guide_chat', { p_guide_token: token, p_body: body, p_anon: !!anon });
+  const { error } = await supabaseClient.rpc('post_guide_chat',
+    { p_guide_token: token, p_body: body, p_anon: !!anon, p_media_url: mediaUrl || null });
   if (error) return { error: error.message };
   return { ok: true };
+}
+
+// Downscale + JPEG-compress an image file in the browser before upload — keeps
+// chat photos small (storage + mobile-data friendly).
+function gcCompressImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 1600;
+      let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+      if (w > MAX || h > MAX) {
+        if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      c.toBlob(b => b ? resolve(b) : reject(new Error('Could not process image')), 'image/jpeg', 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read image')); };
+    img.src = url;
+  });
+}
+
+// Compress, get a one-time signed upload URL (guide-token-gated edge function),
+// upload, and return the public URL of the stored photo.
+async function gcUploadPhoto(file) {
+  const token = getStoredGuideToken();
+  if (!token) throw new Error('Not signed in as a guide.');
+  const blob = await gcCompressImage(file);
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/guide_media_upload`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'apikey': SUPABASE_KEY, 'authorization': 'Bearer ' + SUPABASE_KEY },
+    body: JSON.stringify({ token, ext: 'jpg' }),
+  });
+  if (!resp.ok) { let e = {}; try { e = await resp.json(); } catch (_e) {} throw new Error(e.error || 'Upload failed'); }
+  const { path, token: upToken, publicUrl } = await resp.json();
+  const { error } = await supabaseClient.storage.from('guide-chat')
+    .uploadToSignedUrl(path, upToken, blob, { contentType: 'image/jpeg' });
+  if (error) throw new Error(error.message || 'Upload failed');
+  return publicUrl;
 }
 
 function gcMessageEl(m) {
@@ -4516,10 +4577,19 @@ function gcMessageEl(m) {
   const nameSpan = document.createElement('span'); nameSpan.textContent = m.mine ? 'You' : (m.guide_name || 'Guide');
   const timeSpan = document.createElement('span'); timeSpan.textContent = when;
   meta.appendChild(nameSpan); meta.appendChild(timeSpan);
-  const bubble = document.createElement('div');
-  bubble.className = 'gc-bubble';
-  bubble.textContent = m.body;                 // textContent → no HTML injection
-  wrap.appendChild(meta); wrap.appendChild(bubble);
+  wrap.appendChild(meta);
+  if (m.media_url) {
+    const a = document.createElement('a');
+    a.href = m.media_url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.className = 'gc-photo';
+    const im = document.createElement('img'); im.src = m.media_url; im.loading = 'lazy'; im.alt = 'Photo';
+    a.appendChild(im); wrap.appendChild(a);
+  }
+  if (m.body) {
+    const bubble = document.createElement('div');
+    bubble.className = 'gc-bubble';
+    bubble.textContent = m.body;               // textContent → no HTML injection
+    wrap.appendChild(bubble);
+  }
   return wrap;
 }
 
@@ -4567,15 +4637,28 @@ function showGuideChat() {
     </div>
     <div class="gc-list" id="gc-list"><div class="gc-empty">Loading…</div></div>
     <div class="gc-composer">
-      <button class="gc-anon" id="gc-anon" type="button" role="switch" aria-checked="false" title="Hide your name on this message">🕶 Anonymous</button>
-      <textarea class="gc-input" id="gc-input" rows="1" placeholder="Message the guides…" maxlength="1000"></textarea>
-      <button class="gc-send" id="gc-send" disabled>Send</button>
-    </div>`;
+      <div class="gc-attach-preview" id="gc-attach-preview" style="display:none;"></div>
+      <div class="gc-tools">
+        <button class="gc-tool" id="gc-attach" type="button" title="Add a photo">🖼 Photo</button>
+        <button class="gc-anon" id="gc-anon" type="button" role="switch" aria-checked="false" title="Hide your name on this message">🕶 Anonymous</button>
+      </div>
+      <div class="gc-row">
+        <textarea class="gc-input" id="gc-input" rows="1" placeholder="Message the guides…" maxlength="1000"></textarea>
+        <button class="gc-send" id="gc-send" disabled>Send</button>
+      </div>
+    </div>
+    <input type="file" id="gc-file" accept="image/*" style="display:none;" />`;
   document.getElementById('phone').appendChild(el);
 
   const input = document.getElementById('gc-input');
   const sendBtn = document.getElementById('gc-send');
   const anonBtn = document.getElementById('gc-anon');
+  const attachBtn = document.getElementById('gc-attach');
+  const fileInput = document.getElementById('gc-file');
+  const preview = document.getElementById('gc-attach-preview');
+
+  let pendingMedia = null;   // uploaded-but-not-yet-sent photo URL
+  let uploading = false;
 
   try { _gcAnon = localStorage.getItem('fieldnote_gc_anon') === '1'; } catch (_e) { _gcAnon = false; }
   function syncAnon() {
@@ -4591,16 +4674,45 @@ function showGuideChat() {
   syncAnon();
 
   function autoGrow() { input.style.height = 'auto'; input.style.height = Math.min(120, input.scrollHeight) + 'px'; }
-  function syncSend() { sendBtn.disabled = !input.value.trim(); }
+  function syncSend() { sendBtn.disabled = uploading || (!input.value.trim() && !pendingMedia); }
   input.addEventListener('input', () => { autoGrow(); syncSend(); });
+
+  function renderPreview(msg) {
+    preview.innerHTML = '';
+    if (msg) { preview.style.display = ''; const s = document.createElement('span'); s.className = 'gc-attach-status'; s.textContent = msg; preview.appendChild(s); return; }
+    if (!pendingMedia) { preview.style.display = 'none'; return; }
+    preview.style.display = '';
+    const im = document.createElement('img'); im.src = pendingMedia; im.alt = 'Attached photo';
+    const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'gc-attach-x'; rm.textContent = '✕'; rm.title = 'Remove photo';
+    rm.addEventListener('click', () => { pendingMedia = null; renderPreview(); syncSend(); });
+    preview.appendChild(im); preview.appendChild(rm);
+  }
+
+  attachBtn.addEventListener('click', () => { if (!uploading) fileInput.click(); });
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files && fileInput.files[0];
+    fileInput.value = '';
+    if (!file) return;
+    uploading = true; pendingMedia = null; renderPreview('Uploading photo…'); syncSend();
+    try {
+      pendingMedia = await gcUploadPhoto(file);
+      uploading = false; renderPreview(); syncSend();
+    } catch (err) {
+      console.warn('[guidechat] photo upload failed', err);
+      uploading = false; renderPreview('Photo upload failed — try again');
+      setTimeout(() => { if (!pendingMedia) renderPreview(); }, 2500);
+      syncSend();
+    }
+  });
 
   async function doSend() {
     const body = input.value.trim();
-    if (!body) return;
+    if (uploading) return;
+    if (!body && !pendingMedia) return;
     sendBtn.disabled = true;
-    const r = await gcSend(body, _gcAnon);
-    if (r.error) { sendBtn.disabled = false; console.warn('[guidechat] send failed', r.error); return; }
-    input.value = ''; autoGrow(); syncSend();
+    const r = await gcSend(body, _gcAnon, pendingMedia);
+    if (r.error) { console.warn('[guidechat] send failed', r.error); syncSend(); return; }
+    input.value = ''; pendingMedia = null; renderPreview(); autoGrow(); syncSend();
     gcRefresh(false);   // pull our own message right back
   }
   sendBtn.addEventListener('click', doSend);
