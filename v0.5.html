@@ -2994,7 +2994,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Passkey recovery via recovery code · build 2026-06-04-2222';
+const BUILD_VERSION = '0.6 · Recovery: save-in-notes + help@fieldnote.guide fallback · build 2026-06-04-2230';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4254,7 +4254,7 @@ function showRecoveryCodeScreen(code, onDone) {
   el.innerHTML = `
     <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule);">Fieldnote · Recovery code</div>
     <div style="font-family:'Fraunces',serif; font-style:italic; font-size:22px; color:var(--ink); max-width:300px; line-height:1.3;">Save your recovery code</div>
-    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:280px; line-height:1.55;">This is the only way to reset a forgotten passkey. Write it down or screenshot it — it won't be shown again.</div>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:280px; line-height:1.55;">This is the only way to reset a forgotten passkey. Save it in your notes app, screenshot it, or write it down — it won't be shown again. Lost it? Email <a href="mailto:help@fieldnote.guide" style="color:var(--ink); text-decoration:underline;">help@fieldnote.guide</a>.</div>
     <div id="rc-code" style="font-family:'JetBrains Mono',monospace; font-size:20px; letter-spacing:0.1em; font-weight:700; color:var(--ink); background:var(--paper-2); border:1px dashed var(--ink); border-radius:8px; padding:14px 18px;">${code}</div>
     <button id="rc-copy" style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; padding:8px 14px; background:transparent; border:1px solid var(--rule); border-radius:6px; cursor:pointer;">Copy</button>
     <button id="rc-done" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;">I've saved it — continue</button>
@@ -4564,7 +4564,7 @@ function showInviteCodeForm() {
       toggleB.textContent = 'Have an invite code?';
     } else if (mode === 'reset') {
       headline.textContent = 'Reset your passkey';
-      blurb.textContent = 'Enter your name, your recovery code, and a new passkey.';
+      blurb.innerHTML = 'Enter your name, your recovery code, and a new passkey. Lost your code too? Email <a href="mailto:help@fieldnote.guide" style="color:var(--ink); text-decoration:underline;">help@fieldnote.guide</a>.';
       btn.textContent = 'Reset passkey';
       toggleA.textContent = 'Back to log in';
     } else if (mode === 'invite') {
