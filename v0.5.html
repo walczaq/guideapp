@@ -2952,7 +2952,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Collapsible stops + compact builder list · build 2026-06-04-2058';
+const BUILD_VERSION = '0.6 · Open guide signup (name + passkey) · build 2026-06-04-2110';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3207,6 +3207,31 @@ async function recoverGuideAccess(code, name) {
   if (!data || data.length === 0) {
     throw new Error('Unexpected response from server');
   }
+  storeGuideToken(token);
+  return { id: data[0].guide_id, name: data[0].guide_name };
+}
+
+// Open self-signup: create a guide account with name + passkey (no invite code).
+// Mirrors redeemInviteCode — client generates the device token, server stores it.
+async function registerGuideOpen(name, passkey) {
+  const token = nanoid32();
+  const { data, error } = await supabaseClient.rpc('register_guide_open', {
+    p_name: name.trim(), p_passkey: passkey, p_token: token,
+  });
+  if (error) throw new Error(error.message || 'Could not create your account');
+  if (!data || data.length === 0) throw new Error('Unexpected response from server');
+  storeGuideToken(token);
+  return { id: data[0].guide_id, name: data[0].guide_name };
+}
+
+// Log in (or hop to a new device) with name + passkey. Rotates the device token.
+async function loginGuide(name, passkey) {
+  const token = nanoid32();
+  const { data, error } = await supabaseClient.rpc('login_guide', {
+    p_name: name.trim(), p_passkey: passkey, p_new_token: token,
+  });
+  if (error) throw new Error(error.message || 'Could not log in');
+  if (!data || data.length === 0) throw new Error('Unexpected response from server');
   storeGuideToken(token);
   return { id: data[0].guide_id, name: data[0].guide_name };
 }
@@ -4231,12 +4256,13 @@ async function loadTourDirectly(slug) {
   initMap(MAPBOX_TOKEN);
 }
 
-// Render the invite-code redemption form. Shown when ?role=guide is in the URL
-// but no valid guide token is present. Two modes:
-//   - "first" — code hasn't been redeemed yet, first-time registration
-//   - "recover" — code was previously redeemed; new device, same guide
-// User toggles between them via the link at the bottom. Reloads the page after
-// successful redemption/recovery so boot() picks up the new token.
+// Render the guide access screen. Shown when ?role=guide (or the discreet
+// "guide login" link) and no valid token is present. Four modes:
+//   - "signup"  — open self-signup with name + passkey (the easy default path)
+//   - "login"   — sign in with name + passkey (any device; rotates token)
+//   - "invite"  — redeem an invite code (legacy beta path, kept)
+//   - "recover" — recover a code-based account on a new device
+// Reloads the page on success so boot() picks up the new token.
 function showInviteCodeForm() {
   hideLoading();
   let el = document.getElementById('invite-code-screen');
@@ -4246,109 +4272,126 @@ function showInviteCodeForm() {
   el.style.cssText =
     'position:absolute; inset:0; z-index:90; background:var(--paper);' +
     'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
-    'gap:18px; padding:40px; text-align:center;';
+    'gap:16px; padding:40px; text-align:center;';
+  const inputStyle = "font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:6px; text-align:center;";
+  const linkStyle = "font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); text-decoration:underline; cursor:pointer;";
   el.innerHTML = `
     <img class="brand-logo" src="/icon.svg" alt="Fieldnote" />
     <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
       Fieldnote · Guide access
     </div>
-    <div id="invite-headline" style="font-family:'Fraunces',serif; font-style:italic; font-size:22px; color:var(--ink); max-width:280px; line-height:1.3;">
-      Beta access only.
-    </div>
-    <div id="invite-blurb" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:260px; line-height:1.5;">
-      Paste your invite code below. If you don't have one, ask Filip — <a href="mailto:walczynskifilip@gmail.com" style="color:var(--ink); text-decoration:underline;">walczynskifilip@gmail.com</a>.
-    </div>
-    <input
-      id="invite-code-input"
-      type="text"
-      placeholder="invite code"
-      autocomplete="off"
-      autocapitalize="off"
-      style="font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:6px; text-align:center;"
-    />
-    <input
-      id="invite-name-input"
-      type="text"
-      placeholder="your name"
-      style="font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:6px; text-align:center;"
-    />
-    <button
-      id="invite-redeem-btn"
-      style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
-    >
-      Redeem
-    </button>
+    <div id="invite-headline" style="font-family:'Fraunces',serif; font-style:italic; font-size:22px; color:var(--ink); max-width:280px; line-height:1.3;"></div>
+    <div id="invite-blurb" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:260px; line-height:1.5;"></div>
+    <input id="invite-code-input" type="text" placeholder="invite code" autocomplete="off" autocapitalize="off" style="${inputStyle} display:none;" />
+    <input id="invite-name-input" type="text" placeholder="your name" autocapitalize="words" style="${inputStyle}" />
+    <input id="invite-pass-input" type="password" placeholder="passkey" autocomplete="current-password" style="${inputStyle}" />
+    <button id="invite-redeem-btn" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"></button>
     <div id="invite-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
-    <a id="invite-mode-toggle" href="#" style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); text-decoration:underline;">
-      Already had access? Recover.
-    </a>
+    <a id="invite-toggle-a" href="#" style="${linkStyle}"></a>
+    <a id="invite-toggle-b" href="#" style="${linkStyle} opacity:0.85;"></a>
   `;
   document.getElementById('phone').appendChild(el);
 
   const codeInput = document.getElementById('invite-code-input');
   const nameInput = document.getElementById('invite-name-input');
-  const errorEl = document.getElementById('invite-error');
-  const btn = document.getElementById('invite-redeem-btn');
-  const headline = document.getElementById('invite-headline');
-  const blurb = document.getElementById('invite-blurb');
-  const toggle = document.getElementById('invite-mode-toggle');
+  const passInput = document.getElementById('invite-pass-input');
+  const errorEl   = document.getElementById('invite-error');
+  const btn       = document.getElementById('invite-redeem-btn');
+  const headline  = document.getElementById('invite-headline');
+  const blurb     = document.getElementById('invite-blurb');
+  const toggleA   = document.getElementById('invite-toggle-a');
+  const toggleB   = document.getElementById('invite-toggle-b');
 
-  let mode = 'first';  // 'first' or 'recover'
+  let mode = 'signup';   // signup | login | invite | recover
+  const usesPass = (m) => m === 'signup' || m === 'login';
 
   function applyMode() {
-    if (mode === 'first') {
-      headline.textContent = 'Beta access only.';
-      blurb.innerHTML = 'Paste your invite code below. If you don\'t have one, ask Filip — <a href="mailto:walczynskifilip@gmail.com" style="color:var(--ink); text-decoration:underline;">walczynskifilip@gmail.com</a>.';
+    codeInput.style.display = usesPass(mode) ? 'none' : '';
+    passInput.style.display = usesPass(mode) ? '' : 'none';
+    passInput.autocomplete = (mode === 'signup') ? 'new-password' : 'current-password';
+    if (mode === 'signup') {
+      headline.textContent = 'Create your guide account';
+      blurb.textContent = 'Pick a name and a passkey — you’ll use them to sign in on any device. No email needed.';
+      btn.textContent = 'Create account';
+      toggleA.textContent = 'Already have an account? Log in';
+      toggleB.textContent = 'Have an invite code?';
+    } else if (mode === 'login') {
+      headline.textContent = 'Welcome back';
+      blurb.textContent = 'Sign in with your name and passkey.';
+      btn.textContent = 'Log in';
+      toggleA.textContent = 'New here? Create an account';
+      toggleB.textContent = 'Have an invite code?';
+    } else if (mode === 'invite') {
+      headline.textContent = 'Redeem an invite';
+      blurb.innerHTML = 'Paste your invite code and your name. No code? <a href="#" id="invite-nocode" style="color:var(--ink); text-decoration:underline;">Sign up instead</a>.';
       btn.textContent = 'Redeem';
-      toggle.textContent = 'Already had access? Recover.';
-    } else {
-      headline.textContent = 'Recover access.';
+      toggleA.textContent = 'Already redeemed before? Recover access';
+      toggleB.textContent = 'Back to sign up';
+    } else { // recover
+      headline.textContent = 'Recover access';
       blurb.textContent = 'Enter the invite code you originally redeemed and your name. Your new device replaces the old one.';
       btn.textContent = 'Recover';
-      toggle.textContent = "First time? Redeem an invite.";
+      toggleA.textContent = 'First time with a code? Redeem it';
+      toggleB.textContent = 'Back to sign up';
     }
     errorEl.textContent = '';
+    const nocode = document.getElementById('invite-nocode');
+    if (nocode) nocode.addEventListener('click', (e) => { e.preventDefault(); mode = 'signup'; applyMode(); nameInput.focus(); });
   }
 
-  toggle.addEventListener('click', e => {
+  toggleA.addEventListener('click', (e) => {
     e.preventDefault();
-    mode = (mode === 'first') ? 'recover' : 'first';
+    mode = (mode === 'signup') ? 'login'
+         : (mode === 'login') ? 'signup'
+         : (mode === 'invite') ? 'recover'
+         : 'invite';
     applyMode();
-    codeInput.focus();
+    (usesPass(mode) ? nameInput : codeInput).focus();
+  });
+  toggleB.addEventListener('click', (e) => {
+    e.preventDefault();
+    mode = usesPass(mode) ? 'invite' : 'signup';
+    applyMode();
+    (usesPass(mode) ? nameInput : codeInput).focus();
   });
 
   async function trySubmit() {
     const code = (codeInput.value || '').trim();
     const name = (nameInput.value || '').trim();
+    const pass = passInput.value || '';
     errorEl.textContent = '';
-    if (!code) { codeInput.focus(); errorEl.textContent = 'Enter your invite code.'; return; }
-    if (!name) { nameInput.focus(); errorEl.textContent = 'Enter your name.'; return; }
+    if (usesPass(mode)) {
+      if (!name) { nameInput.focus(); errorEl.textContent = 'Enter your name.'; return; }
+      if (!pass) { passInput.focus(); errorEl.textContent = 'Enter a passkey.'; return; }
+      if (mode === 'signup' && pass.length < 4) { passInput.focus(); errorEl.textContent = 'Passkey must be at least 4 characters.'; return; }
+    } else {
+      if (!code) { codeInput.focus(); errorEl.textContent = 'Enter your invite code.'; return; }
+      if (!name) { nameInput.focus(); errorEl.textContent = 'Enter your name.'; return; }
+    }
 
     btn.disabled = true;
-    btn.textContent = (mode === 'first') ? 'Redeeming…' : 'Recovering…';
+    const busy = { signup: 'Creating…', login: 'Signing in…', invite: 'Redeeming…', recover: 'Recovering…' };
+    btn.textContent = busy[mode];
     try {
-      if (mode === 'first') {
-        await redeemInviteCode(code, name);
-      } else {
-        await recoverGuideAccess(code, name);
-      }
-      // On success, just reload — boot() will see the new token and proceed.
-      window.location.reload();
+      if (mode === 'signup')      await registerGuideOpen(name, pass);
+      else if (mode === 'login')  await loginGuide(name, pass);
+      else if (mode === 'invite') await redeemInviteCode(code, name);
+      else                        await recoverGuideAccess(code, name);
+      window.location.reload();   // boot() picks up the new token
     } catch (err) {
       errorEl.textContent = err.message || 'Could not complete.';
       btn.disabled = false;
-      btn.textContent = (mode === 'first') ? 'Redeem' : 'Recover';
+      applyMode();   // restore the button label
     }
   }
 
   btn.addEventListener('click', trySubmit);
-  // Press Enter in either field to submit.
-  [codeInput, nameInput].forEach(input => {
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') trySubmit();
-    });
+  [codeInput, nameInput, passInput].forEach(input => {
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') trySubmit(); });
   });
-  codeInput.focus();
+
+  applyMode();
+  nameInput.focus();
 }
 
 // ── Per-guide session management ──────────────────────────────────────
