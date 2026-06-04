@@ -2787,7 +2787,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · group chat managed per-session in My Sessions · build 2026-06-04-1004';
+const BUILD_VERSION = '0.6 · reminder to set group chat when none set · build 2026-06-04-1007';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -5137,6 +5137,42 @@ function smChatEditor(s) {
   });
 }
 
+// Gentle reminder: if a guide is in a session with no group chat set, nudge
+// them to add one (so passengers can reach the group). Once per session —
+// "Not now" remembers the dismissal; setting a chat makes it moot.
+function maybeRemindChatSetup() {
+  if (ROLE !== 'guide' || !SESSION || SESSION.chat_url) return;
+  if (document.getElementById('chat-reminder')) return;
+  let dismissed = false;
+  try { dismissed = localStorage.getItem('fieldnote_chatreminder_' + SESSION.id) === '1'; } catch (_e) {}
+  if (dismissed) return;
+  const el = document.createElement('div');
+  el.id = 'chat-reminder';
+  el.style.cssText =
+    'position:absolute; left:14px; right:14px; z-index:18;' +
+    'top:calc(max(env(safe-area-inset-top,0px),30px) + 96px);' +
+    'background:var(--ink); color:var(--paper); border-radius:14px; padding:14px 16px;' +
+    'box-shadow:0 8px 28px rgba(0,0,0,0.34);';
+  el.innerHTML = `
+    <div style="display:flex; align-items:flex-start; gap:10px;">
+      <span style="font-size:18px; line-height:1;">💬</span>
+      <div style="font-family:'Fraunces',serif; font-size:14px; line-height:1.35;">No group chat set for this tour. Add a WhatsApp link so passengers can reach you and each other.</div>
+    </div>
+    <div style="display:flex; gap:10px; margin-top:12px; justify-content:flex-end;">
+      <button id="chat-reminder-dismiss" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; padding:9px 14px; background:transparent; color:var(--paper); border:1px solid rgba(255,255,255,0.4); border-radius:8px; cursor:pointer;">Not now</button>
+      <button id="chat-reminder-add" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; padding:9px 14px; background:#25d366; color:#fff; border:none; border-radius:8px; cursor:pointer;">Add group chat</button>
+    </div>`;
+  document.getElementById('phone').appendChild(el);
+  document.getElementById('chat-reminder-dismiss').addEventListener('click', () => {
+    try { localStorage.setItem('fieldnote_chatreminder_' + SESSION.id, '1'); } catch (_e) {}
+    el.remove();
+  });
+  document.getElementById('chat-reminder-add').addEventListener('click', () => {
+    el.remove();
+    smChatEditor(SESSION);
+  });
+}
+
 // Per-guide card link (website / Linktree / contact).
 async function getSessionGuideCard(sessionId) {
   const { data, error } = await supabaseClient.rpc('get_session_guide_card', { p_session_id: sessionId });
@@ -5497,6 +5533,7 @@ function initMap(token) {
     if (ROLE === 'guide') {
       startGeolocation();
       startGuideShell();
+      setTimeout(() => { try { maybeRemindChatSetup(); } catch (_e) {} }, 1600);
     } else {
       startPassengerGuideListening();
       if (introNeeded()) {
