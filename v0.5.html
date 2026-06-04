@@ -1220,6 +1220,16 @@
     background: rgba(184, 51, 29, 0.12);
     border-color: rgba(184, 51, 29, 0.60);
   }
+  /* Per-note category dropdown (replaces the tap-to-cycle button). */
+  .notes-level-select {
+    flex: 0 0 auto; align-self: stretch;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.04em;
+    padding: 0 8px; border: 1px solid var(--rule); border-radius: 6px;
+    background: var(--paper-2); color: var(--ink); cursor: pointer;
+  }
+  .notes-level-select[data-level="info"]    { background: rgba(37, 99, 235, 0.10);  border-color: rgba(37, 99, 235, 0.55);  color: #2563eb; }
+  .notes-level-select[data-level="caution"] { background: rgba(199, 148, 40, 0.12); border-color: rgba(199, 148, 40, 0.60); color: #9a6a14; }
+  .notes-level-select[data-level="danger"]  { background: rgba(184, 51, 29, 0.12);  border-color: rgba(184, 51, 29, 0.60);  color: #b8331d; }
   .notes-add-btn {
     width: 100%;
     margin-top: 4px;
@@ -2748,7 +2758,7 @@
       </div>
       <div class="stop-modal-body">
         <h2 id="notes-modal-title">…</h2>
-        <p id="notes-modal-sub">Tap the icon on each warning to cycle its category. Up to 3 warnings.</p>
+        <p id="notes-modal-sub">Pick a category for each warning. Up to 3 warnings.</p>
         <div class="stop-modal-error" id="notes-modal-error"></div>
       </div>
       <div class="stop-modal-duration">
@@ -2837,7 +2847,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · builder: drag-to-reorder route (fullscreen) · build 2026-06-04-1729';
+const BUILD_VERSION = '0.6 · warning category = dropdown (not tap-to-cycle) · build 2026-06-04-1814';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -10603,19 +10613,14 @@ function renderNotesEditorList(listId, entries) {
     const row = document.createElement('div');
     row.className = 'notes-row';
 
-    const lvlBtn = document.createElement('button');
-    lvlBtn.type = 'button';
-    lvlBtn.className = 'notes-level-btn';
-    lvlBtn.setAttribute('data-level', entry.level || 'none');
-    lvlBtn.setAttribute('aria-label', 'Cycle warning category');
-    lvlBtn.title = `Category: ${entry.level || 'none'} (tap to cycle)`;
-    lvlBtn.innerHTML = svgForNoteLevel(entry.level || 'none');
-    lvlBtn.addEventListener('click', () => {
-      const current = collectNotesEditorValues(listId);
-      current[idx].level = nextNoteLevel(current[idx].level);
-      renderNotesEditorList(listId, current);
-    });
-    row.appendChild(lvlBtn);
+    const lvlSel = document.createElement('select');
+    lvlSel.className = 'notes-level-select';
+    lvlSel.setAttribute('aria-label', 'Warning category');
+    lvlSel.setAttribute('data-level', entry.level || 'none');
+    lvlSel.innerHTML = [['none', 'Note'], ['info', 'Info'], ['caution', 'Caution'], ['danger', 'Danger']]
+      .map(([v, l]) => `<option value="${v}"${(entry.level || 'none') === v ? ' selected' : ''}>${l}</option>`).join('');
+    lvlSel.addEventListener('change', () => { lvlSel.setAttribute('data-level', lvlSel.value); });
+    row.appendChild(lvlSel);
 
     const input = document.createElement('input');
     input.type = 'text';
@@ -10647,10 +10652,10 @@ function renderNotesEditorList(listId, entries) {
 function collectNotesEditorValues(listId) {
   const rows = document.querySelectorAll('#' + listId + ' .notes-row');
   return Array.from(rows).map(r => {
-    const lvlBtn = r.querySelector('.notes-level-btn');
+    const lvlSel = r.querySelector('.notes-level-select');
     const input = r.querySelector('input.notes-input');
     return {
-      level: (lvlBtn && lvlBtn.getAttribute('data-level')) || 'none',
+      level: (lvlSel && lvlSel.value) || 'none',
       text: input ? input.value : '',
     };
   });
