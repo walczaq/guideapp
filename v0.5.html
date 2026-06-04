@@ -2984,7 +2984,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Guides room: photo attachments · build 2026-06-04-2140';
+const BUILD_VERSION = '0.6 · Guide signup: email + exclusive names · build 2026-06-04-2152';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3245,10 +3245,10 @@ async function recoverGuideAccess(code, name) {
 
 // Open self-signup: create a guide account with name + passkey (no invite code).
 // Mirrors redeemInviteCode — client generates the device token, server stores it.
-async function registerGuideOpen(name, passkey) {
+async function registerGuideOpen(name, passkey, email) {
   const token = nanoid32();
   const { data, error } = await supabaseClient.rpc('register_guide_open', {
-    p_name: name.trim(), p_passkey: passkey, p_token: token,
+    p_name: name.trim(), p_passkey: passkey, p_token: token, p_email: (email || '').trim(),
   });
   if (error) throw new Error(error.message || 'Could not create your account');
   if (!data || data.length === 0) throw new Error('Unexpected response from server');
@@ -4316,6 +4316,7 @@ function showInviteCodeForm() {
     <div id="invite-blurb" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:260px; line-height:1.5;"></div>
     <input id="invite-code-input" type="text" placeholder="invite code" autocomplete="off" autocapitalize="off" style="${inputStyle} display:none;" />
     <input id="invite-name-input" type="text" placeholder="your name" autocapitalize="words" style="${inputStyle}" />
+    <input id="invite-email-input" type="email" placeholder="email" autocomplete="email" autocapitalize="off" inputmode="email" style="${inputStyle} display:none;" />
     <input id="invite-pass-input" type="password" placeholder="passkey" autocomplete="current-password" style="${inputStyle}" />
     <button id="invite-redeem-btn" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"></button>
     <div id="invite-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
@@ -4326,6 +4327,7 @@ function showInviteCodeForm() {
 
   const codeInput = document.getElementById('invite-code-input');
   const nameInput = document.getElementById('invite-name-input');
+  const emailInput = document.getElementById('invite-email-input');
   const passInput = document.getElementById('invite-pass-input');
   const errorEl   = document.getElementById('invite-error');
   const btn       = document.getElementById('invite-redeem-btn');
@@ -4339,11 +4341,12 @@ function showInviteCodeForm() {
 
   function applyMode() {
     codeInput.style.display = usesPass(mode) ? 'none' : '';
+    emailInput.style.display = (mode === 'signup') ? '' : 'none';
     passInput.style.display = usesPass(mode) ? '' : 'none';
     passInput.autocomplete = (mode === 'signup') ? 'new-password' : 'current-password';
     if (mode === 'signup') {
       headline.textContent = 'Create your guide account';
-      blurb.textContent = 'Pick a name and a passkey — you’ll use them to sign in on any device. No email needed.';
+      blurb.textContent = 'Pick a name, your email, and a passkey. You sign in with name + passkey; the email is for recovery and contact.';
       btn.textContent = 'Create account';
       toggleA.textContent = 'Already have an account? Log in';
       toggleB.textContent = 'Have an invite code?';
@@ -4394,6 +4397,11 @@ function showInviteCodeForm() {
     errorEl.textContent = '';
     if (usesPass(mode)) {
       if (!name) { nameInput.focus(); errorEl.textContent = 'Enter your name.'; return; }
+      if (mode === 'signup') {
+        const email = (emailInput.value || '').trim();
+        if (!email) { emailInput.focus(); errorEl.textContent = 'Enter your email.'; return; }
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { emailInput.focus(); errorEl.textContent = 'Enter a valid email.'; return; }
+      }
       if (!pass) { passInput.focus(); errorEl.textContent = 'Enter a passkey.'; return; }
       if (mode === 'signup' && pass.length < 4) { passInput.focus(); errorEl.textContent = 'Passkey must be at least 4 characters.'; return; }
     } else {
@@ -4405,7 +4413,7 @@ function showInviteCodeForm() {
     const busy = { signup: 'Creating…', login: 'Signing in…', invite: 'Redeeming…', recover: 'Recovering…' };
     btn.textContent = busy[mode];
     try {
-      if (mode === 'signup')      await registerGuideOpen(name, pass);
+      if (mode === 'signup')      await registerGuideOpen(name, pass, (emailInput.value || '').trim());
       else if (mode === 'login')  await loginGuide(name, pass);
       else if (mode === 'invite') await redeemInviteCode(code, name);
       else                        await recoverGuideAccess(code, name);
@@ -4418,7 +4426,7 @@ function showInviteCodeForm() {
   }
 
   btn.addEventListener('click', trySubmit);
-  [codeInput, nameInput, passInput].forEach(input => {
+  [codeInput, nameInput, emailInput, passInput].forEach(input => {
     input.addEventListener('keydown', e => { if (e.key === 'Enter') trySubmit(); });
   });
 
