@@ -2801,7 +2801,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · fix: builder load now reads pin category · build 2026-06-04-1559';
+const BUILD_VERSION = '0.6 · reorder pins + stops (↑/↓) in the builder · build 2026-06-04-1606';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4443,6 +4443,39 @@ async function tbUpdatePin(id, f) {
       p_lng: f.lng ?? null, p_lat: f.lat ?? null, p_trigger_radius_m: f.radius ?? null });
   return error ? { error: error.message } : { ok: true, row: data };
 }
+async function tbReorderPins(stopId, pinIds) {
+  const token = getStoredGuideToken();
+  const { error } = await supabaseClient.rpc('reorder_pins', { p_guide_token: token, p_stop_id: stopId, p_pin_ids: pinIds });
+  return error ? { error: error.message } : { ok: true };
+}
+async function tbReorderStops(tourId, stopIds) {
+  const token = getStoredGuideToken();
+  const { error } = await supabaseClient.rpc('reorder_stops', { p_guide_token: token, p_tour_id: tourId, p_stop_ids: stopIds });
+  return error ? { error: error.message } : { ok: true };
+}
+// Move a pin / stop one step in the walking order; renumber + persist.
+async function tbMovePin(stop, pin, dir) {
+  const pins = stop.pins || [];
+  const i = pins.findIndex(x => x.id === pin.id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= pins.length) return;
+  [pins[i], pins[j]] = [pins[j], pins[i]];
+  pins.forEach((x, idx) => { x.ordinal = idx + 1; });
+  renderTbMarkers(); renderTbEditorPanel();
+  const r = await tbReorderPins(stop.id, pins.map(x => x.id));
+  if (r.error) console.warn('[tb] reorder pins failed', r.error);
+}
+async function tbMoveStop(stop, dir) {
+  const stops = _tbTour.stops || [];
+  const i = stops.findIndex(x => x.id === stop.id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= stops.length) return;
+  [stops[i], stops[j]] = [stops[j], stops[i]];
+  stops.forEach((x, idx) => { x.ordinal = idx + 1; });
+  renderTbMarkers(); renderTbEditorPanel();
+  const r = await tbReorderStops(_tbTour.id, stops.map(x => x.id));
+  if (r.error) console.warn('[tb] reorder stops failed', r.error);
+}
 async function tbDeletePin(id) {
   const token = getStoredGuideToken();
   const { error } = await supabaseClient.rpc('delete_pin', { p_guide_token: token, p_pin_id: id });
@@ -4779,6 +4812,9 @@ function renderTbEditorPanel() {
     meta.textContent = `${(s.pins || []).length} pin${(s.pins || []).length === 1 ? '' : 's'} · ${s.activation_radius_m} m radius`;
     row.appendChild(meta);
     const acts = document.createElement('div'); acts.className = 'tb-actions';
+    const sIdx = (_tbTour.stops || []).indexOf(s);
+    if (sIdx > 0) acts.appendChild(smMakeBtn('↑', '', (ev) => { ev.stopPropagation(); tbMoveStop(s, -1); }));
+    if (sIdx < (_tbTour.stops || []).length - 1) acts.appendChild(smMakeBtn('↓', '', (ev) => { ev.stopPropagation(); tbMoveStop(s, +1); }));
     acts.appendChild(smMakeBtn('Edit', '', (ev) => { ev.stopPropagation(); tbEditStopForm(s); }));
     acts.appendChild(smMakeBtn('Move', '', (ev) => { ev.stopPropagation(); _tbSelStopId = s.id; tbArmPlace('move-stop', s.id); }));
     if (_tbStopDeleteConfirm === s.id) {
@@ -4804,6 +4840,9 @@ function renderTbEditorPanel() {
         pr.appendChild(pt);
         if (p.body) { const pb = document.createElement('div'); pb.className = 'tb-rowbody'; pb.textContent = p.body; pr.appendChild(pb); }
         const pa = document.createElement('div'); pa.className = 'tb-actions';
+        const pIdx = (s.pins || []).indexOf(p);
+        if (pIdx > 0) pa.appendChild(smMakeBtn('↑', '', () => tbMovePin(s, p, -1)));
+        if (pIdx < (s.pins || []).length - 1) pa.appendChild(smMakeBtn('↓', '', () => tbMovePin(s, p, +1)));
         pa.appendChild(smMakeBtn('Edit', '', () => tbEditPinForm(p)));
         pa.appendChild(smMakeBtn('Move', '', () => tbArmPlace('move-pin', p.id)));
         if (_tbPinDeleteConfirm === p.id) {
