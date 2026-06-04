@@ -1617,6 +1617,14 @@
     color:var(--paper); font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700;
   }
   .tb-pin-marker.emoji { font-size:12px; }
+  /* Highlighted marker (tapped on the map to locate it in the list) */
+  .tb-stop-marker.hi, .tb-pin-marker.hi {
+    box-shadow:0 0 0 3px #2563eb, 0 2px 10px rgba(0,0,0,0.45);
+    transform:scale(1.18); z-index:4;
+  }
+  .tb-stop-row.hi, .tb-pin-row.hi {
+    box-shadow:0 0 0 2px #2563eb; border-color:#2563eb;
+  }
   /* Placement banner */
   .tb-place-banner {
     position:absolute; left:12px; right:12px; top:12px; z-index:5;
@@ -2801,7 +2809,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · side quests = branch labels (6B); orderable in sequence · build 2026-06-04-1621';
+const BUILD_VERSION = '0.6 · tap map marker → highlight + scroll to its list row · build 2026-06-04-1627';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4614,6 +4622,7 @@ function tbNewTourFlow() {
 let _tbEditorMap = null;
 let _tbTour = null;             // full detail {id,...,stops:[{...,pins:[]}]}
 let _tbSelStopId = null;
+let _tbHi = null;               // highlighted marker {kind:'stop'|'pin', id} — tap a map marker to locate it in the list
 let _tbPlace = null;            // {kind:'stop'|'pin'|'move-stop'|'move-pin', id?}
 let _tbStopMarkers = [];
 let _tbPinMarkers = [];
@@ -4778,18 +4787,21 @@ function renderTbMarkers() {
 
   for (const s of (_tbTour.stops || [])) {
     const elm = document.createElement('div');
-    elm.className = 'tb-stop-marker' + (s.id === _tbSelStopId ? ' sel' : '');
+    const stopHi = _tbHi && _tbHi.kind === 'stop' && _tbHi.id === s.id;
+    elm.className = 'tb-stop-marker' + (s.id === _tbSelStopId ? ' sel' : '') + (stopHi ? ' hi' : '');
     elm.textContent = String(s.ordinal);
-    elm.addEventListener('click', (ev) => { ev.stopPropagation(); _tbSelStopId = s.id; renderTbMarkers(); renderTbEditorPanel(); });
+    elm.addEventListener('click', (ev) => { ev.stopPropagation(); tbMarkerClick('stop', s.id); });
     _tbStopMarkers.push(new mapboxgl.Marker({ element: elm, anchor: 'center' }).setLngLat([s.lng, s.lat]).addTo(_tbEditorMap));
     if (s.id === _tbSelStopId) {
       const _seqMk = computeSequenceLabels(s.pins || []);
       for (const p of (s.pins || [])) {
         const cat = tbCat(p.category);
-        const pe = document.createElement('div'); pe.className = 'tb-pin-marker';
+        const pinHi = _tbHi && _tbHi.kind === 'pin' && _tbHi.id === p.id;
+        const pe = document.createElement('div'); pe.className = 'tb-pin-marker' + (pinHi ? ' hi' : '');
         pe.style.background = cat.color;
         if (_seqMk[p.id]) { pe.textContent = _seqMk[p.id]; }   // route number or side branch (6B)
         else { pe.textContent = cat.emoji; pe.classList.add('emoji'); }
+        pe.addEventListener('click', (ev) => { ev.stopPropagation(); tbMarkerClick('pin', p.id); });
         _tbPinMarkers.push(new mapboxgl.Marker({ element: pe, anchor: 'center' }).setLngLat([p.lng, p.lat]).addTo(_tbEditorMap));
       }
     }
@@ -4797,6 +4809,23 @@ function renderTbMarkers() {
 }
 
 function tbSelStop() { return (_tbTour.stops || []).find(s => s.id === _tbSelStopId) || null; }
+
+// Tap a map marker to highlight it + scroll its row into the middle of the
+// panel (so you can move/edit/reorder it). Tap the same marker again to clear.
+function tbMarkerClick(kind, id) {
+  if (_tbHi && _tbHi.kind === kind && _tbHi.id === id) {
+    _tbHi = null;                       // toggle off
+  } else {
+    _tbHi = { kind, id };
+    if (kind === 'stop') _tbSelStopId = id;   // selecting a stop reveals its pins
+  }
+  renderTbMarkers();
+  renderTbEditorPanel();
+  if (_tbHi) {
+    const row = document.getElementById('tb-hi-row');
+    if (row) setTimeout(() => { try { row.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_e) {} }, 0);
+  }
+}
 
 function renderTbEditorPanel() {
   const panel = document.getElementById('tb-panel');
@@ -4830,7 +4859,9 @@ function renderTbEditorPanel() {
   }
   for (const s of (_tbTour.stops || [])) {
     const row = document.createElement('div');
-    row.className = 'tb-stop-row' + (s.id === _tbSelStopId ? ' selected' : '');
+    const stopRowHi = _tbHi && _tbHi.kind === 'stop' && _tbHi.id === s.id;
+    row.className = 'tb-stop-row' + (s.id === _tbSelStopId ? ' selected' : '') + (stopRowHi ? ' hi' : '');
+    if (stopRowHi) row.id = 'tb-hi-row';
     row.addEventListener('click', () => { _tbSelStopId = s.id; renderTbMarkers(); renderTbEditorPanel(); });
     const title = document.createElement('div'); title.className = 'tb-rowtitle';
     title.innerHTML = `<span class="tb-num">${s.ordinal}</span>${(s.name || '').replace(/</g, '&lt;')}`;
@@ -4859,7 +4890,9 @@ function renderTbEditorPanel() {
     // Pins of the selected stop.
     if (s.id === _tbSelStopId) {
       for (const p of (s.pins || [])) {
-        const pr = document.createElement('div'); pr.className = 'tb-pin-row';
+        const pinRowHi = _tbHi && _tbHi.kind === 'pin' && _tbHi.id === p.id;
+        const pr = document.createElement('div'); pr.className = 'tb-pin-row' + (pinRowHi ? ' hi' : '');
+        if (pinRowHi) pr.id = 'tb-hi-row';
         const cat = tbCat(p.category);
         const _seqPr = computeSequenceLabels(s.pins || []);
         const glyph = _seqPr[p.id] || cat.emoji;
