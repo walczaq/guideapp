@@ -2863,7 +2863,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Back button on Start-session screen · build 2026-06-04-1947';
+const BUILD_VERSION = '0.6 · Fix blank guide map on mobile (fitBounds after load) · build 2026-06-04-1952';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4770,18 +4770,30 @@ async function openTourEditor(tourId) {
     style: 'mapbox://styles/mapbox/outdoors-v12',
     attributionControl: false, pitchWithRotate: false, dragRotate: false,
   };
+  // Same mobile trap as the live map: passing `bounds` to the constructor while
+  // the container is briefly 0-height (phone layout race) bakes in an invalid
+  // camera → blank map. Open at a center+zoom, then fitBounds after load.
+  let edFitBounds = null;
   if (edPoints.length) {
     const lo = [Math.min(...edPoints.map(p => p.lng)), Math.min(...edPoints.map(p => p.lat))];
     const hi = [Math.max(...edPoints.map(p => p.lng)), Math.max(...edPoints.map(p => p.lat))];
-    edOpts.bounds = [[lo[0] - 0.003, lo[1] - 0.003], [hi[0] + 0.003, hi[1] + 0.003]];
-    edOpts.fitBoundsOptions = { padding: 50, maxZoom: 16 };
+    edFitBounds = [[lo[0] - 0.003, lo[1] - 0.003], [hi[0] + 0.003, hi[1] + 0.003]];
+    edOpts.center = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2];
+    edOpts.zoom = 13;
   } else {
     edOpts.center = [_tbTour.home_lng, _tbTour.home_lat];
     edOpts.zoom = 13;
   }
   try {
     _tbEditorMap = new mapboxgl.Map(edOpts);
-    _tbEditorMap.on('load', () => { loosenPoiLayers(_tbEditorMap); setTimeout(() => { try { _tbEditorMap.resize(); } catch (_e) {} }, 50); renderTbMarkers(); updateTbZoom(); });
+    _tbEditorMap.on('load', () => {
+      loosenPoiLayers(_tbEditorMap);
+      setTimeout(() => { try {
+        _tbEditorMap.resize();
+        if (edFitBounds) _tbEditorMap.fitBounds(edFitBounds, { padding: 50, maxZoom: 16, animate: false });
+      } catch (_e) {} }, 50);
+      renderTbMarkers(); updateTbZoom();
+    });
     _tbEditorMap.on('zoom', updateTbZoom);
     _tbEditorMap.on('click', tbOnMapClick);
   } catch (e) { console.warn('[tb] editor map failed', e); }
@@ -5938,6 +5950,9 @@ function initMap(token) {
     // stays available without re-fetching (helps when the signal drops).
     maxTileCacheSize: 2000,
   };
+  // Guides keep the whole-tour overview, framed on the stops; we apply that
+  // framing AFTER load via fitBounds (see below), not at construction.
+  let guideFitBounds = null;
   if (ROLE === 'passenger') {
     // Passengers open at the OVERVIEW scale (whole-area survey) centred on the
     // first stop, then auto-zoom to DETAIL once they start walking. The
@@ -5946,15 +5961,26 @@ function initMap(token) {
     mapOpts.center = firstStop ? [firstStop.lng, firstStop.lat] : [framePoints[0].lng, framePoints[0].lat];
     mapOpts.zoom = ZOOM_OVERVIEW;
   } else {
-    // Guides keep the whole-tour overview, framed on the stops.
-    mapOpts.bounds = bounds;
-    mapOpts.fitBoundsOptions = { padding: 40 };
+    // DON'T pass `bounds` to the constructor. On phones the map container can
+    // momentarily report zero height (100dvh / PWA layout race), and Mapbox
+    // bakes that into an invalid camera that never recovers → a blank map that
+    // "doesn't load". (Passengers dodge this because center+zoom is always a
+    // valid camera.) Open at a safe center+zoom, then fitBounds once on load,
+    // when the container is guaranteed to have real dimensions.
+    mapOpts.center = [(bounds[0][0] + bounds[1][0]) / 2, (bounds[0][1] + bounds[1][1]) / 2];
+    mapOpts.zoom = 12;
+    guideFitBounds = bounds;
   }
   map = new mapboxgl.Map(mapOpts);
   map.touchZoomRotate.disableRotation();
   map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
 
   map.on('load', () => {
+    // Container may have only just gained its real size on mobile — resize so
+    // the canvas matches, then apply the guide's whole-tour framing now that
+    // fitBounds has valid dimensions to compute a zoom from.
+    try { map.resize(); } catch (_e) {}
+    if (guideFitBounds) { try { map.fitBounds(guideFitBounds, { padding: 40, animate: false }); } catch (_e) {} }
     loosenPoiLayers(map);
     renderAll();
     updateZoomPresetButtons();
