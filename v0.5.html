@@ -2086,6 +2086,14 @@
     border-top: 1px solid var(--rule-soft);
     display: flex; flex-direction: column; align-items: center; gap: 10px;
   }
+  /* Discreet guide-login link at the very bottom of the menu (passenger view). */
+  .menu-guidelogin-link {
+    display: block; width: 100%; margin: 16px auto 2px; padding: 6px;
+    background: transparent; border: none; cursor: pointer; text-align: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--rule); text-decoration: underline;
+  }
+  .menu-guidelogin-link:active { color: var(--ink); }
   .install-btn {
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
@@ -2430,17 +2438,6 @@
              the page can't re-request, so we tell the user how to reset it
              in their browser. Revealed by tapping the blocked menu item. -->
         <div class="menu-notif-hint" id="menu-notif-hint" hidden></div>
-        <button class="menu-item" data-action="guide-login" id="menu-guide-login" style="display:none;">
-          <div class="menu-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
-              <polyline points="10 17 15 12 10 7"/>
-              <line x1="15" y1="12" x2="3" y2="12"/>
-            </svg>
-          </div>
-          <div class="menu-label">Guide login</div>
-          <span class="menu-chevron">›</span>
-        </button>
         <button class="menu-item" data-action="reset">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2471,6 +2468,8 @@
         <button class="install-btn" id="menu-install-btn" type="button">Install website</button>
         <div class="install-hint" id="menu-install-hint"></div>
       </div>
+      <!-- Discreet guide-login link (shown only when not signed in as a guide). -->
+      <button type="button" class="menu-guidelogin-link" id="menu-guide-login" style="display:none;">Guide login</button>
     </div>
   </div>
 
@@ -2802,7 +2801,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · build tours w/o session; guide login from menu · build 2026-06-04-1534';
+const BUILD_VERSION = '0.6 · guide-login = discreet link at menu bottom · build 2026-06-04-1556';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -7764,6 +7763,12 @@ document.querySelectorAll('[data-close-screen]').forEach(b => b.addEventListener
     const u = mapChatBtn.dataset.url;
     if (u) window.open(u, '_blank', 'noopener,noreferrer');
   });
+  // Discreet "Guide login" link at the bottom of the menu (not a .menu-item).
+  const guideLoginLink = document.getElementById('menu-guide-login');
+  if (guideLoginLink) guideLoginLink.addEventListener('click', () => {
+    while (screenStack.length) closeScreen();
+    showInviteCodeForm();
+  });
 }
 
 document.getElementById('burger-btn').addEventListener('click', () => {
@@ -7857,9 +7862,6 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
     } else if (action === 'build-tours') {
       while (screenStack.length) closeScreen();
       showTourManager();
-    } else if (action === 'guide-login') {
-      while (screenStack.length) closeScreen();
-      showInviteCodeForm();
     } else if (action === 'edit-name') {
       // Close the menu, then show the edit form.
       while (screenStack.length) closeScreen();
