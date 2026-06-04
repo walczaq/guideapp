@@ -1594,7 +1594,8 @@
   .tb-ro-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 14px calc(24px + env(safe-area-inset-bottom, 0px)); }
   .tb-ro-tile {
     display: flex; align-items: center; gap: 12px; padding: 14px 12px; margin-bottom: 8px;
-    background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; user-select: none;
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 10px;
+    user-select: none; touch-action: none; cursor: grab;
   }
   .tb-ro-tile.dragging { box-shadow: 0 10px 28px rgba(0,0,0,0.32); border-color: #2563eb; position: relative; z-index: 5; opacity: 0.97; }
   .tb-ro-handle { font-size: 18px; color: var(--rule); cursor: grab; touch-action: none; padding: 2px 4px; }
@@ -2847,7 +2848,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Reorder route button at top of list too · build 2026-06-04-1911';
+const BUILD_VERSION = '0.6 · reorder: live renumber + drag anywhere on tile · build 2026-06-04-1914';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -5071,6 +5072,21 @@ function tbCloseReorder(stop, list) {
   tbReorderPins(stop.id, stop.pins.map(p => p.id)).then(r => { if (r && r.error) console.warn('[tb] reorder failed', r.error); });
 }
 
+// Recompute the route numbers / branch labels from the CURRENT tile order so
+// they update live as you drag (e.g. dragging a pin into 3rd place shows "3").
+function tbRelabelReorder(list) {
+  const stop = tbSelStop(); if (!stop) return;
+  const byId = {}; (stop.pins || []).forEach(p => { byId[p.id] = p; });
+  const tiles = Array.from(list.querySelectorAll('.tb-ro-tile'));
+  const ordered = tiles.map(t => byId[Number(t.dataset.id)]).filter(Boolean);
+  const labels = computeSequenceLabels(ordered);
+  tiles.forEach(t => {
+    const p = byId[Number(t.dataset.id)];
+    const dot = t.querySelector('.tb-pin-dot');
+    if (p && dot) dot.textContent = labels[p.id] || tbCat(p.category).emoji;
+  });
+}
+
 function tbWireReorderDrag(list) {
   let dragEl = null, pid = null, startY = 0, lastY = 0, raf = 0;
   const tiles = () => Array.from(list.querySelectorAll('.tb-ro-tile'));
@@ -5083,7 +5099,7 @@ function tbWireReorderDrag(list) {
   }
   list.addEventListener('pointerdown', (e) => {
     const tile = e.target.closest('.tb-ro-tile');
-    if (!tile || !e.target.closest('.tb-ro-handle')) return;   // drag starts on the handle only
+    if (!tile) return;   // drag starts anywhere on the tile
     e.preventDefault();
     dragEl = tile; pid = e.pointerId; startY = e.clientY; lastY = e.clientY;
     tile.classList.add('dragging');
@@ -5104,10 +5120,10 @@ function tbWireReorderDrag(list) {
       const dragBefore = (sib.compareDocumentPosition(dragEl) & Node.DOCUMENT_POSITION_PRECEDING);
       if (dragBefore && mid > sibMid) {
         list.insertBefore(dragEl, sib.nextSibling); startY += r.height;
-        dragEl.style.transform = `translateY(${e.clientY - startY}px)`; break;
+        dragEl.style.transform = `translateY(${e.clientY - startY}px)`; tbRelabelReorder(list); break;
       } else if (!dragBefore && mid < sibMid) {
         list.insertBefore(dragEl, sib); startY -= r.height;
-        dragEl.style.transform = `translateY(${e.clientY - startY}px)`; break;
+        dragEl.style.transform = `translateY(${e.clientY - startY}px)`; tbRelabelReorder(list); break;
       }
     }
   });
