@@ -2791,7 +2791,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · delete session (guide, My Sessions) · build 2026-06-04-1017';
+const BUILD_VERSION = '0.6 · invite blurb: add Filip contact email · build 2026-06-04-1147';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4050,7 +4050,7 @@ function showInviteCodeForm() {
       Beta access only.
     </div>
     <div id="invite-blurb" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:260px; line-height:1.5;">
-      Paste your invite code below. If you don't have one, ask Filip.
+      Paste your invite code below. If you don't have one, ask Filip — <a href="mailto:walczynskiflip@gmail.com" style="color:var(--ink); text-decoration:underline;">walczynskiflip@gmail.com</a>.
     </div>
     <input
       id="invite-code-input"
@@ -4092,7 +4092,7 @@ function showInviteCodeForm() {
   function applyMode() {
     if (mode === 'first') {
       headline.textContent = 'Beta access only.';
-      blurb.textContent = "Paste your invite code below. If you don't have one, ask Filip.";
+      blurb.innerHTML = 'Paste your invite code below. If you don\'t have one, ask Filip — <a href="mailto:walczynskiflip@gmail.com" style="color:var(--ink); text-decoration:underline;">walczynskiflip@gmail.com</a>.';
       btn.textContent = 'Redeem';
       toggle.textContent = 'Already had access? Recover.';
     } else {
