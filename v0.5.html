@@ -2787,7 +2787,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · guide card link (website/Linktree) menu item · build 2026-06-04-0958';
+const BUILD_VERSION = '0.6 · group chat managed per-session in My Sessions · build 2026-06-04-1004';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4293,6 +4293,16 @@ function renderSmList() {
     actions.className = 'sm-actions';
     actions.appendChild(smMakeBtn('Resume', 'primary', () => resumeSession(s.id)));
     actions.appendChild(smMakeBtn('Rename', '', () => { _smRenamingId = s.id; _smConfirmEndId = null; renderSmList(); }));
+    // Per-session group chat — open it (even after the session ended) or set/edit.
+    if (s.chat_url) {
+      actions.appendChild(smMakeBtn('Open chat', '', () => {
+        const u = normalizeChatUrl(s.chat_url);
+        if (u) window.open(u, '_blank', 'noopener,noreferrer');
+      }));
+      actions.appendChild(smMakeBtn('Edit chat', '', () => smChatEditor(s)));
+    } else {
+      actions.appendChild(smMakeBtn('Add chat', '', () => smChatEditor(s)));
+    }
     if (active) {
       if (_smConfirmEndId === s.id) {
         actions.appendChild(smMakeBtn('Tap to confirm', 'danger', async () => {
@@ -5098,12 +5108,33 @@ function normalizeChatUrl(raw) {
   return '';
 }
 
-async function setSessionChatUrl(url) {
+async function setSessionChatUrl(url, sessionId) {
   const token = getStoredGuideToken();
-  if (!token || !SESSION) return { error: 'Not in a session.' };
+  const sid = sessionId || (SESSION && SESSION.id);
+  if (!token || !sid) return { error: 'Not in a session.' };
   const { error } = await supabaseClient.rpc('set_session_chat_url',
-    { p_session_id: SESSION.id, p_guide_token: token, p_chat_url: url });
+    { p_session_id: sid, p_guide_token: token, p_chat_url: url });
   return error ? { error: error.message } : { ok: true };
+}
+
+// Per-session group-chat editor used from the My Sessions list (works on any
+// session the guide owns, active or ended).
+function smChatEditor(s) {
+  tbShowForm({
+    title: 'Group chat link',
+    fields: [{ key: 'url', label: 'WhatsApp / chat invite link', type: 'text', value: s.chat_url || '' }],
+    note: 'Per-session group chat. Passengers in this session get a "Group chat" button. Leave blank to remove.',
+    onSave: async (v, err) => {
+      const raw = (v.url || '').trim();
+      const norm = raw ? normalizeChatUrl(raw) : '';
+      if (raw && !norm) { err('Enter a valid http(s) link.'); return false; }
+      const r = await setSessionChatUrl(norm, s.id);
+      if (r.error) { err(r.error); return false; }
+      s.chat_url = norm || null;
+      if (SESSION && SESSION.id === s.id) { SESSION.chat_url = norm || null; refreshGroupChatButton(); }
+      tbCloseForm(); renderSmList(); return true;
+    },
+  });
 }
 
 // Per-guide card link (website / Linktree / contact).
@@ -7636,8 +7667,10 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   if (groupChatItem) {
     const gcLabel = document.getElementById('menu-group-chat-label');
     if (SESSION && ROLE === 'guide') {
-      groupChatItem.style.display = '';
-      if (gcLabel) gcLabel.textContent = (SESSION.chat_url) ? 'Group chat link · set' : 'Group chat link · add';
+      // Guides manage the per-session chat from My Sessions now (logged +
+      // reopenable). Hidden here so it doesn't read as a permanent setting
+      // sitting above "Your link".
+      groupChatItem.style.display = 'none';
     } else if (SESSION && SESSION.chat_url) {
       groupChatItem.style.display = '';
       if (gcLabel) gcLabel.textContent = 'Group chat';
