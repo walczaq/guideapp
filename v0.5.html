@@ -2791,7 +2791,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · /j short-invite path read app-side (SW-proof) · build 2026-06-04-1153';
+const BUILD_VERSION = '0.6 · invites = branded fieldnote.guide/j/<id> (QR + copy) · build 2026-06-04-1157';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -2819,6 +2819,13 @@ let _pushPromptShownThisLoad = false;
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiZmllbGRub3RlMSIsImEiOiJjbW9mbmhtZmcwMGI2MnNzZmpmOG95OTYyIn0.ZkANytVZy65-RZf4--aEzQ';
 const SUPABASE_URL = 'https://xgelrfdrdvrlltcsquqh.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_56-3xMMvHZFtw2LGKkcqew_09NhbiB0';
+
+// Canonical public origin for shareable invite links — always branded
+// (fieldnote.guide), regardless of which URL the guide actually opened the
+// app from. Invites use the short /j/<id> path (see the _redirects rule +
+// the /j path parsing in the boot router).
+const APP_ORIGIN = 'https://fieldnote.guide';
+function inviteUrlFor(sessionId) { return `${APP_ORIGIN}/j/${encodeURIComponent(sessionId)}`; }
 
 // (Tour selection now comes from the Start-session tour picker, which lists
 // the guide's tours via list_guide_tours — no hardcoded default tour.)
@@ -7015,7 +7022,7 @@ function mountGuideBottomSheet() {
             Share this link to start:
           </div>
           <div id="guide-share-link" style="margin-top:10px; padding:10px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:10px; word-break:break-all; user-select:all;">
-            ${SESSION ? `${window.location.origin}${window.location.pathname}?session=${SESSION.id}` : '—'}
+            ${SESSION ? inviteUrlFor(SESSION.id) : '—'}
           </div>
           <button
             id="guide-share-invite"
@@ -7853,7 +7860,7 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
 // (it doesn't currently, but cheap insurance).
 function openShareScreen() {
   if (!SESSION) return;
-  const url = `${window.location.origin}${window.location.pathname}?session=${SESSION.id}`;
+  const url = inviteUrlFor(SESSION.id);
 
   // Render URL text.
   const urlEl = document.getElementById('share-url');
