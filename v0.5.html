@@ -1758,7 +1758,7 @@
   .tb-pin-row { margin-left:14px; background:var(--paper-2); cursor:default; }
   .tb-rowtitle { font-family:'Fraunces',serif; font-weight:700; font-size:15px; color:var(--ink); display:flex; align-items:center; }
   .tb-stop-head { cursor:pointer; }
-  .tb-chev { flex:0 0 auto; width:13px; color:var(--rule); font-size:11px; }
+  .tb-chev { flex:0 0 auto; width:16px; color:var(--ink); font-size:13px; }
   .tb-rowname { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .tb-stop-meta { margin-top:3px; }
   .tb-rowbody { font-family:'Fraunces',serif; font-size:13px; color:#3a3a3a; margin-top:2px; line-height:1.35; }
@@ -2994,7 +2994,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Recovery: save-in-notes + help@fieldnote.guide fallback · build 2026-06-04-2230';
+const BUILD_VERSION = '0.6 · Duplicate stop (with pins) + clearer collapse chevron · build 2026-06-04-2305';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -5142,6 +5142,11 @@ async function tbDuplicateTour(id) {
   const { data, error } = await supabaseClient.rpc('duplicate_tour', { p_guide_token: token, p_tour_id: id });
   return error ? { error: error.message } : { ok: true, tour: data };
 }
+async function tbDuplicateStop(id) {
+  const token = getStoredGuideToken(); if (!token) return { error: 'Not signed in.' };
+  const { data, error } = await supabaseClient.rpc('duplicate_stop', { p_guide_token: token, p_stop_id: id });
+  return error ? { error: error.message } : { ok: true, id: data && data.id };
+}
 async function tbCreateStop(tourId, name, lng, lat, radius) {
   const token = getStoredGuideToken();
   const { data, error } = await supabaseClient.rpc('create_stop',
@@ -5771,6 +5776,16 @@ function renderTbEditorPanel() {
       acts.appendChild(smMakeBtn('＋ Spot', 'primary', (ev) => { ev.stopPropagation(); _tbSelStopId = s.id; renderTbMarkers(); renderTbEditorPanel(); tbArmPlace('pin', null, 'pin'); }));
       acts.appendChild(smMakeBtn('Edit', '', (ev) => { ev.stopPropagation(); tbEditStopForm(s); }));
       acts.appendChild(smMakeBtn('Move', '', (ev) => { ev.stopPropagation(); _tbSelStopId = s.id; tbArmPlace('move-stop', s.id); }));
+      acts.appendChild(smMakeBtn('Duplicate', '', async (ev) => {
+        ev.stopPropagation();
+        const btn = ev.currentTarget; btn.textContent = 'Duplicating…'; btn.disabled = true;
+        const r = await tbDuplicateStop(s.id);
+        if (r.error) { btn.textContent = 'Duplicate'; btn.disabled = false; console.warn('[tb] duplicate stop failed', r.error); return; }
+        const fresh = await tbLoadTourDetail(_tbTour.id);
+        if (fresh) _tbTour = fresh;
+        if (r.id) { _tbExpandedStops.add(r.id); _tbSelStopId = r.id; }   // open the copy
+        renderTbMarkers(); renderTbEditorPanel();
+      }));
       if (_tbStopDeleteConfirm === s.id) {
         acts.appendChild(smMakeBtn('Tap to confirm', 'danger', async (ev) => {
           ev.stopPropagation(); const r = await tbDeleteStop(s.id); _tbStopDeleteConfirm = null;
