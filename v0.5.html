@@ -2994,7 +2994,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Guide account screen (name/email/passkey) · build 2026-06-04-2205';
+const BUILD_VERSION = '0.6 · Passkey recovery via recovery code · build 2026-06-04-2222';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3095,6 +3095,20 @@ function nanoid16() {
     id += NANOID_ALPHABET[bytes[i] % NANOID_ALPHABET.length];
   }
   return id;
+}
+
+// Human-friendly recovery code: 3 groups of 4 from an unambiguous alphabet
+// (no 0/O/1/I/L), e.g. "K7Q3-M2WX-P9RT". Stored server-side only as a hash.
+function genRecoveryCode() {
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  let s = '';
+  for (let i = 0; i < 12; i++) {
+    s += A[bytes[i] % A.length];
+    if (i % 4 === 3 && i < 11) s += '-';
+  }
+  return s;
 }
 
 function getOrCreatePassengerId() {
@@ -3257,13 +3271,14 @@ async function recoverGuideAccess(code, name) {
 // Mirrors redeemInviteCode — client generates the device token, server stores it.
 async function registerGuideOpen(name, passkey, email) {
   const token = nanoid32();
+  const recoveryCode = genRecoveryCode();
   const { data, error } = await supabaseClient.rpc('register_guide_open', {
-    p_name: name.trim(), p_passkey: passkey, p_token: token, p_email: (email || '').trim(),
+    p_name: name.trim(), p_passkey: passkey, p_token: token, p_email: (email || '').trim(), p_recovery_code: recoveryCode,
   });
   if (error) throw new Error(error.message || 'Could not create your account');
   if (!data || data.length === 0) throw new Error('Unexpected response from server');
   storeGuideToken(token);
-  return { id: data[0].guide_id, name: data[0].guide_name };
+  return { id: data[0].guide_id, name: data[0].guide_name, recoveryCode };
 }
 
 // Log in (or hop to a new device) with name + passkey. Rotates the device token.
@@ -3296,6 +3311,29 @@ async function updateGuideAccount(name, email, passkey) {
   });
   if (error) throw new Error(error.message || 'Could not save');
   if (!data || data.length === 0) throw new Error('Unexpected response from server');
+  return { id: data[0].guide_id, name: data[0].guide_name };
+}
+
+// Generate + store a new recovery code for the logged-in guide; returns the
+// plaintext to show once.
+async function setRecoveryCode() {
+  const token = getStoredGuideToken();
+  if (!token) throw new Error('Not signed in as a guide.');
+  const code = genRecoveryCode();
+  const { error } = await supabaseClient.rpc('set_recovery_code', { p_guide_token: token, p_recovery_code: code });
+  if (error) throw new Error(error.message || 'Could not set recovery code');
+  return code;
+}
+
+// Reset a forgotten passkey with name + recovery code. Rotates the device token.
+async function resetPasskeyWithCode(name, code, newPasskey) {
+  const token = nanoid32();
+  const { data, error } = await supabaseClient.rpc('reset_passkey_with_code', {
+    p_name: name.trim(), p_recovery_code: code, p_new_passkey: newPasskey, p_new_token: token,
+  });
+  if (error) throw new Error(error.message || 'Could not reset passkey');
+  if (!data || data.length === 0) throw new Error('Unexpected response from server');
+  storeGuideToken(token);
   return { id: data[0].guide_id, name: data[0].guide_name };
 }
 
@@ -4205,6 +4243,30 @@ function showNameEntryGate() {
 // Edit-name form, accessible from burger menu. Independent overlay (NOT part
 // of the screen-stack system) — same z-index pattern as the name gate so it
 // sits cleanly above everything. Removed via el.remove() on save or back.
+// Show a freshly-issued recovery code once, with a save/copy prompt. onDone
+// runs when the guide confirms they've saved it.
+function showRecoveryCodeScreen(code, onDone) {
+  let el = document.getElementById('recovery-code-screen');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'recovery-code-screen';
+  el.style.cssText = 'position:absolute; inset:0; z-index:97; background:var(--paper); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:40px; text-align:center;';
+  el.innerHTML = `
+    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule);">Fieldnote · Recovery code</div>
+    <div style="font-family:'Fraunces',serif; font-style:italic; font-size:22px; color:var(--ink); max-width:300px; line-height:1.3;">Save your recovery code</div>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:280px; line-height:1.55;">This is the only way to reset a forgotten passkey. Write it down or screenshot it — it won't be shown again.</div>
+    <div id="rc-code" style="font-family:'JetBrains Mono',monospace; font-size:20px; letter-spacing:0.1em; font-weight:700; color:var(--ink); background:var(--paper-2); border:1px dashed var(--ink); border-radius:8px; padding:14px 18px;">${code}</div>
+    <button id="rc-copy" style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; padding:8px 14px; background:transparent; border:1px solid var(--rule); border-radius:6px; cursor:pointer;">Copy</button>
+    <button id="rc-done" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;">I've saved it — continue</button>
+  `;
+  document.getElementById('phone').appendChild(el);
+  document.getElementById('rc-copy').addEventListener('click', () => {
+    try { navigator.clipboard.writeText(code); } catch (_e) {}
+    const b = document.getElementById('rc-copy'); if (b) { b.textContent = 'Copied'; setTimeout(() => { if (b) b.textContent = 'Copy'; }, 1500); }
+  });
+  document.getElementById('rc-done').addEventListener('click', () => { el.remove(); if (onDone) onDone(); });
+}
+
 // Guide-only: edit your own name, email, and passkey. How EXISTING accounts add
 // the email that powers recovery/contact and set a passkey for name+passkey login.
 async function showGuideAccountForm() {
@@ -4235,6 +4297,10 @@ async function showGuideAccountForm() {
       <button id="ga-save" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; margin-top:6px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;">Save</button>
       <div id="ga-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
       <div id="ga-ok" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); min-height:1em;"></div>
+      <div style="height:1px; background:var(--rule-soft); margin:10px 0 4px;"></div>
+      <label style="${lbl}">Recovery code</label>
+      <div id="ga-recstatus" style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); line-height:1.5;"></div>
+      <button id="ga-recgen" type="button" style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; padding:10px 14px; background:transparent; border:1px solid var(--rule); border-radius:6px; cursor:pointer; align-self:flex-start;">Generate recovery code</button>
     </div>`;
   document.getElementById('phone').appendChild(el);
 
@@ -4245,7 +4311,24 @@ async function showGuideAccountForm() {
   const errorEl = document.getElementById('ga-error');
   const okEl = document.getElementById('ga-ok');
   const btn = document.getElementById('ga-save');
+  const recStatus = document.getElementById('ga-recstatus');
+  const recGen = document.getElementById('ga-recgen');
   document.getElementById('ga-back').addEventListener('click', () => el.remove());
+
+  recStatus.textContent = 'Lets you reset a forgotten passkey.';
+  recGen.addEventListener('click', async () => {
+    recGen.disabled = true; const old = recGen.textContent; recGen.textContent = 'Generating…';
+    try {
+      const code = await setRecoveryCode();
+      showRecoveryCodeScreen(code, () => {});
+      recStatus.textContent = 'A recovery code is set. Generating a new one replaces it.';
+      recGen.textContent = 'Replace recovery code';
+    } catch (err) {
+      recStatus.textContent = err.message || 'Could not generate a code.';
+      recGen.textContent = old;
+    }
+    recGen.disabled = false;
+  });
 
   nameI.value = (GUIDE && GUIDE.name) ? GUIDE.name : '';
   try {
@@ -4256,6 +4339,10 @@ async function showGuideAccountForm() {
       passNote.textContent = acct.has_passkey
         ? 'A passkey is set. Enter a new one only to change it.'
         : 'No passkey yet — set one to log in by name + passkey on another device.';
+      recStatus.textContent = acct.has_recovery
+        ? 'A recovery code is set. Generating a new one replaces it.'
+        : 'No recovery code yet — generate one to enable passkey reset.';
+      recGen.textContent = acct.has_recovery ? 'Replace recovery code' : 'Generate recovery code';
     }
   } catch (_e) {}
 
@@ -4431,6 +4518,7 @@ function showInviteCodeForm() {
     <div id="invite-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
     <a id="invite-toggle-a" href="#" style="${linkStyle}"></a>
     <a id="invite-toggle-b" href="#" style="${linkStyle} opacity:0.85;"></a>
+    <a id="invite-toggle-c" href="#" style="${linkStyle} opacity:0.85; display:none;"></a>
   `;
   document.getElementById('phone').appendChild(el);
 
@@ -4444,18 +4532,27 @@ function showInviteCodeForm() {
   const blurb     = document.getElementById('invite-blurb');
   const toggleA   = document.getElementById('invite-toggle-a');
   const toggleB   = document.getElementById('invite-toggle-b');
+  const toggleC   = document.getElementById('invite-toggle-c');
 
-  let mode = 'signup';   // signup | login | invite | recover
-  const usesPass = (m) => m === 'signup' || m === 'login';
+  let mode = 'signup';   // signup | login | invite | recover | reset
+  const focusFor = () => ((mode === 'invite' || mode === 'recover') ? codeInput : nameInput).focus();
 
   function applyMode() {
-    codeInput.style.display = usesPass(mode) ? 'none' : '';
-    emailInput.style.display = (mode === 'signup') ? '' : 'none';
-    passInput.style.display = usesPass(mode) ? '' : 'none';
-    passInput.autocomplete = (mode === 'signup') ? 'new-password' : 'current-password';
+    const showCode  = (mode === 'invite' || mode === 'recover' || mode === 'reset');
+    const showEmail = (mode === 'signup');
+    const showPass  = (mode === 'signup' || mode === 'login' || mode === 'reset');
+    codeInput.style.display  = showCode ? '' : 'none';
+    emailInput.style.display = showEmail ? '' : 'none';
+    passInput.style.display  = showPass ? '' : 'none';
+    codeInput.placeholder = (mode === 'reset') ? 'recovery code' : 'invite code';
+    passInput.placeholder = (mode === 'reset') ? 'new passkey' : 'passkey';
+    passInput.autocomplete = (mode === 'signup' || mode === 'reset') ? 'new-password' : 'current-password';
+    toggleB.style.display = (mode === 'reset') ? 'none' : '';
+    toggleC.style.display = (mode === 'login') ? '' : 'none';
+    toggleC.textContent = 'Forgot passkey?';
     if (mode === 'signup') {
       headline.textContent = 'Create your guide account';
-      blurb.textContent = 'Pick a name, your email, and a passkey. You sign in with name + passkey; the email is for recovery and contact.';
+      blurb.textContent = 'Pick a name, your email, and a passkey. You sign in with name + passkey; the email is for contact. You’ll get a recovery code to save.';
       btn.textContent = 'Create account';
       toggleA.textContent = 'Already have an account? Log in';
       toggleB.textContent = 'Have an invite code?';
@@ -4465,6 +4562,11 @@ function showInviteCodeForm() {
       btn.textContent = 'Log in';
       toggleA.textContent = 'New here? Create an account';
       toggleB.textContent = 'Have an invite code?';
+    } else if (mode === 'reset') {
+      headline.textContent = 'Reset your passkey';
+      blurb.textContent = 'Enter your name, your recovery code, and a new passkey.';
+      btn.textContent = 'Reset passkey';
+      toggleA.textContent = 'Back to log in';
     } else if (mode === 'invite') {
       headline.textContent = 'Redeem an invite';
       blurb.innerHTML = 'Paste your invite code and your name. No code? <a href="#" id="invite-nocode" style="color:var(--ink); text-decoration:underline;">Sign up instead</a>.';
@@ -4488,42 +4590,55 @@ function showInviteCodeForm() {
     mode = (mode === 'signup') ? 'login'
          : (mode === 'login') ? 'signup'
          : (mode === 'invite') ? 'recover'
-         : 'invite';
-    applyMode();
-    (usesPass(mode) ? nameInput : codeInput).focus();
+         : (mode === 'recover') ? 'invite'
+         : 'login';   // from reset → back to log in
+    applyMode(); focusFor();
   });
   toggleB.addEventListener('click', (e) => {
     e.preventDefault();
-    mode = usesPass(mode) ? 'invite' : 'signup';
-    applyMode();
-    (usesPass(mode) ? nameInput : codeInput).focus();
+    mode = (mode === 'invite' || mode === 'recover') ? 'signup' : 'invite';
+    applyMode(); focusFor();
+  });
+  toggleC.addEventListener('click', (e) => {
+    e.preventDefault();
+    mode = (mode === 'reset') ? 'login' : 'reset';
+    applyMode(); (mode === 'reset' ? nameInput : nameInput).focus();
   });
 
   async function trySubmit() {
     const code = (codeInput.value || '').trim();
     const name = (nameInput.value || '').trim();
+    const email = (emailInput.value || '').trim();
     const pass = passInput.value || '';
     errorEl.textContent = '';
-    if (usesPass(mode)) {
+    if (mode === 'signup') {
       if (!name) { nameInput.focus(); errorEl.textContent = 'Enter your name.'; return; }
-      if (mode === 'signup') {
-        const email = (emailInput.value || '').trim();
-        if (!email) { emailInput.focus(); errorEl.textContent = 'Enter your email.'; return; }
-        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { emailInput.focus(); errorEl.textContent = 'Enter a valid email.'; return; }
-      }
+      if (!email) { emailInput.focus(); errorEl.textContent = 'Enter your email.'; return; }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { emailInput.focus(); errorEl.textContent = 'Enter a valid email.'; return; }
+      if (pass.length < 4) { passInput.focus(); errorEl.textContent = 'Passkey must be at least 4 characters.'; return; }
+    } else if (mode === 'login') {
+      if (!name) { nameInput.focus(); errorEl.textContent = 'Enter your name.'; return; }
       if (!pass) { passInput.focus(); errorEl.textContent = 'Enter a passkey.'; return; }
-      if (mode === 'signup' && pass.length < 4) { passInput.focus(); errorEl.textContent = 'Passkey must be at least 4 characters.'; return; }
+    } else if (mode === 'reset') {
+      if (!name) { nameInput.focus(); errorEl.textContent = 'Enter your name.'; return; }
+      if (!code) { codeInput.focus(); errorEl.textContent = 'Enter your recovery code.'; return; }
+      if (pass.length < 4) { passInput.focus(); errorEl.textContent = 'New passkey must be at least 4 characters.'; return; }
     } else {
       if (!code) { codeInput.focus(); errorEl.textContent = 'Enter your invite code.'; return; }
       if (!name) { nameInput.focus(); errorEl.textContent = 'Enter your name.'; return; }
     }
 
     btn.disabled = true;
-    const busy = { signup: 'Creating…', login: 'Signing in…', invite: 'Redeeming…', recover: 'Recovering…' };
+    const busy = { signup: 'Creating…', login: 'Signing in…', invite: 'Redeeming…', recover: 'Recovering…', reset: 'Resetting…' };
     btn.textContent = busy[mode];
     try {
-      if (mode === 'signup')      await registerGuideOpen(name, pass, (emailInput.value || '').trim());
-      else if (mode === 'login')  await loginGuide(name, pass);
+      if (mode === 'signup') {
+        const res = await registerGuideOpen(name, pass, email);
+        showRecoveryCodeScreen(res.recoveryCode, () => window.location.reload());
+        return;   // recovery-code screen drives the reload
+      }
+      if (mode === 'login')       await loginGuide(name, pass);
+      else if (mode === 'reset')  await resetPasskeyWithCode(name, code, pass);
       else if (mode === 'invite') await redeemInviteCode(code, name);
       else                        await recoverGuideAccess(code, name);
       window.location.reload();   // boot() picks up the new token
