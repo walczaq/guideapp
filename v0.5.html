@@ -1639,20 +1639,23 @@
   .tb-actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
   .tb-footer { padding:14px 16px calc(16px + env(safe-area-inset-bottom,0px)); border-top:1px solid var(--rule-soft); }
 
-  /* Editor: map on top, scrollable panel below */
-  .tb-map { flex: 0 0 calc(46% + 60px); position: relative; }
+  /* Editor: map on top, draggable list panel below. The map fills whatever the
+     panel leaves; the panel's height is driven by --tb-panel-h, set by dragging
+     the handle bar. */
+  .tb-map { flex: 1 1 auto; position: relative; min-height: 120px; }
   .tb-map .mapboxgl-ctrl-bottom-left, .tb-map .mapboxgl-ctrl-top-right { display:none !important; }
-  .tb-panel { flex: 1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 16px calc(16px + env(safe-area-inset-bottom,0px)); }
-  /* Roll the list panel up (full-map) / down. Toggle bar sits between map + list. */
+  .tb-panel { flex: 0 0 var(--tb-panel-h, 46%); overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 16px calc(16px + env(safe-area-inset-bottom,0px)); }
+  /* Drag handle between map + list: swipe up/down to show/hide, hold-drag to
+     set the list height. */
   .tb-panel-toggle {
     flex: 0 0 auto; display: flex; align-items: center; justify-content: center; gap: 10px;
-    padding: 7px 12px; background: var(--paper); cursor: pointer;
+    padding: 9px 12px; background: var(--paper); cursor: ns-resize;
     border: none; border-top: 1px solid var(--rule-soft); border-bottom: 1px solid var(--rule-soft);
     font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--rule);
+    touch-action: none; user-select: none; -webkit-user-select: none;
   }
-  .tb-panel-grip { display: inline-block; width: 34px; height: 4px; border-radius: 2px; background: var(--rule); opacity: 0.55; }
-  .tb-editor.panel-up .tb-map { flex: 1 1 auto; }
-  .tb-editor.panel-up .tb-panel { display: none; }
+  .tb-panel-grip { display: inline-block; width: 40px; height: 5px; border-radius: 3px; background: var(--rule); opacity: 0.55; }
+  .tb-editor.panel-collapsed .tb-panel { display: none; }
   .tb-section-label { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); margin:10px 0 8px; }
   .tb-stop-row, .tb-pin-row {
     border:1px solid var(--rule); border-radius:8px; padding:10px 12px; margin-bottom:8px; background:var(--paper); cursor:pointer;
@@ -2872,7 +2875,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Fix builder map token (set accessToken globally) · build 2026-06-04-2004';
+const BUILD_VERSION = '0.6 · Builder list panel: swipe to show/hide + drag-to-resize · build 2026-06-04-2013';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4759,19 +4762,14 @@ async function openTourEditor(tourId) {
       <div class="tb-place-banner" id="tb-place-banner"><span id="tb-place-text">Tap the map</span><button type="button" class="tb-place-cancel" id="tb-place-cancel">Cancel</button></div>
       <div class="tb-zoom" id="tb-zoom">z —</div>
     </div>
-    <button class="tb-panel-toggle" id="tb-panel-toggle" type="button" aria-label="Roll the list up or down"><span class="tb-panel-grip"></span><span id="tb-panel-toggle-label">Hide list</span></button>
+    <div class="tb-panel-toggle" id="tb-panel-toggle" role="separator" aria-label="Drag to resize the list; swipe up or down to show or hide it"><span class="tb-panel-grip"></span><span id="tb-panel-toggle-label">Drag to resize · swipe down to hide</span></div>
     <div class="tb-panel" id="tb-panel"></div>`;
   document.getElementById('phone').appendChild(el);
   document.getElementById('tb-ed-back').addEventListener('click', tbCloseEditor);
   document.getElementById('tb-place-cancel').addEventListener('click', tbCancelPlace);
   document.getElementById('tb-add-btn').addEventListener('click', (ev) => { ev.stopPropagation(); tbToggleAddMenu(); });
-  // Roll the list panel up (full-map) / down (list).
-  document.getElementById('tb-panel-toggle').addEventListener('click', () => {
-    const up = el.classList.toggle('panel-up');
-    const lbl = document.getElementById('tb-panel-toggle-label');
-    if (lbl) lbl.textContent = up ? 'Show list' : 'Hide list';
-    if (_tbEditorMap) setTimeout(() => { try { _tbEditorMap.resize(); } catch (_e) {} }, 260);
-  });
+  // List panel: drag the handle to set its height, swipe up/down to show/hide.
+  tbWirePanelDrag(el);
   tbBuildAddMenu();
 
   // Dedicated editor map — framed on the tour's stops (+pins) if any,
@@ -4828,6 +4826,92 @@ async function openTourEditor(tourId) {
   }
 
   renderTbEditorPanel();
+}
+
+// Make the handle bar between the map and the list a draggable edge:
+//   • hold + drag        → set the list height live (map fills the rest)
+//   • flick up / down    → snap the list open / hidden (full map)
+//   • plain tap          → nothing (toggle is swipe-only, by request)
+// Pointer Events so one path covers touch + mouse. Heights are written to the
+// editor's --tb-panel-h var; collapse adds .panel-collapsed (list display:none,
+// handle stays so it can be pulled back up).
+function tbWirePanelDrag(editorEl) {
+  const handle = document.getElementById('tb-panel-toggle');
+  const panel  = document.getElementById('tb-panel');
+  const label  = document.getElementById('tb-panel-toggle-label');
+  if (!handle || !panel) return;
+
+  const MIN_MAP     = 160;   // px of map always kept visible
+  const COLLAPSE_AT = 64;    // release below this list height → fully hidden
+  const FLICK       = 0.5;   // px/ms — above this counts as a swipe
+  let lastExpandedH = 0;     // remembered height to restore on swipe-up
+
+  const editorH   = () => editorEl.clientHeight || window.innerHeight;
+  const maxPanelH = () => Math.max(120, editorH() - MIN_MAP);
+  const panelH    = () => panel.getBoundingClientRect().height;
+
+  function applyH(h) {
+    h = Math.max(0, Math.min(h, maxPanelH()));
+    editorEl.style.setProperty('--tb-panel-h', h + 'px');
+    return h;
+  }
+  function setLabel(collapsed) {
+    if (label) label.textContent = collapsed ? 'Swipe up to show list' : 'Drag to resize · swipe down to hide';
+  }
+  let _rz = null;
+  function resizeMapSoon() {
+    if (!_tbEditorMap) return;
+    if (_rz) cancelAnimationFrame(_rz);
+    _rz = requestAnimationFrame(() => { try { _tbEditorMap.resize(); } catch (_e) {} });
+  }
+  function collapse() { editorEl.classList.add('panel-collapsed'); setLabel(true); resizeMapSoon(); }
+  function expand(h)  {
+    editorEl.classList.remove('panel-collapsed');
+    lastExpandedH = applyH(h || lastExpandedH || Math.round(editorH() * 0.5));
+    setLabel(false); resizeMapSoon();
+  }
+
+  let dragging = false, moved = false, startY = 0, startH = 0, lastY = 0, lastT = 0, vy = 0;
+
+  handle.addEventListener('pointerdown', (e) => {
+    dragging = true; moved = false; vy = 0;
+    startY = e.clientY; lastY = e.clientY; lastT = e.timeStamp;
+    if (editorEl.classList.contains('panel-collapsed')) {
+      // start from a hidden list and grow it as the finger pulls up
+      editorEl.classList.remove('panel-collapsed');
+      startH = applyH(0);
+    } else {
+      startH = panelH();
+    }
+    try { handle.setPointerCapture(e.pointerId); } catch (_e) {}
+    e.preventDefault();
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dy = e.clientY - startY;
+    if (Math.abs(dy) > 3) moved = true;
+    applyH(startH - dy);                    // drag up (dy<0) → taller list
+    const dt = e.timeStamp - lastT;
+    if (dt > 0) vy = (e.clientY - lastY) / dt;   // +down / -up, px per ms
+    lastY = e.clientY; lastT = e.timeStamp;
+    resizeMapSoon();
+    e.preventDefault();
+  });
+  function endDrag(e) {
+    if (!dragging) return;
+    dragging = false;
+    try { handle.releasePointerCapture(e.pointerId); } catch (_e) {}
+    if (!moved) {                           // a tap, not a swipe → leave as-is
+      if (panelH() < COLLAPSE_AT) collapse();
+      return;
+    }
+    if (vy < -FLICK) { expand(Math.round(editorH() * 0.6)); return; }  // flick up → show
+    if (vy >  FLICK) { collapse(); return; }                          // flick down → hide
+    const h = panelH();                     // slow drag → keep set height
+    if (h < COLLAPSE_AT) collapse(); else expand(h);
+  }
+  handle.addEventListener('pointerup', endDrag);
+  handle.addEventListener('pointercancel', endDrag);
 }
 
 function tbCloseEditor() {
