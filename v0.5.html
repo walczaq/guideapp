@@ -349,6 +349,17 @@
     font-variation-settings: "opsz" 90;
   }
   .screen-title em { font-style: italic; color: var(--mark); }
+  /* Fieldnote brand mark — used on the landing/login screens + burger menu.
+     Rounded tile + soft shadow so the beige icon reads on the cream page
+     (and pops on the dark page in dark mode). */
+  .brand-logo {
+    width: 72px; height: 72px; border-radius: 18px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.16);
+    display: block; flex-shrink: 0;
+  }
+  .menu-brand { display: flex; align-items: center; gap: 12px; padding: 16px 20px 6px; }
+  .menu-brand .brand-logo { width: 46px; height: 46px; border-radius: 12px; }
+  .menu-brand-name { font-family: 'Fraunces', serif; font-weight: 700; font-size: 20px; color: var(--ink); }
   .screen-body {
     flex: 1; overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -2316,6 +2327,10 @@
       <div class="screen-title">Menu</div>
     </div>
     <div class="screen-body">
+      <div class="menu-brand">
+        <img class="brand-logo" src="/icon.svg" alt="Fieldnote" />
+        <span class="menu-brand-name">Fieldnote</span>
+      </div>
       <!-- Live session info: guide name, active stop, current warnings.
            Populated each time the menu opens by renderMenuSessionInfo(). -->
       <div class="menu-session-info" id="menu-session-info">
@@ -2761,7 +2776,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · rebranded icons (favicon/PWA) + push badge silhouette · build 2026-06-04-0934';
+const BUILD_VERSION = '0.6 · Fieldnote logo on landing/login + burger menu · build 2026-06-04-0940';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3556,6 +3571,7 @@ function showLandingScreen() {
     'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
     'gap:20px; padding:40px; text-align:center;';
   el.innerHTML = `
+    <img class="brand-logo" src="/icon.svg" alt="Fieldnote" />
     <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
       Fieldnote
     </div>
@@ -4008,6 +4024,7 @@ function showInviteCodeForm() {
     'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
     'gap:18px; padding:40px; text-align:center;';
   el.innerHTML = `
+    <img class="brand-logo" src="/icon.svg" alt="Fieldnote" />
     <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
       Fieldnote · Guide access
     </div>
