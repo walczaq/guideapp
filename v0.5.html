@@ -2809,7 +2809,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · builder: route vs amenities groups; clean reorder · build 2026-06-04-1637';
+const BUILD_VERSION = '0.6 · builder: trigger-area on highlight + ＋Spot/＋Extra · build 2026-06-04-1645';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4625,6 +4625,7 @@ let _tbEditorMap = null;
 let _tbTour = null;             // full detail {id,...,stops:[{...,pins:[]}]}
 let _tbSelStopId = null;
 let _tbHi = null;               // highlighted marker {kind:'stop'|'pin', id} — tap a map marker to locate it in the list
+let _tbInsertAfter = null;      // pin id: a new pin should be inserted right after it (the spot-tile "+ Extra")
 let _tbPlace = null;            // {kind:'stop'|'pin'|'move-stop'|'move-pin', id?}
 let _tbStopMarkers = [];
 let _tbPinMarkers = [];
@@ -4762,6 +4763,12 @@ function tbEnsureZoneLayers() {
     m.addLayer({ id: 'tb-zones-fill', type: 'fill', source: 'tb-zones', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.16 } });
     m.addLayer({ id: 'tb-zones-line', type: 'line', source: 'tb-zones', paint: { 'line-color': ['get', 'color'], 'line-width': 2, 'line-dasharray': [2, 1.5] } });
   }
+  // Trigger/activation radius of the currently-highlighted stop or pin.
+  if (!m.getSource('tb-hi')) {
+    m.addSource('tb-hi', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    m.addLayer({ id: 'tb-hi-fill', type: 'fill', source: 'tb-hi', paint: { 'fill-color': '#2563eb', 'fill-opacity': 0.1 } });
+    m.addLayer({ id: 'tb-hi-line', type: 'line', source: 'tb-hi', paint: { 'line-color': '#2563eb', 'line-width': 2, 'line-dasharray': [2, 2] } });
+  }
   return true;
 }
 
@@ -4785,6 +4792,21 @@ function renderTbMarkers() {
     }
     const src = _tbEditorMap.getSource('tb-zones');
     if (src) src.setData({ type: 'FeatureCollection', features: feats });
+
+    // Trigger/activation-area border of whatever marker is highlighted.
+    const hiFeats = [];
+    if (_tbHi) {
+      if (_tbHi.kind === 'stop') {
+        const st = (_tbTour.stops || []).find(x => x.id === _tbHi.id);
+        if (st) hiFeats.push(circlePolygon(st.lng, st.lat, st.activation_radius_m || 100));
+      } else {
+        const sst = tbSelStop();
+        const p = sst && (sst.pins || []).find(x => x.id === _tbHi.id);
+        if (p) hiFeats.push(circlePolygon(p.lng, p.lat, p.trigger_radius_m || 25));
+      }
+    }
+    const hiSrc = _tbEditorMap.getSource('tb-hi');
+    if (hiSrc) hiSrc.setData({ type: 'FeatureCollection', features: hiFeats });
   }
 
   for (const s of (_tbTour.stops || [])) {
@@ -4875,6 +4897,7 @@ function renderTbEditorPanel() {
     const sIdx = (_tbTour.stops || []).indexOf(s);
     if (sIdx > 0) acts.appendChild(smMakeBtn('↑', '', (ev) => { ev.stopPropagation(); tbMoveStop(s, -1); }));
     if (sIdx < (_tbTour.stops || []).length - 1) acts.appendChild(smMakeBtn('↓', '', (ev) => { ev.stopPropagation(); tbMoveStop(s, +1); }));
+    acts.appendChild(smMakeBtn('＋ Spot', 'primary', (ev) => { ev.stopPropagation(); _tbSelStopId = s.id; renderTbMarkers(); renderTbEditorPanel(); tbArmPlace('pin', null, 'pin'); }));
     acts.appendChild(smMakeBtn('Edit', '', (ev) => { ev.stopPropagation(); tbEditStopForm(s); }));
     acts.appendChild(smMakeBtn('Move', '', (ev) => { ev.stopPropagation(); _tbSelStopId = s.id; tbArmPlace('move-stop', s.id); }));
     if (_tbStopDeleteConfirm === s.id) {
@@ -4940,6 +4963,8 @@ function tbAppendPinRow(panel, s, p, seqList, seqLabels) {
     const idx = seqList.findIndex(x => x.id === p.id);
     if (idx > 0) pa.appendChild(smMakeBtn('↑', '', () => tbMovePin(s, p, -1)));
     if (idx < seqList.length - 1) pa.appendChild(smMakeBtn('↓', '', () => tbMovePin(s, p, +1)));
+    // "+ Extra" — add a side quest (extra spot) right after this one.
+    pa.appendChild(smMakeBtn('＋ Extra', '', () => { tbArmPlace('pin', null, 'side'); _tbInsertAfter = p.id; }));
   }
   pa.appendChild(smMakeBtn('Edit', '', () => tbEditPinForm(p)));
   pa.appendChild(smMakeBtn('Move', '', () => tbArmPlace('move-pin', p.id)));
@@ -4983,8 +5008,24 @@ function tbCloseAddMenu() {
   if (menu) menu.classList.remove('show');
 }
 
+// Insert a just-created pin right after `afterId` in the walking sequence,
+// then regroup [sequence…, amenities/zones], renumber and persist.
+function tbInsertPinAfter(stop, newPin, afterId) {
+  const arr = stop.pins || [];
+  const i = arr.indexOf(newPin);
+  if (i >= 0) arr.splice(i, 1);
+  const ai = arr.findIndex(x => x.id === afterId);
+  if (ai >= 0) arr.splice(ai + 1, 0, newPin); else arr.push(newPin);
+  const seqA = arr.filter(x => isSequencedCat(x.category));
+  const othA = arr.filter(x => !isSequencedCat(x.category));
+  stop.pins = seqA.concat(othA);
+  stop.pins.forEach((x, idx) => { x.ordinal = idx + 1; });
+  tbReorderPins(stop.id, stop.pins.map(x => x.id)).then(r => { if (r && r.error) console.warn('[tb] insert reorder failed', r.error); });
+}
+
 function tbArmPlace(kind, id, category) {
   tbCloseAddMenu();
+  _tbInsertAfter = null;   // cleared by default; the spot-tile "+ Extra" sets it after calling this
   // Typed pins need a stop to live under (stops are the container).
   if (kind === 'pin' && !tbSelStop()) {
     const banner = document.getElementById('tb-place-banner');
@@ -5062,6 +5103,7 @@ async function tbOnMapClick(e) {
         const r = await tbCreatePin(stop.id, b.title, b.body, lng, lat, b.radius, cat.key);
         if (r.error) { err(r.error); return false; }
         stop.pins.push(r.row);
+        if (_tbInsertAfter != null) { tbInsertPinAfter(stop, r.row, _tbInsertAfter); _tbInsertAfter = null; }
         tbCloseForm(); renderTbMarkers(); renderTbEditorPanel(); return true;
       },
     });
