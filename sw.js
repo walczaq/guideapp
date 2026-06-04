@@ -19,7 +19,7 @@
 // /sw.js itself is served no-cache (see /_headers), so SW updates propagate
 // on next app open; bumping SHELL_CACHE purges the old shell on activate.
 
-const SHELL_CACHE = 'fieldnote-shell-v2';
+const SHELL_CACHE = 'fieldnote-shell-v3';   // bumped: rebranded icons + new push badge
 
 // Same-origin shell assets — these MUST cache for the app to boot offline.
 const SHELL_URLS = [
