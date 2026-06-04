@@ -1714,13 +1714,21 @@
   /* Collapsed = animate to zero height (not display:none) so it slides shut.
      The handle bar stays, so the list can be pulled back up. */
   .tb-editor.panel-collapsed .tb-panel { flex-basis: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; }
-  .tb-section-label { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); margin:10px 0 8px; }
+  .tb-section-label { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); margin:8px 0 6px; }
+  /* Compact "Stops (N)" header row with an inline Rename. */
+  .tb-list-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:2px 0 8px; }
+  .tb-mini { padding:5px 10px !important; font-size:9px !important; }
   .tb-stop-row, .tb-pin-row {
-    border:1px solid var(--rule); border-radius:8px; padding:10px 12px; margin-bottom:8px; background:var(--paper); cursor:pointer;
+    border:1px solid var(--rule); border-radius:8px; padding:8px 10px; margin-bottom:6px; background:var(--paper); cursor:pointer;
   }
-  .tb-stop-row.selected { border-color:var(--ink); box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+  .tb-stop-row.selected { border-color:var(--ink); }
+  .tb-stop-row.open { box-shadow:0 2px 8px rgba(0,0,0,0.08); }
   .tb-pin-row { margin-left:14px; background:var(--paper-2); cursor:default; }
-  .tb-rowtitle { font-family:'Fraunces',serif; font-weight:700; font-size:15px; color:var(--ink); }
+  .tb-rowtitle { font-family:'Fraunces',serif; font-weight:700; font-size:15px; color:var(--ink); display:flex; align-items:center; }
+  .tb-stop-head { cursor:pointer; }
+  .tb-chev { flex:0 0 auto; width:13px; color:var(--rule); font-size:11px; }
+  .tb-rowname { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tb-stop-meta { margin-top:3px; }
   .tb-rowbody { font-family:'Fraunces',serif; font-size:13px; color:#3a3a3a; margin-top:2px; line-height:1.35; }
   .tb-num {
     display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%;
@@ -2944,7 +2952,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Guides-only community chat room · build 2026-06-04-2047';
+const BUILD_VERSION = '0.6 · Collapsible stops + compact builder list · build 2026-06-04-2058';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4908,6 +4916,7 @@ function tbNewTourFlow() {
 let _tbEditorMap = null;
 let _tbTour = null;             // full detail {id,...,stops:[{...,pins:[]}]}
 let _tbSelStopId = null;
+let _tbExpandedStops = new Set();   // stop ids whose pins + actions are shown (collapsed = compact)
 let _tbHi = null;               // highlighted marker {kind:'stop'|'pin', id} — tap a map marker to locate it in the list
 let _tbInsertAfter = null;      // pin id: a new pin should be inserted right after it (the spot-tile "+ Extra")
 let _tbPlace = null;            // {kind:'stop'|'pin'|'move-stop'|'move-pin', id?}
@@ -4939,6 +4948,7 @@ async function openTourEditor(tourId) {
   _tbTour = await tbLoadTourDetail(tourId);
   if (!_tbTour) { showTourManager(); return; }
   _tbSelStopId = _tbTour.stops && _tbTour.stops[0] ? _tbTour.stops[0].id : null;
+  _tbExpandedStops = new Set(_tbSelStopId ? [_tbSelStopId] : []);   // first stop open, rest collapsed
   _tbPlace = null; _tbStopDeleteConfirm = null; _tbPinDeleteConfirm = null; _tbHi = null;
 
   let el = document.getElementById('tour-editor');
@@ -5268,6 +5278,19 @@ function tbMarkerClick(kind, id) {
   }
 }
 
+// Collapse/expand a stop. Expanding reveals its actions + pins and makes it the
+// active stop (so +Spot / map-taps target it); collapsing keeps it compact.
+function tbToggleStop(id) {
+  if (_tbExpandedStops.has(id)) {
+    _tbExpandedStops.delete(id);
+  } else {
+    _tbExpandedStops.add(id);
+    _tbSelStopId = id;
+  }
+  renderTbMarkers();
+  renderTbEditorPanel();
+}
+
 function renderTbEditorPanel() {
   const panel = document.getElementById('tb-panel');
   const titleEl = document.getElementById('tb-ed-title');
@@ -5275,9 +5298,13 @@ function renderTbEditorPanel() {
   if (!panel) return;
   panel.innerHTML = '';
 
-  // Tour-level actions.
-  const top = document.createElement('div'); top.className = 'tb-actions';
-  top.appendChild(smMakeBtn('Rename tour', '', () => tbShowForm({
+  // Compact header: "Stops (N) · path" on the left, a small Rename on the right.
+  const hdr = document.createElement('div'); hdr.className = 'tb-list-head';
+  const sl = document.createElement('div'); sl.className = 'tb-section-label'; sl.style.margin = '0';
+  const nStops = (_tbTour.stops || []).length;
+  sl.textContent = `Stops (${nStops})` + (nStops > 1 ? ` · ${tbFmtDist(tbTotalPathMeters())}` : '');
+  hdr.appendChild(sl);
+  const ren = smMakeBtn('Rename', '', () => tbShowForm({
     title: 'Rename tour',
     fields: [{ key: 'name', label: 'Tour name', type: 'text', value: _tbTour.name || '' }],
     onSave: async (v, err) => {
@@ -5287,53 +5314,60 @@ function renderTbEditorPanel() {
       if (error) { err(error.message); return false; }
       _tbTour.name = v.name.trim(); tbCloseForm(); renderTbEditorPanel(); return true;
     },
-  })));
-  panel.appendChild(top);
+  }));
+  ren.classList.add('tb-mini');
+  hdr.appendChild(ren);
+  panel.appendChild(hdr);
 
-  // Stops.
-  const sl = document.createElement('div'); sl.className = 'tb-section-label';
-  const nStops = (_tbTour.stops || []).length;
-  sl.textContent = `Stops (${nStops})` + (nStops > 1 ? ` · ${tbFmtDist(tbTotalPathMeters())} total path` : '');
-  panel.appendChild(sl);
   if (!(_tbTour.stops || []).length) {
     const e = document.createElement('div'); e.className = 'tb-empty'; e.style.padding = '12px'; e.textContent = 'No stops yet — add one.'; panel.appendChild(e);
   }
   for (const s of (_tbTour.stops || [])) {
+    const expanded = _tbExpandedStops.has(s.id);
     const row = document.createElement('div');
     const stopRowHi = _tbHi && _tbHi.kind === 'stop' && _tbHi.id === s.id;
-    row.className = 'tb-stop-row' + (s.id === _tbSelStopId ? ' selected' : '') + (stopRowHi ? ' hi' : '');
+    row.className = 'tb-stop-row' + (s.id === _tbSelStopId ? ' selected' : '') + (stopRowHi ? ' hi' : '') + (expanded ? ' open' : '');
     if (stopRowHi) row.id = 'tb-hi-row';
-    row.addEventListener('click', () => { _tbSelStopId = s.id; renderTbMarkers(); renderTbEditorPanel(); });
+
+    // Clickable header toggles collapse/expand (and selects the stop on expand).
+    const head = document.createElement('div'); head.className = 'tb-stop-head';
+    head.addEventListener('click', () => tbToggleStop(s.id));
     const title = document.createElement('div'); title.className = 'tb-rowtitle';
-    title.innerHTML = `<span class="tb-num">${s.ordinal}</span>${(s.name || '').replace(/</g, '&lt;')}`;
-    row.appendChild(title);
-    const meta = document.createElement('div'); meta.className = 'tb-row-meta';
-    meta.textContent = `${(s.pins || []).length} pin${(s.pins || []).length === 1 ? '' : 's'} · ${s.activation_radius_m} m radius`;
-    row.appendChild(meta);
-    const acts = document.createElement('div'); acts.className = 'tb-actions';
-    const sIdx = (_tbTour.stops || []).indexOf(s);
-    if (sIdx > 0) acts.appendChild(smMakeBtn('↑', '', (ev) => { ev.stopPropagation(); tbMoveStop(s, -1); }));
-    if (sIdx < (_tbTour.stops || []).length - 1) acts.appendChild(smMakeBtn('↓', '', (ev) => { ev.stopPropagation(); tbMoveStop(s, +1); }));
-    acts.appendChild(smMakeBtn('＋ Spot', 'primary', (ev) => { ev.stopPropagation(); _tbSelStopId = s.id; renderTbMarkers(); renderTbEditorPanel(); tbArmPlace('pin', null, 'pin'); }));
-    acts.appendChild(smMakeBtn('Edit', '', (ev) => { ev.stopPropagation(); tbEditStopForm(s); }));
-    acts.appendChild(smMakeBtn('Move', '', (ev) => { ev.stopPropagation(); _tbSelStopId = s.id; tbArmPlace('move-stop', s.id); }));
-    if (_tbStopDeleteConfirm === s.id) {
-      acts.appendChild(smMakeBtn('Tap to confirm', 'danger', async (ev) => {
-        ev.stopPropagation(); const r = await tbDeleteStop(s.id); _tbStopDeleteConfirm = null;
-        if (!r.error) { _tbTour.stops = _tbTour.stops.filter(x => x.id !== s.id); if (_tbSelStopId === s.id) _tbSelStopId = _tbTour.stops[0] ? _tbTour.stops[0].id : null; }
-        renderTbMarkers(); renderTbEditorPanel();
-      }));
-    } else {
-      acts.appendChild(smMakeBtn('Delete', 'danger', (ev) => { ev.stopPropagation(); _tbStopDeleteConfirm = s.id; renderTbEditorPanel(); }));
+    title.innerHTML = `<span class="tb-chev">${expanded ? '▾' : '▸'}</span><span class="tb-num">${s.ordinal}</span><span class="tb-rowname">${(s.name || '').replace(/</g, '&lt;')}</span>`;
+    head.appendChild(title);
+    const npins = (s.pins || []).length;
+    const meta = document.createElement('div'); meta.className = 'tb-row-meta tb-stop-meta';
+    meta.textContent = `${npins} pin${npins === 1 ? '' : 's'} · ${s.activation_radius_m} m`;
+    head.appendChild(meta);
+    row.appendChild(head);
+
+    // Actions + pins only when expanded — collapsed stops stay compact.
+    if (expanded) {
+      const acts = document.createElement('div'); acts.className = 'tb-actions';
+      const sIdx = (_tbTour.stops || []).indexOf(s);
+      if (sIdx > 0) acts.appendChild(smMakeBtn('↑', '', (ev) => { ev.stopPropagation(); tbMoveStop(s, -1); }));
+      if (sIdx < (_tbTour.stops || []).length - 1) acts.appendChild(smMakeBtn('↓', '', (ev) => { ev.stopPropagation(); tbMoveStop(s, +1); }));
+      acts.appendChild(smMakeBtn('＋ Spot', 'primary', (ev) => { ev.stopPropagation(); _tbSelStopId = s.id; renderTbMarkers(); renderTbEditorPanel(); tbArmPlace('pin', null, 'pin'); }));
+      acts.appendChild(smMakeBtn('Edit', '', (ev) => { ev.stopPropagation(); tbEditStopForm(s); }));
+      acts.appendChild(smMakeBtn('Move', '', (ev) => { ev.stopPropagation(); _tbSelStopId = s.id; tbArmPlace('move-stop', s.id); }));
+      if (_tbStopDeleteConfirm === s.id) {
+        acts.appendChild(smMakeBtn('Tap to confirm', 'danger', async (ev) => {
+          ev.stopPropagation(); const r = await tbDeleteStop(s.id); _tbStopDeleteConfirm = null;
+          if (!r.error) { _tbTour.stops = _tbTour.stops.filter(x => x.id !== s.id); _tbExpandedStops.delete(s.id); if (_tbSelStopId === s.id) _tbSelStopId = _tbTour.stops[0] ? _tbTour.stops[0].id : null; }
+          renderTbMarkers(); renderTbEditorPanel();
+        }));
+      } else {
+        acts.appendChild(smMakeBtn('Delete', 'danger', (ev) => { ev.stopPropagation(); _tbStopDeleteConfirm = s.id; renderTbEditorPanel(); }));
+      }
+      row.appendChild(acts);
     }
-    row.appendChild(acts);
     panel.appendChild(row);
 
-    // Pins of the selected stop, GROUPED: the walking route (route pins + side
+    // Pins of the expanded stop, GROUPED: the walking route (route pins + side
     // quests, ordered) first, then amenities & zones in their own section.
     // Keeps route reordering from disturbing amenities, and new markers land
     // in the right group.
-    if (s.id === _tbSelStopId) {
+    if (expanded) {
       const allP = s.pins || [];
       const seq = allP.filter(x => isSequencedCat(x.category)).slice().sort((a, b) => a.ordinal - b.ordinal);
       const others = allP.filter(x => !isSequencedCat(x.category)).slice().sort((a, b) => a.ordinal - b.ordinal);
