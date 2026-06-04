@@ -1644,7 +1644,10 @@
      the handle bar. */
   .tb-map { flex: 1 1 auto; position: relative; min-height: 120px; }
   .tb-map .mapboxgl-ctrl-bottom-left, .tb-map .mapboxgl-ctrl-top-right { display:none !important; }
-  .tb-panel { flex: 0 0 var(--tb-panel-h, 46%); overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 16px calc(16px + env(safe-area-inset-bottom,0px)); }
+  .tb-panel { flex: 0 0 var(--tb-panel-h, 46%); overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 16px calc(16px + env(safe-area-inset-bottom,0px)); transition: flex-basis 200ms ease, padding 200ms ease; }
+  /* No transition while the finger is down — the panel must track 1:1. The
+     200ms ease only applies to the release snap (collapse / reveal). */
+  .tb-editor.tb-dragging .tb-panel { transition: none; }
   /* Drag handle between map + list: swipe up/down to show/hide, hold-drag to
      set the list height. */
   .tb-panel-toggle {
@@ -1655,7 +1658,9 @@
     touch-action: none; user-select: none; -webkit-user-select: none;
   }
   .tb-panel-grip { display: inline-block; width: 40px; height: 5px; border-radius: 3px; background: var(--rule); opacity: 0.55; }
-  .tb-editor.panel-collapsed .tb-panel { display: none; }
+  /* Collapsed = animate to zero height (not display:none) so it slides shut.
+     The handle bar stays, so the list can be pulled back up. */
+  .tb-editor.panel-collapsed .tb-panel { flex-basis: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; }
   .tb-section-label { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); margin:10px 0 8px; }
   .tb-stop-row, .tb-pin-row {
     border:1px solid var(--rule); border-radius:8px; padding:10px 12px; margin-bottom:8px; background:var(--paper); cursor:pointer;
@@ -1692,8 +1697,10 @@
     box-shadow:0 0 0 2px #2563eb; border-color:#2563eb;
   }
   /* Placement banner */
+  /* Sits BELOW the floating header row (Tours / title / Add) so it doesn't
+     overlap them — that row is ~34px tall at top:8px+inset. */
   .tb-place-banner {
-    position:absolute; left:12px; right:12px; top:12px; z-index:5;
+    position:absolute; left:12px; right:12px; top:calc(max(env(safe-area-inset-top,0px),0px) + 52px); z-index:8;
     background:var(--ink); color:var(--paper); padding:10px 14px; border-radius:10px;
     font-family:'Fraunces',serif; font-size:13px; display:none; align-items:center; gap:10px;
     box-shadow:0 4px 14px rgba(0,0,0,0.3);
@@ -2875,7 +2882,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Builder list panel: swipe to show/hide + drag-to-resize · build 2026-06-04-2013';
+const BUILD_VERSION = '0.6 · Panel: speed-gated hide + free resize; fix place-banner overlap · build 2026-06-04-2023';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4762,7 +4769,7 @@ async function openTourEditor(tourId) {
       <div class="tb-place-banner" id="tb-place-banner"><span id="tb-place-text">Tap the map</span><button type="button" class="tb-place-cancel" id="tb-place-cancel">Cancel</button></div>
       <div class="tb-zoom" id="tb-zoom">z —</div>
     </div>
-    <div class="tb-panel-toggle" id="tb-panel-toggle" role="separator" aria-label="Drag to resize the list; swipe up or down to show or hide it"><span class="tb-panel-grip"></span><span id="tb-panel-toggle-label">Drag to resize · swipe down to hide</span></div>
+    <div class="tb-panel-toggle" id="tb-panel-toggle" role="separator" aria-label="Drag to resize the list; swipe up or down to show or hide it"><span class="tb-panel-grip"></span><span id="tb-panel-toggle-label">Drag to resize · slide down to hide</span></div>
     <div class="tb-panel" id="tb-panel"></div>`;
   document.getElementById('phone').appendChild(el);
   document.getElementById('tb-ed-back').addEventListener('click', tbCloseEditor);
@@ -4829,22 +4836,29 @@ async function openTourEditor(tourId) {
 }
 
 // Make the handle bar between the map and the list a draggable edge:
-//   • hold + drag        → set the list height live (map fills the rest)
-//   • flick up / down    → snap the list open / hidden (full map)
-//   • plain tap          → nothing (toggle is swipe-only, by request)
-// Pointer Events so one path covers touch + mouse. Heights are written to the
-// editor's --tb-panel-h var; collapse adds .panel-collapsed (list display:none,
-// handle stays so it can be pulled back up).
+//   • hold + drag        → set the list height live, 1:1 with the finger (free
+//                          resize, any distance — never hides on its own)
+//   • brisk swipe DOWN   → hide the list (full map)
+//   • pull UP ≥15%       → reveal the list from hidden
+//   • plain tap          → nothing
+// Hiding is gated on SPEED (distance ÷ time), not raw distance: a slow resize
+// of any length must NOT hide the panel — only a deliberate quick swipe down
+// does. Revealing-from-hidden is distance-based (there's nothing to resize when
+// hidden, so a long pull-up is unambiguous). Pointer Events cover touch + mouse.
+// Heights go to --tb-panel-h; collapse adds .panel-collapsed (animates to 0,
+// handle stays to pull it back up).
 function tbWirePanelDrag(editorEl) {
   const handle = document.getElementById('tb-panel-toggle');
   const panel  = document.getElementById('tb-panel');
   const label  = document.getElementById('tb-panel-toggle-label');
   if (!handle || !panel) return;
 
-  const MIN_MAP     = 160;   // px of map always kept visible
-  const COLLAPSE_AT = 64;    // release below this list height → fully hidden
-  const FLICK       = 0.5;   // px/ms — above this counts as a swipe
-  let lastExpandedH = 0;     // remembered height to restore on swipe-up
+  const MIN_MAP      = 160;    // px of map always kept visible
+  const SWIPE_SPEED  = 0.5;    // px/ms — avg speed above this = a swipe (not a resize)
+  const SWIPE_FRAC   = 0.15;   // a swipe must also cover ≥15% of screen height
+  const REVEAL_FRAC  = 0.15;   // pull up ≥15% from hidden to reveal
+  const MIN_OPEN_FRAC = 0.12;  // smallest open height when resizing
+  let lastExpandedH = 0;       // remembered height to restore on reveal
 
   const editorH   = () => editorEl.clientHeight || window.innerHeight;
   const maxPanelH = () => Math.max(120, editorH() - MIN_MAP);
@@ -4856,7 +4870,7 @@ function tbWirePanelDrag(editorEl) {
     return h;
   }
   function setLabel(collapsed) {
-    if (label) label.textContent = collapsed ? 'Swipe up to show list' : 'Drag to resize · swipe down to hide';
+    if (label) label.textContent = collapsed ? 'Slide up to show the list' : 'Drag to resize · swipe down to hide';
   }
   let _rz = null;
   function resizeMapSoon() {
@@ -4864,19 +4878,21 @@ function tbWirePanelDrag(editorEl) {
     if (_rz) cancelAnimationFrame(_rz);
     _rz = requestAnimationFrame(() => { try { _tbEditorMap.resize(); } catch (_e) {} });
   }
-  function collapse() { editorEl.classList.add('panel-collapsed'); setLabel(true); resizeMapSoon(); }
+  function collapse() { editorEl.classList.add('panel-collapsed'); setLabel(true); resizeMapSoon(); setTimeout(resizeMapSoon, 230); }
   function expand(h)  {
     editorEl.classList.remove('panel-collapsed');
     lastExpandedH = applyH(h || lastExpandedH || Math.round(editorH() * 0.5));
-    setLabel(false); resizeMapSoon();
+    setLabel(false); resizeMapSoon(); setTimeout(resizeMapSoon, 230);
   }
 
-  let dragging = false, moved = false, startY = 0, startH = 0, lastY = 0, lastT = 0, vy = 0;
+  let dragging = false, moved = false, startY = 0, startT = 0, startH = 0, startCollapsed = false;
 
   handle.addEventListener('pointerdown', (e) => {
-    dragging = true; moved = false; vy = 0;
-    startY = e.clientY; lastY = e.clientY; lastT = e.timeStamp;
-    if (editorEl.classList.contains('panel-collapsed')) {
+    dragging = true; moved = false;
+    startY = e.clientY; startT = e.timeStamp;
+    startCollapsed = editorEl.classList.contains('panel-collapsed');
+    editorEl.classList.add('tb-dragging');   // suppress the snap transition
+    if (startCollapsed) {
       // start from a hidden list and grow it as the finger pulls up
       editorEl.classList.remove('panel-collapsed');
       startH = applyH(0);
@@ -4890,25 +4906,34 @@ function tbWirePanelDrag(editorEl) {
     if (!dragging) return;
     const dy = e.clientY - startY;
     if (Math.abs(dy) > 3) moved = true;
-    applyH(startH - dy);                    // drag up (dy<0) → taller list
-    const dt = e.timeStamp - lastT;
-    if (dt > 0) vy = (e.clientY - lastY) / dt;   // +down / -up, px per ms
-    lastY = e.clientY; lastT = e.timeStamp;
+    applyH(startH - dy);                      // drag up (dy<0) → taller list
     resizeMapSoon();
     e.preventDefault();
   });
   function endDrag(e) {
     if (!dragging) return;
     dragging = false;
+    editorEl.classList.remove('tb-dragging');
     try { handle.releasePointerCapture(e.pointerId); } catch (_e) {}
-    if (!moved) {                           // a tap, not a swipe → leave as-is
-      if (panelH() < COLLAPSE_AT) collapse();
+    if (!moved) {                             // a tap → no toggle
+      if (startCollapsed) collapse();         // we un-collapsed on down; restore
       return;
     }
-    if (vy < -FLICK) { expand(Math.round(editorH() * 0.6)); return; }  // flick up → show
-    if (vy >  FLICK) { collapse(); return; }                          // flick down → hide
-    const h = panelH();                     // slow drag → keep set height
-    if (h < COLLAPSE_AT) collapse(); else expand(h);
+    const slid  = e.clientY - startY;         // + = slid down, − = slid up
+    const dt    = Math.max(1, e.timeStamp - startT);
+    const speed = Math.abs(slid) / dt;        // px/ms, averaged over the gesture
+    const isSwipe = speed >= SWIPE_SPEED && Math.abs(slid) >= SWIPE_FRAC * editorH();
+    const minOpen = MIN_OPEN_FRAC * editorH();
+
+    if (startCollapsed) {
+      // was hidden → reveal if pulled up far enough; otherwise stay hidden
+      if (-slid >= REVEAL_FRAC * editorH()) expand(panelH()); else collapse();
+    } else {
+      // was open → hide ONLY on a brisk downward swipe, or if dragged almost to
+      // nothing. A slow resize (any length) just keeps the height.
+      if ((isSwipe && slid > 0) || panelH() < 0.5 * minOpen) collapse();
+      else expand(Math.max(panelH(), minOpen));
+    }
   }
   handle.addEventListener('pointerup', endDrag);
   handle.addEventListener('pointercancel', endDrag);
