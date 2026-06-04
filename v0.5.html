@@ -2966,7 +2966,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Guides room: house rules + anonymous toggle · build 2026-06-04-2122';
+const BUILD_VERSION = '0.6 · Guides room: remember anonymous choice · build 2026-06-04-2126';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4577,13 +4577,17 @@ function showGuideChat() {
   const sendBtn = document.getElementById('gc-send');
   const anonBtn = document.getElementById('gc-anon');
 
-  _gcAnon = false;
+  try { _gcAnon = localStorage.getItem('fieldnote_gc_anon') === '1'; } catch (_e) { _gcAnon = false; }
   function syncAnon() {
     anonBtn.classList.toggle('on', _gcAnon);
     anonBtn.setAttribute('aria-checked', _gcAnon ? 'true' : 'false');
     input.placeholder = _gcAnon ? 'Message the guides (as Anonymous)…' : 'Message the guides…';
   }
-  anonBtn.addEventListener('click', () => { _gcAnon = !_gcAnon; syncAnon(); });
+  anonBtn.addEventListener('click', () => {
+    _gcAnon = !_gcAnon;
+    try { localStorage.setItem('fieldnote_gc_anon', _gcAnon ? '1' : '0'); } catch (_e) {}
+    syncAnon();
+  });
   syncAnon();
 
   function autoGrow() { input.style.height = 'auto'; input.style.height = Math.min(120, input.scrollHeight) + 'px'; }
