@@ -394,6 +394,21 @@
     color: var(--rule);
     display: block; margin-bottom: 2px;
   }
+  /* Small "Your link" / contact button under the guide name — deliberately
+     more compact than the full menu rows. */
+  .menu-guidecard-btn {
+    display: flex; width: max-content; align-items: center; gap: 6px; margin-top: 8px;
+    padding: 6px 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper);
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.04em;
+    color: var(--ink); cursor: pointer;
+  }
+  .menu-guidecard-btn:active { background: var(--paper-2); }
+  /* Small red reminder note (guide, no group chat set) */
+  .menu-chat-note {
+    display: block; margin-top: 8px; cursor: pointer;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.03em;
+    color: var(--mark);
+  }
   .menu-session-stop {
     display: none;
     padding: 10px 12px;
@@ -2370,17 +2385,6 @@
           <div class="menu-label" id="menu-group-chat-label">Group chat</div>
           <span class="menu-chevron">›</span>
         </button>
-        <button class="menu-item" data-action="guide-card" id="menu-guide-card" style="display:none;">
-          <div class="menu-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="9"/>
-              <line x1="3" y1="12" x2="21" y2="12"/>
-              <path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/>
-            </svg>
-          </div>
-          <div class="menu-label" id="menu-guide-card-label">Guide · contact</div>
-          <span class="menu-chevron">›</span>
-        </button>
         <button class="menu-item" data-action="my-sessions" id="menu-my-sessions" style="display:none;">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2787,7 +2791,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · reminder to set group chat when none set · build 2026-06-04-1007';
+const BUILD_VERSION = '0.6 · chat reminder ≥10min + red note; "Your link" under guide name · build 2026-06-04-1014';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -5533,7 +5537,11 @@ function initMap(token) {
     if (ROLE === 'guide') {
       startGeolocation();
       startGuideShell();
-      setTimeout(() => { try { maybeRemindChatSetup(); } catch (_e) {} }, 1600);
+      // Chat-setup nudge: not before 10 min into the session (8s floor when
+      // resuming a session that's already older than that).
+      const _startedMs = (SESSION && SESSION.started_at) ? Date.parse(SESSION.started_at) : Date.now();
+      const _chatWait = Math.max(8000, 10 * 60 * 1000 - (Date.now() - _startedMs));
+      setTimeout(() => { try { maybeRemindChatSetup(); } catch (_e) {} }, _chatWait);
     } else {
       startPassengerGuideListening();
       if (introNeeded()) {
@@ -7715,21 +7723,8 @@ document.getElementById('burger-btn').addEventListener('click', () => {
       groupChatItem.style.display = 'none';
     }
   }
-  // "Guide · contact" — guides see it in a session (to set/edit their card
-  // link); passengers see it only once the guide has set one (to open it).
-  const guideCardItem = document.getElementById('menu-guide-card');
-  if (guideCardItem) {
-    const gcardLabel = document.getElementById('menu-guide-card-label');
-    if (SESSION && ROLE === 'guide') {
-      guideCardItem.style.display = '';
-      if (gcardLabel) gcardLabel.textContent = GUIDE_CARD_URL ? 'Your link · set' : 'Your link · add';
-    } else if (SESSION && GUIDE_CARD_URL) {
-      guideCardItem.style.display = '';
-      if (gcardLabel) gcardLabel.textContent = 'Guide · contact';
-    } else {
-      guideCardItem.style.display = 'none';
-    }
-  }
+  // (Guide card link now renders as a small button under the guide name —
+  // see renderMenuGuideName — not as a full menu row.)
   // "My sessions" — guide-only (logged-in). Lets a guide switch/manage
   // sessions without leaving the current one.
   const mySessionsItem = document.getElementById('menu-my-sessions');
@@ -7778,14 +7773,6 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
         showGroupChatEditor();
       } else {
         const u = SESSION && SESSION.chat_url ? normalizeChatUrl(SESSION.chat_url) : '';
-        if (u) window.open(u, '_blank', 'noopener,noreferrer');
-      }
-    } else if (action === 'guide-card') {
-      if (ROLE === 'guide') {
-        while (screenStack.length) closeScreen();
-        showGuideCardEditor();
-      } else {
-        const u = GUIDE_CARD_URL ? normalizeChatUrl(GUIDE_CARD_URL) : '';
         if (u) window.open(u, '_blank', 'noopener,noreferrer');
       }
     } else if (action === 'my-sessions') {
@@ -9238,8 +9225,27 @@ function renderMenuGuideName() {
   }
   const label = (ROLE === 'passenger') ? 'Your guide' : 'Guide';
   const safeName = name.replace(/</g, '&lt;');
-  el.innerHTML = `<span class="menu-session-guide-label">${label}</span>${safeName}`;
+  let extra = '';
+  // Card link button, just below the name. Guide: always (to add/edit);
+  // passenger: only when the guide has set one (to open).
+  if (ROLE === 'guide') {
+    extra += `<button type="button" class="menu-guidecard-btn" id="menu-guidecard-btn">🔗 Your link${GUIDE_CARD_URL ? '' : ' · add'}</button>`;
+  } else if (GUIDE_CARD_URL) {
+    extra += `<button type="button" class="menu-guidecard-btn" id="menu-guidecard-btn">🔗 Contact &amp; links</button>`;
+  }
+  // Small red reminder for the guide when no group chat is set.
+  if (ROLE === 'guide' && SESSION && !SESSION.chat_url) {
+    extra += `<span class="menu-chat-note" id="menu-chat-note">⚠ No group chat set — tap to add</span>`;
+  }
+  el.innerHTML = `<span class="menu-session-guide-label">${label}</span>${safeName}${extra}`;
   el.classList.add('show');
+  const cardBtn = document.getElementById('menu-guidecard-btn');
+  if (cardBtn) cardBtn.addEventListener('click', () => {
+    if (ROLE === 'guide') { while (screenStack.length) closeScreen(); showGuideCardEditor(); }
+    else { const u = GUIDE_CARD_URL ? normalizeChatUrl(GUIDE_CARD_URL) : ''; if (u) window.open(u, '_blank', 'noopener,noreferrer'); }
+  });
+  const noteEl = document.getElementById('menu-chat-note');
+  if (noteEl) noteEl.addEventListener('click', () => { while (screenStack.length) closeScreen(); smChatEditor(SESSION); });
 }
 
 function renderMenuActiveStop() {
