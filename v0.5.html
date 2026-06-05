@@ -3052,7 +3052,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Translate button moved to tours list · build 2026-06-05-1803';
+const BUILD_VERSION = '0.6 · notifications on/off toggle · build 2026-06-05-2157';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3064,6 +3064,16 @@ const BUILD_VERSION = '0.6 · Translate button moved to tours list · build 2026
 // ╰──────────────────────────────────────────────────────╯
 const VAPID_PUBLIC_KEY = 'BCJbZ9Igmq1_8ap7WUvkSl48Kt8XBHZvLgVe43dmSopBDgwrAHgAaJESAo6035YR_U0nn_BZ8eXd7KEubw76EP0';
 const PUSH_PROMPT_DISMISSED_KEY = 'fn_push_prompt_dismissed_v1';   // per-browser, all-sessions
+// Explicit "I turned notifications OFF" preference (per-browser, all-sessions).
+// Source of truth for the menu toggle: when set, we don't auto-(re)subscribe on
+// load, and the menu shows "Notifications · off". Distinct from the dismissed
+// banner above (that's just "not now" for the persistent prompt).
+const PUSH_OFF_KEY = 'fn_push_off_v1';
+function notifOptedOut() { try { return localStorage.getItem(PUSH_OFF_KEY) === '1'; } catch (_e) { return false; } }
+function setNotifOptedOut(v) {
+  try { if (v) localStorage.setItem(PUSH_OFF_KEY, '1'); else localStorage.removeItem(PUSH_OFF_KEY); }
+  catch (_e) { /* private mode — ignore */ }
+}
 const INSTALL_PROMPT_DISMISSED_KEY = 'fn_install_prompt_dismissed_v1';
 // Saved beforeinstallprompt event — fired by Chrome/Edge/Samsung Internet
 // when the site meets PWA install criteria. We hold it so we can call
@@ -3127,7 +3137,7 @@ const I18N = {
     menu_group_chat: 'Group chat', menu_reset: 'Reset visited pins', menu_about: 'About this build',
     pop_continue: 'Continue', pop_gotit: 'Got it', menu_your_name: 'Your name', menu_enable_notif: 'Enable notifications',
     share_title: 'Share invite', share_sub: "Scan with another phone's camera, or copy the link.", share_copy: 'Copy link', share_copied: 'Copied',
-    menu_title: 'Menu', notif_on: 'Notifications · on', notif_blocked: 'Notifications blocked · tap to fix',
+    menu_title: 'Menu', notif_on: 'Notifications · on', notif_off: 'Notifications · off', notif_blocked: 'Notifications blocked · tap to fix',
     arr_stop: 'Stop', arr_now: 'Now', arr_time_at_stop: 'Time at stop', arr_departure: 'Departure', arr_time_left: 'Time left', arr_weather: 'Weather', arr_tba: 'to be added', arr_checking: 'checking…',
     warn_info: 'Info', warn_caution: 'Caution', warn_danger: 'Danger', warn_note: 'Note', bus_headback: 'Time to head back to the bus',
     warn_fb_info: 'Heads up from your guide.', warn_fb_caution: 'Please take care.', warn_fb_danger: 'Take this seriously.', dep_now: 'Departure is now',
@@ -3162,7 +3172,7 @@ const I18N = {
     menu_group_chat: 'Chat del grupo', menu_reset: 'Restablecer paradas vistas', menu_about: 'Acerca de esta versión',
     pop_continue: 'Continuar', pop_gotit: 'Entendido', menu_your_name: 'Tu nombre', menu_enable_notif: 'Activar notificaciones',
     share_title: 'Compartir invitación', share_sub: 'Escanéalo con la cámara de otro teléfono o copia el enlace.', share_copy: 'Copiar enlace', share_copied: 'Copiado',
-    menu_title: 'Menú', notif_on: 'Notificaciones · activadas', notif_blocked: 'Notificaciones bloqueadas · toca para arreglar',
+    menu_title: 'Menú', notif_on: 'Notificaciones · activadas', notif_off: 'Notificaciones · desactivadas', notif_blocked: 'Notificaciones bloqueadas · toca para arreglar',
     arr_stop: 'Parada', arr_now: 'Ahora', arr_time_at_stop: 'Tiempo en la parada', arr_departure: 'Salida', arr_time_left: 'Tiempo restante', arr_weather: 'Clima', arr_tba: 'por confirmar', arr_checking: 'comprobando…',
     warn_info: 'Información', warn_caution: 'Precaución', warn_danger: 'Peligro', warn_note: 'Nota', bus_headback: 'Hora de volver al autobús',
     warn_fb_info: 'Aviso de tu guía.', warn_fb_caution: 'Por favor, ten cuidado.', warn_fb_danger: 'Tómatelo en serio.', dep_now: 'La salida es ahora a las',
@@ -3197,7 +3207,7 @@ const I18N = {
     menu_group_chat: '群聊', menu_reset: '重置已访问的点', menu_about: '关于此版本',
     pop_continue: '继续', pop_gotit: '知道了', menu_your_name: '你的名字', menu_enable_notif: '开启通知',
     share_title: '分享邀请', share_sub: '用另一部手机的相机扫描，或复制链接。', share_copy: '复制链接', share_copied: '已复制',
-    menu_title: '菜单', notif_on: '通知 · 已开启', notif_blocked: '通知被屏蔽 · 点按修复',
+    menu_title: '菜单', notif_on: '通知 · 已开启', notif_off: '通知 · 已关闭', notif_blocked: '通知被屏蔽 · 点按修复',
     arr_stop: '停靠点', arr_now: '现在', arr_time_at_stop: '停留时间', arr_departure: '出发', arr_time_left: '剩余时间', arr_weather: '天气', arr_tba: '待定', arr_checking: '查询中…',
     warn_info: '提示', warn_caution: '注意', warn_danger: '危险', warn_note: '备注', bus_headback: '该回到大巴了',
     warn_fb_info: '向导有提醒。', warn_fb_caution: '请小心。', warn_fb_danger: '请认真对待。', dep_now: '出发时间现在为',
@@ -9634,10 +9644,15 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
         }
         return;
       }
-      // Otherwise use the same subscribe path as the persistent banner.
-      const result = await subscribePushAndSave();
-      if (result && result.error) {
-        console.warn('[push] enable from menu failed:', result.error);
+      // Granted + currently on → turn OFF. Otherwise (off, or never-asked) →
+      // turn ON via the same subscribe path the banner uses.
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && !notifOptedOut()) {
+        await unsubscribePushAndDelete();
+      } else {
+        const result = await subscribePushAndSave();
+        if (result && result.error) {
+          console.warn('[push] enable from menu failed:', result.error);
+        }
       }
       refreshNotificationsMenuItem();
       renderNotifPrompt();
@@ -11407,12 +11422,17 @@ async function initPushSubscription() {
   // existing subscription), re-run the subscribe path silently.
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'pushsubscriptionchange') {
-      subscribePushAndSave().catch(err => console.warn('[push] resubscribe failed', err));
+      // Respect an explicit opt-out — don't silently re-subscribe a user who
+      // turned notifications off.
+      if (!notifOptedOut()) {
+        subscribePushAndSave().catch(err => console.warn('[push] resubscribe failed', err));
+      }
     }
   });
   // Already-granted: pre-warm the subscription so the user doesn't miss
-  // pushes if their old endpoint expired between visits.
-  if (Notification.permission === 'granted' && SESSION) {
+  // pushes if their old endpoint expired between visits — unless they've
+  // explicitly turned notifications off.
+  if (Notification.permission === 'granted' && SESSION && !notifOptedOut()) {
     try { await subscribePushAndSave(); }
     catch (err) { console.warn('[push] silent re-subscribe failed', err); }
   }
@@ -11725,6 +11745,36 @@ async function subscribePushAndSave() {
     console.warn('[push] save_push_subscription failed', error);
     return { error: error.message || 'Could not save subscription.' };
   }
+  // Subscribing IS opting in — clear any prior "off" preference so the menu
+  // shows "on" and future loads keep the subscription warm.
+  setNotifOptedOut(false);
+  refreshNotificationsMenuItem();
+  return { ok: true };
+}
+
+// Turn notifications OFF: record the opt-out, delete this device's server-side
+// subscription row (so the Edge Functions stop targeting it immediately — the
+// push_subscriptions DELETE policy allows the passenger to remove their own
+// row), and unsubscribe the browser's pushManager subscription. Idempotent.
+async function unsubscribePushAndDelete() {
+  setNotifOptedOut(true);
+  try {
+    if (!_swRegistration && 'serviceWorker' in navigator) {
+      try { _swRegistration = await navigator.serviceWorker.ready; } catch (_e) { /* no SW */ }
+    }
+    const sub = _swRegistration ? await _swRegistration.pushManager.getSubscription() : null;
+    if (sub) {
+      const endpoint = sub.endpoint;
+      if (SESSION && endpoint) {
+        const { error } = await supabaseClient.from('push_subscriptions')
+          .delete().eq('session_id', SESSION.id).eq('endpoint', endpoint);
+        if (error) console.warn('[push] delete subscription row failed', error);
+      }
+      try { await sub.unsubscribe(); } catch (e) { console.warn('[push] pushManager.unsubscribe failed', e); }
+    }
+  } catch (e) {
+    console.warn('[push] turn-off failed', e);
+  }
   refreshNotificationsMenuItem();
   return { ok: true };
 }
@@ -11743,10 +11793,12 @@ function refreshNotificationsMenuItem() {
   const hint = document.getElementById('menu-notif-hint');
   const perm = Notification.permission;
   if (perm === 'granted') {
+    // Granted → it's a real on/off toggle. "off" = the user opted out (we keep
+    // the OS permission but stop subscribing); tap flips it either way.
     item.style.display = '';
-    label.textContent = t('notif_on');
-    item.disabled = true;
-    item.style.opacity = '0.6';
+    item.disabled = false;
+    item.style.opacity = '';
+    label.textContent = notifOptedOut() ? t('notif_off') : t('notif_on');
     if (hint) { hint.hidden = true; hint.innerHTML = ''; }
   } else if (perm === 'denied') {
     // Denied → the page can't re-request. Keep the item TAPPABLE so the
