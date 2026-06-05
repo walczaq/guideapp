@@ -19,7 +19,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<title>Fieldnote v0.5</title>
+<title>Fieldnote v0.6</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -312,6 +312,13 @@
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px; font-weight: 700;
     fill: var(--paper); text-anchor: middle; pointer-events: none;
+  }
+  /* Title/name shown under a marker when the "titles" toggle is on. White halo
+     (paint-order stroke) keeps it legible over the map. */
+  .pin-title-label {
+    font-family: 'Fraunces', serif; font-size: 11px; font-weight: 700;
+    fill: var(--ink); text-anchor: middle; pointer-events: none;
+    paint-order: stroke; stroke: var(--paper); stroke-width: 3px; stroke-linejoin: round;
   }
 
   /* Typed markers (danger/border zones + amenity icons) */
@@ -2383,7 +2390,7 @@
 </head>
 <body>
 
-<div class="proto-label">Fieldnote v0.5 · prototype</div>
+<div class="proto-label">Fieldnote v0.6 · prototype</div>
 
 <div class="phone" id="phone">
 
@@ -2509,6 +2516,7 @@
           <span class="zoom-btn-cap">Group</span>
         </button>
         <div class="zoom-sep"></div>
+        <button class="zoom-btn" id="titles-toggle" type="button" title="Show place names" aria-label="Show place names" style="font-family:'Fraunces',serif; font-size:14px; font-weight:700;">Aa</button>
         <button class="zoom-btn preset" id="zoom-overview" title="Overview">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="4 9 4 4 9 4"/>
@@ -2696,17 +2704,6 @@
           <div class="menu-label" id="menu-language-label">Language</div>
           <span class="menu-chevron">›</span>
         </button>
-        <button class="menu-item" data-action="about">
-          <div class="menu-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="16" x2="12" y2="12"/>
-              <line x1="12" y1="8" x2="12.01" y2="8"/>
-            </svg>
-          </div>
-          <div class="menu-label" data-i18n="menu_about">About this build</div>
-          <span class="menu-chevron">›</span>
-        </button>
       </div>
       <!-- Install website CTA — always-visible escape hatch for when the
            beforeinstallprompt banner didn't fire. Handles four states:
@@ -2718,6 +2715,8 @@
       </div>
       <!-- Discreet guide-login link (shown only when not signed in as a guide). -->
       <button type="button" class="menu-guidelogin-link" id="menu-guide-login" style="display:none;">Guide login</button>
+      <!-- Discreet developer-info link (same text-link style; replaces the old "About" row). -->
+      <button type="button" class="menu-guidelogin-link" id="menu-dev-info" style="margin-top:2px;">Developer info</button>
     </div>
   </div>
 
@@ -2762,18 +2761,21 @@
           <polyline points="12 19 5 12 12 5"/>
         </svg>
       </button>
-      <div class="screen-title">About v0.5</div>
+      <div class="screen-title">Developer info</div>
     </div>
     <div class="screen-body">
       <div class="about-block">
-        <b>v0.5 — Stops + activation broadcasts.</b>
-        Tours have a stop → pin hierarchy. Guides activate stops; passengers see pins reveal as stops activate. Activated stops stay on for the rest of the session.
+        <b>Fieldnote v0.6 — live tour companion.</b>
+        A single-page app a guide runs for their group. Two layers: a content layer (each tour is a stop → pin hierarchy the guide reveals as the group arrives) and a safety layer (live location on a shared map, broadcasts, "time to head back to the bus" alerts, and headcount).
       </div>
       <div class="about-block muted">
-        Chunks A + B + C done, plus session controls and a persistent arrival modal. Chunk A: stops + pins tables. Chunk B: guide-side activation. Chunk C: realtime fan-out to passengers. Session controls: deactivate a stop (tap Active pill), end the session (button at bottom of Control Center). Arrival modal: when the guide activates a stop, the passenger sees a centered modal with the stop name, an Icelandic huldufólk warning, and placeholder rows for time-at-stop, departure, weather, and guide notes. The modal stays up until the passenger taps "Got it" — and if they close the browser or lock the phone first, the modal re-shows with sound the next time they come back. Polling + visibilitychange backstop catches any realtime events that go missing. Future: Web Push for closed-app passengers (D), iOS-foreground lobby copy (E).
+        New since v0.5: passengers pick a language on first load (English · Español · 中文) and the whole passenger experience — interface, tour content, and push notifications — is translated, auto-filled by a translate-on-save pipeline. Guides can sign up with just a name + passkey, run a guides-only community room, build and reorder tours with per-leg driving ETAs, duplicate stops and spots, and drive a live "next stop" banner. Passengers get a draggable map list, a place-names toggle, and installable-PWA push that works with the app closed.
       </div>
       <div class="about-block muted">
-        v0.4 still works: invite-code auth, live guide view, realtime passenger dots, breadcrumb trails. v0.3 still works: GPS fixes captured locally, queued in IndexedDB, synced to Supabase when network is available.
+        Built as one HTML file plus a service worker, backed by Supabase (Postgres + realtime + edge functions) and Mapbox, deployed on Cloudflare at fieldnote.guide. Earlier layers still work: stop activation broadcasts (v0.5), invite-code auth and realtime passenger dots (v0.4), and offline-queued GPS fixes synced when back online (v0.3).
+      </div>
+      <div class="about-block muted">
+        Contact: help@fieldnote.guide
       </div>
       <div class="about-block muted" id="about-debug">
         <!-- populated at runtime with session + passenger info -->
@@ -3050,7 +3052,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · next-pill guide-only, bus/warning text localized, builder translate status · build 2026-06-05-1726';
+const BUILD_VERSION = '0.6 · place-names toggle, About → developer info, v0.6 labels · build 2026-06-05-1738';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -9022,6 +9024,19 @@ function updateNextStopBanner() {
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 
+// "Show place names" toggle (right-bar Aa button). Renders each marker's
+// (localized) title below it. Persisted per device.
+let _showTitles = false;
+try { _showTitles = localStorage.getItem('fieldnote_titles') === '1'; } catch (_e) {}
+function pinTitleLabel(text) {
+  const lbl = document.createElementNS(SVGNS, 'text');
+  lbl.setAttribute('class', 'pin-title-label');
+  lbl.setAttribute('y', 27);
+  let s = (text || '').trim(); if (s.length > 34) s = s.slice(0, 32) + '…';
+  lbl.textContent = s;
+  return lbl;
+}
+
 function renderPins() {
   pinsLayer.innerHTML = '';
   const ppm = pxPerMeter();
@@ -9068,6 +9083,7 @@ function renderPins() {
     glyph.setAttribute('class', 'marker-emoji'); glyph.setAttribute('y', 4);
     glyph.textContent = cat.emoji;
     g.appendChild(glyph);
+    if (_showTitles) g.appendChild(pinTitleLabel(i18nText(a.titleI18n, a.title) || cat.label));
     g.addEventListener('click', (e) => { e.stopPropagation(); showCategoryPopup(a); });
     pinsLayer.appendChild(g);
   }
@@ -9092,6 +9108,7 @@ function renderPins() {
     glyph.setAttribute('class', 'pin-label'); glyph.setAttribute('y', 4);
     glyph.textContent = seqLabels[sp.id] || '★';
     g.appendChild(glyph);
+    if (_showTitles) g.appendChild(pinTitleLabel(i18nText(sp.titleI18n, sp.title)));
     g.addEventListener('click', (e) => { e.stopPropagation(); showPopup(sp); });
     pinsLayer.appendChild(g);
   }
@@ -9137,6 +9154,8 @@ function renderPins() {
     t.setAttribute('y', 4);
     t.textContent = seqLabels[pin.id] || String(i + 1);
     g.appendChild(t);
+
+    if (_showTitles) g.appendChild(pinTitleLabel(i18nText(pin.titleI18n, pin.title)));
 
     // tap a pin to re-read its note (any time)
     g.addEventListener('click', (e) => {
@@ -9377,6 +9396,19 @@ document.getElementById('recenter').addEventListener('click', () => {
   }
 });
 
+// "Show place names" toggle — labels each marker with its (localized) title.
+(() => {
+  const tb = document.getElementById('titles-toggle');
+  if (!tb) return;
+  tb.classList.toggle('active', _showTitles);
+  tb.addEventListener('click', () => {
+    _showTitles = !_showTitles;
+    try { localStorage.setItem('fieldnote_titles', _showTitles ? '1' : '0'); } catch (_e) {}
+    tb.classList.toggle('active', _showTitles);
+    renderPins();
+  });
+})();
+
 // ── Zoom presets: Overview (wide survey) ↔ Detail (street, when walking) ──
 function applyZoomPreset(preset) {
   if (!map) return;
@@ -9439,6 +9471,11 @@ document.querySelectorAll('[data-close-screen]').forEach(b => b.addEventListener
   if (guideLoginLink) guideLoginLink.addEventListener('click', () => {
     while (screenStack.length) closeScreen();
     showInviteCodeForm();
+  });
+  // Discreet "Developer info" link (replaces the old About menu row).
+  const devInfoLink = document.getElementById('menu-dev-info');
+  if (devInfoLink) devInfoLink.addEventListener('click', () => {
+    openScreen('screen-about');
   });
 }
 
