@@ -1790,6 +1790,7 @@
   /* Compact "Stops (N)" header row with an inline Rename. */
   .tb-list-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:2px 0 8px; }
   .tb-mini { padding:5px 10px !important; font-size:9px !important; }
+  .tb-mini.tb-done { color:#15803d; border-color:#15803d; }
   .tb-stop-row, .tb-pin-row {
     border:1px solid var(--rule); border-radius:8px; padding:8px 10px; margin-bottom:6px; background:var(--paper); cursor:pointer;
   }
@@ -3049,7 +3050,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Passenger-only language gate + auto-translate pipeline (DeepL) · build 2026-06-05-1706';
+const BUILD_VERSION = '0.6 · next-pill guide-only, bus/warning text localized, builder translate status · build 2026-06-05-1726';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3126,7 +3127,8 @@ const I18N = {
     share_title: 'Share invite', share_sub: "Scan with another phone's camera, or copy the link.", share_copy: 'Copy link', share_copied: 'Copied',
     menu_title: 'Menu', notif_on: 'Notifications · on', notif_blocked: 'Notifications blocked · tap to fix',
     arr_stop: 'Stop', arr_now: 'Now', arr_time_at_stop: 'Time at stop', arr_departure: 'Departure', arr_time_left: 'Time left', arr_weather: 'Weather', arr_tba: 'to be added', arr_checking: 'checking…',
-    warn_info: 'Info', warn_caution: 'Caution', warn_danger: 'Danger', warn_note: 'Note',
+    warn_info: 'Info', warn_caution: 'Caution', warn_danger: 'Danger', warn_note: 'Note', bus_headback: 'Time to head back to the bus',
+    warn_fb_info: 'Heads up from your guide.', warn_fb_caution: 'Please take care.', warn_fb_danger: 'Take this seriously.', dep_now: 'Departure is now',
   },
   es: {
     gate_title: 'Elige tu idioma', gate_sub: 'Puedes cambiarlo luego en el menú.',
@@ -3160,7 +3162,8 @@ const I18N = {
     share_title: 'Compartir invitación', share_sub: 'Escanéalo con la cámara de otro teléfono o copia el enlace.', share_copy: 'Copiar enlace', share_copied: 'Copiado',
     menu_title: 'Menú', notif_on: 'Notificaciones · activadas', notif_blocked: 'Notificaciones bloqueadas · toca para arreglar',
     arr_stop: 'Parada', arr_now: 'Ahora', arr_time_at_stop: 'Tiempo en la parada', arr_departure: 'Salida', arr_time_left: 'Tiempo restante', arr_weather: 'Clima', arr_tba: 'por confirmar', arr_checking: 'comprobando…',
-    warn_info: 'Información', warn_caution: 'Precaución', warn_danger: 'Peligro', warn_note: 'Nota',
+    warn_info: 'Información', warn_caution: 'Precaución', warn_danger: 'Peligro', warn_note: 'Nota', bus_headback: 'Hora de volver al autobús',
+    warn_fb_info: 'Aviso de tu guía.', warn_fb_caution: 'Por favor, ten cuidado.', warn_fb_danger: 'Tómatelo en serio.', dep_now: 'La salida es ahora a las',
   },
   zh: {
     gate_title: '选择语言', gate_sub: '稍后可在菜单中更改。',
@@ -3194,7 +3197,8 @@ const I18N = {
     share_title: '分享邀请', share_sub: '用另一部手机的相机扫描，或复制链接。', share_copy: '复制链接', share_copied: '已复制',
     menu_title: '菜单', notif_on: '通知 · 已开启', notif_blocked: '通知被屏蔽 · 点按修复',
     arr_stop: '停靠点', arr_now: '现在', arr_time_at_stop: '停留时间', arr_departure: '出发', arr_time_left: '剩余时间', arr_weather: '天气', arr_tba: '待定', arr_checking: '查询中…',
-    warn_info: '提示', warn_caution: '注意', warn_danger: '危险', warn_note: '备注',
+    warn_info: '提示', warn_caution: '注意', warn_danger: '危险', warn_note: '备注', bus_headback: '该回到大巴了',
+    warn_fb_info: '向导有提醒。', warn_fb_caution: '请小心。', warn_fb_danger: '请认真对待。', dep_now: '出发时间现在为',
   },
 };
 let LANG = 'en';
@@ -5396,6 +5400,22 @@ async function tbTranslateTour(tourId) {
     return { ok: true, translated: data.translated || 0 };
   } catch (e) { return { error: String(e) }; }
 }
+// True when every non-empty stop/spot text has an up-to-date ES+ZH translation
+// (i18n._src matches the current source). Drives the builder's "Translated" badge.
+function tbTourTranslated(tour) {
+  const stops = (tour && tour.stops) || [];
+  let any = false, allOk = true;
+  const chk = (text, i18n) => {
+    const s = (text || '').trim(); if (!s) return;
+    any = true;
+    if (!(i18n && i18n._src === s && i18n.es && i18n.zh)) allOk = false;
+  };
+  for (const s of stops) {
+    chk(s.name, s.name_i18n); chk(s.subtitle, s.subtitle_i18n);
+    for (const p of (s.pins || [])) { chk(p.title, p.title_i18n); chk(p.body, p.body_i18n); }
+  }
+  return any && allOk;
+}
 async function tbCreateStop(tourId, name, lng, lat, radius) {
   const token = getStoredGuideToken();
   const { data, error } = await supabaseClient.rpc('create_stop',
@@ -5482,7 +5502,7 @@ async function tbDeletePin(id) {
 async function tbLoadTourDetail(tourId) {
   const { data, error } = await supabaseClient
     .from('tours')
-    .select('id, slug, name, subtitle, home_lng, home_lat, owner_guide_id, stops ( id, ordinal, name, subtitle, lng, lat, activation_radius_m, drive_secs_from_prev, pins ( id, ordinal, title, body, lng, lat, trigger_radius_m, category ) )')
+    .select('id, slug, name, subtitle, home_lng, home_lat, owner_guide_id, stops ( id, ordinal, name, subtitle, lng, lat, activation_radius_m, drive_secs_from_prev, name_i18n, subtitle_i18n, pins ( id, ordinal, title, body, lng, lat, trigger_radius_m, category, title_i18n, body_i18n ) )')
     .eq('id', tourId).single();
   if (error) { console.warn('[tb] load detail failed', error); return null; }
   if (data && data.stops) {
@@ -6044,15 +6064,16 @@ function renderTbEditorPanel() {
   hdr.appendChild(sl);
   const hdrActs = document.createElement('div'); hdrActs.style.cssText = 'display:flex; gap:6px; flex:0 0 auto; flex-wrap:wrap; justify-content:flex-end;';
   if (nStops >= 1) {
-    const tr = smMakeBtn('🌐 Translate', '', async (ev) => {
+    const done = tbTourTranslated(_tbTour);
+    const tr = smMakeBtn(done ? '✓ Translated (ES/ZH)' : '🌐 Translate', '', async (ev) => {
       const btn = ev.currentTarget; btn.textContent = 'Translating…'; btn.disabled = true;
       const r = await tbTranslateTour(_tbTour.id);
-      btn.disabled = false;
-      btn.textContent = r.error ? '🌐 Translate' : '✓ Translated';
-      if (r.error) console.warn('[tb] translate failed', r.error);
-      else setTimeout(() => { if (btn) btn.textContent = '🌐 Translate'; }, 2500);
+      if (r.error) { btn.disabled = false; btn.textContent = '🌐 Translate'; console.warn('[tb] translate failed', r.error); return; }
+      const fresh = await tbLoadTourDetail(_tbTour.id); if (fresh) _tbTour = fresh;
+      renderTbEditorPanel();   // recomputes → shows "✓ Translated"
     });
     tr.classList.add('tb-mini');
+    if (done) tr.classList.add('tb-done');
     hdrActs.appendChild(tr);
   }
   if (nStops >= 2) {
@@ -8983,13 +9004,11 @@ function updateNextStopBanner() {
   const el = document.getElementById('next-stop-banner');
   if (!el) return;
   const stops = (TOUR && TOUR.stops) || [];
-  // Prefer the guide's declared next stop (until it's been activated); else the
-  // first not-yet-activated stop.
-  let next = null;
+  // Only show once the GUIDE has declared the next stop (deactivate prompt) and
+  // it hasn't been activated yet — not always-on.
   const declared = SESSION && SESSION.next_stop_id;
-  if (declared && !ACTIVE_STOP_IDS.has(declared)) next = stops.find(s => s.id === declared);
-  if (!next) next = stops.find(s => !ACTIVE_STOP_IDS.has(s.id));
-  if (!next) { el.hidden = true; return; }   // no stops, or all activated
+  const next = (declared && !ACTIVE_STOP_IDS.has(declared)) ? stops.find(s => s.id === declared) : null;
+  if (!next) { el.hidden = true; return; }
   el.innerHTML = '';
   const label = document.createElement('span'); label.className = 'nsb-label'; label.textContent = t('nsb_next');
   const nm = document.createElement('span'); nm.className = 'nsb-name'; nm.textContent = i18nText(next.nameI18n, next.name) || 'Stop';
@@ -10322,7 +10341,7 @@ function showUpdatePopup(stop, opts) {
     const dep = new Date(new Date(meta.activated_at).getTime() + (meta.duration_minutes ?? 20) * 60 * 1000);
     const row = document.createElement('div');
     row.className = 'update-popup-departure';
-    row.innerHTML = '🕒 <span>Departure is now <b>' + formatHHMM(dep) + '</b></span>';
+    row.innerHTML = '🕒 <span>' + t('dep_now') + ' <b>' + formatHHMM(dep) + '</b></span>';
     bodyEl.appendChild(row);
   }
 
@@ -10648,21 +10667,30 @@ function svgForLevel(level) {
   return '';
 }
 
+// Display text for a [bus] departure line. The guide sends a fixed default
+// ("Time to head back to the bus"); show it in the passenger's language. Any
+// custom bus text is shown as authored.
+function busLineDisplayText(text) {
+  const s = (text || '').trim();
+  if (!s || s === 'Time to head back to the bus') return t('bus_headback');
+  return s;
+}
+
 function updateArrivalWarning(overallLevel, notesText) {
   const banner = document.getElementById('stop-arrival-warning');
   if (!banner) return;
   banner.innerHTML = '';
   let entries = parseNotesText(notesText || '').map(e => ({
     level: e.level === 'none' ? overallLevel : e.level,
-    text: e.text,
+    text: e.level === 'bus' ? busLineDisplayText(e.text) : e.text,
   }));
   // Fallback: an overall warning set with no notes → synthesize a single
   // generic line in that level's badge.
   if (entries.length === 0 && overallLevel && overallLevel !== 'none') {
     const fallback = {
-      info:    'Heads up from your guide.',
-      caution: 'Please take care.',
-      danger:  'Take this seriously.',
+      info:    t('warn_fb_info'),
+      caution: t('warn_fb_caution'),
+      danger:  t('warn_fb_danger'),
     };
     entries = [{ level: overallLevel, text: fallback[overallLevel] || '' }];
   }
