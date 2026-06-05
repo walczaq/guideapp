@@ -3049,7 +3049,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · i18n: localized push notifications (per subscriber) · build 2026-06-05-1655';
+const BUILD_VERSION = '0.6 · Passenger-only language gate + auto-translate pipeline (DeepL) · build 2026-06-05-1706';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4042,11 +4042,11 @@ async function boot() {
     return;
   }
 
-  // Language: prompt once, before everything else. The gate reloads on pick so
-  // the whole app renders in the chosen language.
+  // Language is per-passenger. Load any saved choice + localize static HTML now
+  // (harmless for guides — defaults to English). The GATE itself is shown only
+  // to a passenger joining a session (below, once we know the role).
   loadLang();
-  if (!langChosen()) { showLanguageGate(); return; }
-  applyStaticI18n();   // localize tagged static HTML (intro wizard, install prompt, …)
+  applyStaticI18n();
 
   const params = new URLSearchParams(window.location.search);
   let sessionId = params.get('session');
@@ -4065,6 +4065,12 @@ async function boot() {
       try { history.replaceState(null, '', '/v0.5?session=' + encodeURIComponent(sessionId)); } catch (_e) {}
     }
   }
+
+  // Language gate — PASSENGERS ONLY. A passenger is joining a session and is
+  // not a guide (no stored guide token, not ?role=guide). Guides are never
+  // prompted. The gate reloads on pick so the rest of boot renders localized.
+  const _isGuide = (role === 'guide') || !!getStoredGuideToken();
+  if (sessionId && !_isGuide && !langChosen()) { showLanguageGate(); return; }
 
   // Verify any stored guide token. Cheap — one RPC call. Result populates
   // module-level GUIDE so downstream code knows whether we're a logged-in guide.
@@ -5375,6 +5381,21 @@ async function tbDuplicateStop(id) {
   const { data, error } = await supabaseClient.rpc('duplicate_stop', { p_guide_token: token, p_stop_id: id });
   return error ? { error: error.message } : { ok: true, id: data && data.id };
 }
+// Auto-translate the tour's content (stops/spots) to ES + ZH via the
+// translate_tour edge function (DeepL). Only new/changed text is sent.
+async function tbTranslateTour(tourId) {
+  const token = getStoredGuideToken(); if (!token) return { error: 'Not signed in.' };
+  try {
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/translate_tour`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'apikey': SUPABASE_KEY, 'authorization': 'Bearer ' + SUPABASE_KEY },
+      body: JSON.stringify({ token, tourId }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) return { error: data.error || ('HTTP ' + resp.status) };
+    return { ok: true, translated: data.translated || 0 };
+  } catch (e) { return { error: String(e) }; }
+}
 async function tbCreateStop(tourId, name, lng, lat, radius) {
   const token = getStoredGuideToken();
   const { data, error } = await supabaseClient.rpc('create_stop',
@@ -5803,6 +5824,10 @@ function tbWirePanelDrag(editorEl) {
 }
 
 function tbCloseEditor() {
+  // Fire-and-forget: auto-translate any new/changed content on leave. No-op if
+  // nothing changed or the DeepL key isn't configured.
+  const _tid = _tbTour && _tbTour.id;
+  if (_tid) { tbTranslateTour(_tid).catch(() => {}); }
   if (_tbEditorMap) { try { _tbEditorMap.remove(); } catch (_e) {} _tbEditorMap = null; }
   _tbStopMarkers = []; _tbPinMarkers = [];
   const el = document.getElementById('tour-editor'); if (el) el.remove();
@@ -6017,7 +6042,19 @@ function renderTbEditorPanel() {
   }
   sl.textContent = headTxt;
   hdr.appendChild(sl);
-  const hdrActs = document.createElement('div'); hdrActs.style.cssText = 'display:flex; gap:6px; flex:0 0 auto;';
+  const hdrActs = document.createElement('div'); hdrActs.style.cssText = 'display:flex; gap:6px; flex:0 0 auto; flex-wrap:wrap; justify-content:flex-end;';
+  if (nStops >= 1) {
+    const tr = smMakeBtn('🌐 Translate', '', async (ev) => {
+      const btn = ev.currentTarget; btn.textContent = 'Translating…'; btn.disabled = true;
+      const r = await tbTranslateTour(_tbTour.id);
+      btn.disabled = false;
+      btn.textContent = r.error ? '🌐 Translate' : '✓ Translated';
+      if (r.error) console.warn('[tb] translate failed', r.error);
+      else setTimeout(() => { if (btn) btn.textContent = '🌐 Translate'; }, 2500);
+    });
+    tr.classList.add('tb-mini');
+    hdrActs.appendChild(tr);
+  }
   if (nStops >= 2) {
     const ro = smMakeBtn('↕ Reorder', '', () => tbOpenReorderStops());
     ro.classList.add('tb-mini');
