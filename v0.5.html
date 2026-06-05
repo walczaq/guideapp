@@ -3049,7 +3049,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · i18n: stop-arrival modal labels · build 2026-06-05-1646';
+const BUILD_VERSION = '0.6 · i18n: warning-level badge labels · build 2026-06-05-1648';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3126,6 +3126,7 @@ const I18N = {
     share_title: 'Share invite', share_sub: "Scan with another phone's camera, or copy the link.", share_copy: 'Copy link', share_copied: 'Copied',
     menu_title: 'Menu', notif_on: 'Notifications · on', notif_blocked: 'Notifications blocked · tap to fix',
     arr_stop: 'Stop', arr_now: 'Now', arr_time_at_stop: 'Time at stop', arr_departure: 'Departure', arr_time_left: 'Time left', arr_weather: 'Weather', arr_tba: 'to be added', arr_checking: 'checking…',
+    warn_info: 'Info', warn_caution: 'Caution', warn_danger: 'Danger', warn_note: 'Note',
   },
   es: {
     gate_title: 'Elige tu idioma', gate_sub: 'Puedes cambiarlo luego en el menú.',
@@ -3159,6 +3160,7 @@ const I18N = {
     share_title: 'Compartir invitación', share_sub: 'Escanéalo con la cámara de otro teléfono o copia el enlace.', share_copy: 'Copiar enlace', share_copied: 'Copiado',
     menu_title: 'Menú', notif_on: 'Notificaciones · activadas', notif_blocked: 'Notificaciones bloqueadas · toca para arreglar',
     arr_stop: 'Parada', arr_now: 'Ahora', arr_time_at_stop: 'Tiempo en la parada', arr_departure: 'Salida', arr_time_left: 'Tiempo restante', arr_weather: 'Clima', arr_tba: 'por confirmar', arr_checking: 'comprobando…',
+    warn_info: 'Información', warn_caution: 'Precaución', warn_danger: 'Peligro', warn_note: 'Nota',
   },
   zh: {
     gate_title: '选择语言', gate_sub: '稍后可在菜单中更改。',
@@ -3192,6 +3194,7 @@ const I18N = {
     share_title: '分享邀请', share_sub: '用另一部手机的相机扫描，或复制链接。', share_copy: '复制链接', share_copied: '已复制',
     menu_title: '菜单', notif_on: '通知 · 已开启', notif_blocked: '通知被屏蔽 · 点按修复',
     arr_stop: '停靠点', arr_now: '现在', arr_time_at_stop: '停留时间', arr_departure: '出发', arr_time_left: '剩余时间', arr_weather: '天气', arr_tba: '待定', arr_checking: '查询中…',
+    warn_info: '提示', warn_caution: '注意', warn_danger: '危险', warn_note: '备注',
   },
 };
 let LANG = 'en';
@@ -10287,7 +10290,7 @@ function showUpdatePopup(stop, opts) {
   }
 
   // Per-line warnings, reusing the arrival modal's warning-row look.
-  const labelByLevel = { info: 'Info', caution: 'Caution', danger: 'Danger' };
+  const labelByLevel = { info: t('warn_info'), caution: t('warn_caution'), danger: t('warn_danger') };
   const entries = parseNotesText(meta.notes || '').map(e => ({
     level: e.level === 'none' ? overallLevel : e.level,
     text: e.level === 'bus' ? busLineDisplayText(e.text) : e.text,
@@ -10303,7 +10306,7 @@ function showUpdatePopup(stop, opts) {
       const prefix = document.createElement('span');
       prefix.className = 'stop-arrival-warning-prefix';
       prefix.innerHTML = svgForLevel(entry.level)
-        + '<span class="stop-arrival-warning-level">' + (labelByLevel[entry.level] || 'Note') + '</span>';
+        + '<span class="stop-arrival-warning-level">' + (labelByLevel[entry.level] || t('warn_note')) + '</span>';
       row.appendChild(prefix);
       const textEl = document.createElement('span');
       textEl.textContent = entry.text;
@@ -10630,7 +10633,7 @@ function updateArrivalWarning(overallLevel, notesText) {
     banner.classList.remove('show');
     return;
   }
-  const labelByLevel = { info: 'Info', caution: 'Caution', danger: 'Danger' };
+  const labelByLevel = { info: t('warn_info'), caution: t('warn_caution'), danger: t('warn_danger') };
   for (const entry of entries) {
     const row = document.createElement('div');
     row.className = 'stop-arrival-warning-row';
@@ -10642,7 +10645,7 @@ function updateArrivalWarning(overallLevel, notesText) {
       const prefix = document.createElement('span');
       prefix.className = 'stop-arrival-warning-prefix';
       prefix.innerHTML = svgForLevel(entry.level)
-        + '<span class="stop-arrival-warning-level">' + (labelByLevel[entry.level] || 'Note') + '</span>';
+        + '<span class="stop-arrival-warning-level">' + (labelByLevel[entry.level] || t('warn_note')) + '</span>';
       row.appendChild(prefix);
       const textEl = document.createElement('span');
       textEl.textContent = entry.text;
