@@ -2564,7 +2564,7 @@
           <polyline points="12 19 5 12 12 5"/>
         </svg>
       </button>
-      <div class="screen-title">Menu</div>
+      <div class="screen-title" data-i18n="menu_title">Menu</div>
     </div>
     <div class="screen-body">
       <div class="menu-brand">
@@ -2730,10 +2730,10 @@
           <polyline points="12 19 5 12 12 5"/>
         </svg>
       </button>
-      <div class="screen-title">Share invite</div>
+      <div class="screen-title" data-i18n="share_title">Share invite</div>
     </div>
     <div class="screen-body">
-      <div style="text-align:center; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); line-height:1.5; margin-bottom:20px;">
+      <div data-i18n="share_sub" style="text-align:center; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); line-height:1.5; margin-bottom:20px;">
         Scan with another phone's camera, or copy the link.
       </div>
       <div id="share-qr-wrap" style="display:flex; justify-content:center; padding:20px; background:#ffffff; border:2px solid var(--ink); border-radius:12px; margin-bottom:18px;">
@@ -2743,6 +2743,7 @@
       <div id="share-url" style="padding:12px 14px; background:var(--paper-2); border:1px solid var(--rule); border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:11px; word-break:break-all; user-select:all; line-height:1.5; margin-bottom:14px;"></div>
       <button
         id="share-copy-btn"
+        data-i18n="share_copy"
         style="width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
       >
         Copy link
@@ -3048,7 +3049,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · i18n: all tour content translated + more UI chrome · build 2026-06-05-1636';
+const BUILD_VERSION = '0.6 · i18n: share screen, menu title, notification states · build 2026-06-05-1643';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3122,6 +3123,8 @@ const I18N = {
     reward_stamp: '🎉 On time!', reward_title: 'Nice — you made it back!', reward_body: "You're at the bus with time to spare. Sit back and enjoy the ride.",
     menu_group_chat: 'Group chat', menu_reset: 'Reset visited pins', menu_about: 'About this build',
     pop_continue: 'Continue', pop_gotit: 'Got it', menu_your_name: 'Your name', menu_enable_notif: 'Enable notifications',
+    share_title: 'Share invite', share_sub: "Scan with another phone's camera, or copy the link.", share_copy: 'Copy link', share_copied: 'Copied',
+    menu_title: 'Menu', notif_on: 'Notifications · on', notif_blocked: 'Notifications blocked · tap to fix',
   },
   es: {
     gate_title: 'Elige tu idioma', gate_sub: 'Puedes cambiarlo luego en el menú.',
@@ -3152,6 +3155,8 @@ const I18N = {
     reward_stamp: '🎉 ¡A tiempo!', reward_title: '¡Bien, llegaste a tiempo!', reward_body: 'Estás en el autobús con tiempo de sobra. Relájate y disfruta del viaje.',
     menu_group_chat: 'Chat del grupo', menu_reset: 'Restablecer paradas vistas', menu_about: 'Acerca de esta versión',
     pop_continue: 'Continuar', pop_gotit: 'Entendido', menu_your_name: 'Tu nombre', menu_enable_notif: 'Activar notificaciones',
+    share_title: 'Compartir invitación', share_sub: 'Escanéalo con la cámara de otro teléfono o copia el enlace.', share_copy: 'Copiar enlace', share_copied: 'Copiado',
+    menu_title: 'Menú', notif_on: 'Notificaciones · activadas', notif_blocked: 'Notificaciones bloqueadas · toca para arreglar',
   },
   zh: {
     gate_title: '选择语言', gate_sub: '稍后可在菜单中更改。',
@@ -3182,6 +3187,8 @@ const I18N = {
     reward_stamp: '🎉 准时！', reward_title: '太好了——你赶回来了！', reward_body: '你已到达大巴，还有充足时间。请坐好，享受旅程。',
     menu_group_chat: '群聊', menu_reset: '重置已访问的点', menu_about: '关于此版本',
     pop_continue: '继续', pop_gotit: '知道了', menu_your_name: '你的名字', menu_enable_notif: '开启通知',
+    share_title: '分享邀请', share_sub: '用另一部手机的相机扫描，或复制链接。', share_copy: '复制链接', share_copied: '已复制',
+    menu_title: '菜单', notif_on: '通知 · 已开启', notif_blocked: '通知被屏蔽 · 点按修复',
   },
 };
 let LANG = 'en';
@@ -9578,7 +9585,7 @@ function openShareScreen() {
           document.execCommand('copy');
           document.body.removeChild(ta);
         }
-        flash('Copied');
+        flash(t('share_copied'));
       } catch {
         flash('Copy failed');
       }
@@ -11601,7 +11608,7 @@ function refreshNotificationsMenuItem() {
   const perm = Notification.permission;
   if (perm === 'granted') {
     item.style.display = '';
-    label.textContent = 'Notifications · on';
+    label.textContent = t('notif_on');
     item.disabled = true;
     item.style.opacity = '0.6';
     if (hint) { hint.hidden = true; hint.innerHTML = ''; }
@@ -11609,7 +11616,7 @@ function refreshNotificationsMenuItem() {
     // Denied → the page can't re-request. Keep the item TAPPABLE so the
     // user can reveal recovery steps (handled in the menu click handler).
     item.style.display = '';
-    label.textContent = 'Notifications blocked · tap to fix';
+    label.textContent = t('notif_blocked');
     item.disabled = false;
     item.style.opacity = '';
   } else {
