@@ -2798,20 +2798,20 @@
       </div>
       <div class="stop-arrival-info">
         <div class="stop-arrival-info-row">
-          <span class="stop-arrival-info-label">Time at stop</span>
-          <span class="stop-arrival-info-value placeholder">to be added</span>
+          <span class="stop-arrival-info-label" data-i18n="arr_time_at_stop">Time at stop</span>
+          <span class="stop-arrival-info-value placeholder" data-i18n="arr_tba">to be added</span>
         </div>
         <div class="stop-arrival-info-row">
-          <span class="stop-arrival-info-label">Departure</span>
-          <span class="stop-arrival-info-value placeholder">to be added</span>
+          <span class="stop-arrival-info-label" data-i18n="arr_departure">Departure</span>
+          <span class="stop-arrival-info-value placeholder" data-i18n="arr_tba">to be added</span>
         </div>
         <div class="stop-arrival-info-row">
-          <span class="stop-arrival-info-label">Time left</span>
-          <span class="stop-arrival-info-value placeholder">to be added</span>
+          <span class="stop-arrival-info-label" data-i18n="arr_time_left">Time left</span>
+          <span class="stop-arrival-info-value placeholder" data-i18n="arr_tba">to be added</span>
         </div>
         <div class="stop-arrival-info-row">
-          <span class="stop-arrival-info-label">Weather</span>
-          <span class="stop-arrival-info-value placeholder">to be added</span>
+          <span class="stop-arrival-info-label" data-i18n="arr_weather">Weather</span>
+          <span class="stop-arrival-info-value placeholder" data-i18n="arr_tba">to be added</span>
         </div>
 
       </div>
@@ -3049,7 +3049,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · i18n: share screen, menu title, notification states · build 2026-06-05-1643';
+const BUILD_VERSION = '0.6 · i18n: stop-arrival modal labels · build 2026-06-05-1646';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3125,6 +3125,7 @@ const I18N = {
     pop_continue: 'Continue', pop_gotit: 'Got it', menu_your_name: 'Your name', menu_enable_notif: 'Enable notifications',
     share_title: 'Share invite', share_sub: "Scan with another phone's camera, or copy the link.", share_copy: 'Copy link', share_copied: 'Copied',
     menu_title: 'Menu', notif_on: 'Notifications · on', notif_blocked: 'Notifications blocked · tap to fix',
+    arr_stop: 'Stop', arr_now: 'Now', arr_time_at_stop: 'Time at stop', arr_departure: 'Departure', arr_time_left: 'Time left', arr_weather: 'Weather', arr_tba: 'to be added', arr_checking: 'checking…',
   },
   es: {
     gate_title: 'Elige tu idioma', gate_sub: 'Puedes cambiarlo luego en el menú.',
@@ -3157,6 +3158,7 @@ const I18N = {
     pop_continue: 'Continuar', pop_gotit: 'Entendido', menu_your_name: 'Tu nombre', menu_enable_notif: 'Activar notificaciones',
     share_title: 'Compartir invitación', share_sub: 'Escanéalo con la cámara de otro teléfono o copia el enlace.', share_copy: 'Copiar enlace', share_copied: 'Copiado',
     menu_title: 'Menú', notif_on: 'Notificaciones · activadas', notif_blocked: 'Notificaciones bloqueadas · toca para arreglar',
+    arr_stop: 'Parada', arr_now: 'Ahora', arr_time_at_stop: 'Tiempo en la parada', arr_departure: 'Salida', arr_time_left: 'Tiempo restante', arr_weather: 'Clima', arr_tba: 'por confirmar', arr_checking: 'comprobando…',
   },
   zh: {
     gate_title: '选择语言', gate_sub: '稍后可在菜单中更改。',
@@ -3189,6 +3191,7 @@ const I18N = {
     pop_continue: '继续', pop_gotit: '知道了', menu_your_name: '你的名字', menu_enable_notif: '开启通知',
     share_title: '分享邀请', share_sub: '用另一部手机的相机扫描，或复制链接。', share_copy: '复制链接', share_copied: '已复制',
     menu_title: '菜单', notif_on: '通知 · 已开启', notif_blocked: '通知被屏蔽 · 点按修复',
+    arr_stop: '停靠点', arr_now: '现在', arr_time_at_stop: '停留时间', arr_departure: '出发', arr_time_left: '剩余时间', arr_weather: '天气', arr_tba: '待定', arr_checking: '查询中…',
   },
 };
 let LANG = 'en';
@@ -10540,7 +10543,7 @@ function populateArrivalModalContent(stop) {
   const nameEl = document.getElementById('stop-arrival-name');
   if (!stamp || !nameEl) return;
   console.log('[arrival populate]', stop.name, 'meta:', ACTIVATION_META.get(stop.id));
-  stamp.textContent = `Stop № ${String(stop.ordinal).padStart(2, '0')} · Now`;
+  stamp.textContent = `${t('arr_stop')} № ${String(stop.ordinal).padStart(2, '0')} · ${t('arr_now')}`;
   nameEl.textContent = i18nText(stop.nameI18n, stop.name) || '';
 
   const meta = ACTIVATION_META.get(stop.id) || {};
@@ -10551,11 +10554,11 @@ function populateArrivalModalContent(stop) {
     : null;
 
   setArrivalInfoRow(0, `${duration} min`, false);
-  setArrivalInfoRow(1, departureAt ? formatHHMM(departureAt) : 'to be added', !departureAt);
+  setArrivalInfoRow(1, departureAt ? formatHHMM(departureAt) : t('arr_tba'), !departureAt);
   // Time-left row: live-updates via the countdown ticker.
-  setArrivalInfoRow(2, departureAt ? formatTimeLeft(departureAt) : 'to be added', !departureAt);
-  // Weather row defaults to "checking…" until refreshArrivalWeather completes.
-  setArrivalInfoRow(3, 'checking…', true);
+  setArrivalInfoRow(2, departureAt ? formatTimeLeft(departureAt) : t('arr_tba'), !departureAt);
+  // Weather row defaults to the localized "checking…" until refreshArrivalWeather completes.
+  setArrivalInfoRow(3, t('arr_checking'), true);
   // Each note line carries its own level — render one badge per line.
   updateArrivalWarning(meta.warning_level || 'none', meta.notes || '');
 }
