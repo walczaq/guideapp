@@ -2681,7 +2681,7 @@
               <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
             </svg>
           </div>
-          <div class="menu-label">Reset visited pins</div>
+          <div class="menu-label" data-i18n="menu_reset">Reset visited pins</div>
           <span class="menu-chevron">›</span>
         </button>
         <button class="menu-item" data-action="language" id="menu-language">
@@ -2703,7 +2703,7 @@
               <line x1="12" y1="8" x2="12.01" y2="8"/>
             </svg>
           </div>
-          <div class="menu-label">About this build</div>
+          <div class="menu-label" data-i18n="menu_about">About this build</div>
           <span class="menu-chevron">›</span>
         </button>
       </div>
@@ -3048,7 +3048,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · i18n phase 2: intro/permissions wizard + install prompt localized · build 2026-06-05-0058';
+const BUILD_VERSION = '0.6 · i18n phase 3: reward popup, loading, menu items · build 2026-06-05-1554';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3118,6 +3118,9 @@ const I18N = {
     intro_d_battery: 'If your phone aggressively closes apps, keep Fieldnote open during key moments to be safe.',
     intro_d_cta: 'Start the tour',
     install_text: 'Install Fieldnote on your phone to keep notifications reliable even if you close the browser.', install_btn: 'Install',
+    loading_joining: 'Joining session…',
+    reward_stamp: '🎉 On time!', reward_title: 'Nice — you made it back!', reward_body: "You're at the bus with time to spare. Sit back and enjoy the ride.",
+    menu_group_chat: 'Group chat', menu_reset: 'Reset visited pins', menu_about: 'About this build',
   },
   es: {
     gate_title: 'Elige tu idioma', gate_sub: 'Puedes cambiarlo luego en el menú.',
@@ -3144,6 +3147,9 @@ const I18N = {
     intro_d_battery: 'Si tu teléfono cierra apps de forma agresiva, mantén Fieldnote abierto en los momentos clave por seguridad.',
     intro_d_cta: 'Empezar el tour',
     install_text: 'Instala Fieldnote en tu teléfono para mantener las notificaciones fiables aunque cierres el navegador.', install_btn: 'Instalar',
+    loading_joining: 'Uniéndote a la sesión…',
+    reward_stamp: '🎉 ¡A tiempo!', reward_title: '¡Bien, llegaste a tiempo!', reward_body: 'Estás en el autobús con tiempo de sobra. Relájate y disfruta del viaje.',
+    menu_group_chat: 'Chat del grupo', menu_reset: 'Restablecer paradas vistas', menu_about: 'Acerca de esta versión',
   },
   zh: {
     gate_title: '选择语言', gate_sub: '稍后可在菜单中更改。',
@@ -3170,6 +3176,9 @@ const I18N = {
     intro_d_battery: '如果你的手机会主动关闭应用，请在关键时刻保持 Fieldnote 打开以防万一。',
     intro_d_cta: '开始导览',
     install_text: '在手机上安装 Fieldnote，即使关闭浏览器也能保持通知可靠。', install_btn: '安装',
+    loading_joining: '正在加入…',
+    reward_stamp: '🎉 准时！', reward_title: '太好了——你赶回来了！', reward_body: '你已到达大巴，还有充足时间。请坐好，享受旅程。',
+    menu_group_chat: '群聊', menu_reset: '重置已访问的点', menu_about: '关于此版本',
   },
 };
 let LANG = 'en';
@@ -4181,7 +4190,7 @@ function clearLastSession() {
 
 // Load a session by ID, then load its tour, then init the map.
 async function loadSessionAndTour(sessionId) {
-  showLoading(`Joining session ${sessionId}…`);
+  showLoading(t('loading_joining'));
 
   // Fetch the session row.
   const { data: session, error: sessionErr } = await supabaseClient
@@ -9198,9 +9207,9 @@ async function markPassengerInBus() {
 function showBusArrivalReward() {
   popup.classList.remove('warn');
   popup.classList.add('reward');
-  popupStamp.textContent = '🎉 On time!';
-  popupTitle.textContent = 'Nice — you made it back!';
-  popupBodyEl.textContent = "You're at the bus with time to spare. Sit back and enjoy the ride.";
+  popupStamp.textContent = t('reward_stamp');
+  popupTitle.textContent = t('reward_title');
+  popupBodyEl.textContent = t('reward_body');
   popup.classList.add('show');
   playChime();
   burstConfetti();
@@ -9372,7 +9381,7 @@ document.getElementById('burger-btn').addEventListener('click', () => {
       groupChatItem.style.display = 'none';
     } else if (SESSION && SESSION.chat_url) {
       groupChatItem.style.display = '';
-      if (gcLabel) gcLabel.textContent = 'Group chat';
+      if (gcLabel) gcLabel.textContent = t('menu_group_chat');
     } else {
       groupChatItem.style.display = 'none';
     }
