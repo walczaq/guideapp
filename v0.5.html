@@ -2684,6 +2684,17 @@
           <div class="menu-label">Reset visited pins</div>
           <span class="menu-chevron">›</span>
         </button>
+        <button class="menu-item" data-action="language" id="menu-language">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M2 12h20"/>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+          </div>
+          <div class="menu-label" id="menu-language-label">Language</div>
+          <span class="menu-chevron">›</span>
+        </button>
         <button class="menu-item" data-action="about">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -3037,7 +3048,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Guide picks next stop (prompt after deactivate) → passenger banner · build 2026-06-05-0010';
+const BUILD_VERSION = '0.6 · Language gate (EN/ES/ZH) + i18n framework + first-load flow localized · build 2026-06-05-0035';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3069,6 +3080,60 @@ const MAPBOX_TOKEN = 'pk.eyJ1IjoiZmllbGRub3RlMSIsImEiOiJjbW9mbmhtZmcwMGI2MnNzZmp
 // sets this — never runs, and the builder map fails with "an API access token
 // is required". Setting it here covers every entry path.
 if (typeof mapboxgl !== 'undefined') { try { mapboxgl.accessToken = MAPBOX_TOKEN; } catch (_e) {} }
+
+// ── i18n (passenger-facing) ──────────────────────────────────────────────
+// Chosen on first load via the language gate, stored in localStorage, applied
+// by re-rendering (the gate reloads the page so every screen renders in the
+// chosen language). Guide/builder UI stays English for now. t(key, params)
+// falls back to English, then to the key itself. AI translations (es/zh) —
+// flagged for a native-speaker review before any public launch.
+const LANGS = [
+  { code: 'en', native: 'English' },
+  { code: 'es', native: 'Español' },
+  { code: 'zh', native: '中文' },
+];
+const I18N = {
+  en: {
+    gate_title: 'Choose your language', gate_sub: 'You can change this later in the menu.',
+    menu_language: 'Language',
+    join_stamp: 'Joining tour', join_q: "What's your name?", join_sub: 'So {guide} can recognize you on the map.',
+    join_ph: 'your name', join_btn: 'Join tour', join_joining: 'Joining…',
+    join_err_empty: 'Enter a name to continue.', join_err_long: 'Name is too long.',
+    ended_stamp: 'Fieldnote · Tour ended', ended_title: "That's a wrap.",
+    ended_sub: 'Your guide has ended this tour. Thanks for walking with us.',
+    nsb_next: 'Next',
+  },
+  es: {
+    gate_title: 'Elige tu idioma', gate_sub: 'Puedes cambiarlo luego en el menú.',
+    menu_language: 'Idioma',
+    join_stamp: 'Uniéndote al tour', join_q: '¿Cómo te llamas?', join_sub: 'Para que {guide} pueda reconocerte en el mapa.',
+    join_ph: 'tu nombre', join_btn: 'Unirse al tour', join_joining: 'Uniéndote…',
+    join_err_empty: 'Escribe un nombre para continuar.', join_err_long: 'El nombre es demasiado largo.',
+    ended_stamp: 'Fieldnote · Tour finalizado', ended_title: 'Eso es todo.',
+    ended_sub: 'Tu guía ha finalizado este tour. Gracias por acompañarnos.',
+    nsb_next: 'Siguiente',
+  },
+  zh: {
+    gate_title: '选择语言', gate_sub: '稍后可在菜单中更改。',
+    menu_language: '语言',
+    join_stamp: '加入行程', join_q: '你叫什么名字？', join_sub: '让 {guide} 能在地图上认出你。',
+    join_ph: '你的名字', join_btn: '加入行程', join_joining: '加入中…',
+    join_err_empty: '请输入名字以继续。', join_err_long: '名字太长了。',
+    ended_stamp: 'Fieldnote · 行程已结束', ended_title: '行程结束。',
+    ended_sub: '你的向导已结束本次行程。感谢你的同行。',
+    nsb_next: '下一站',
+  },
+};
+let LANG = 'en';
+function loadLang() { try { const l = localStorage.getItem('fieldnote_lang'); if (l && I18N[l]) LANG = l; } catch (_e) {} }
+function langChosen() { try { return !!localStorage.getItem('fieldnote_lang'); } catch (_e) { return false; } }
+function t(key, params) {
+  let s = (I18N[LANG] && I18N[LANG][key] != null) ? I18N[LANG][key]
+        : (I18N.en[key] != null ? I18N.en[key] : key);
+  if (params) for (const k in params) s = s.split('{' + k + '}').join(params[k]);
+  return s;
+}
+
 const SUPABASE_URL = 'https://xgelrfdrdvrlltcsquqh.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_56-3xMMvHZFtw2LGKkcqew_09NhbiB0';
 
@@ -3853,6 +3918,30 @@ const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 // The "create session" path generates a nanoid, inserts a session row,
 // then redirects to ?session=<newId>.
 
+// First-load language picker (English / Español / 中文). Stores the choice and
+// reloads so every screen renders in it. Also reachable later from the menu.
+function showLanguageGate() {
+  hideLoading();
+  let el = document.getElementById('language-gate'); if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'language-gate';
+  el.style.cssText = 'position:absolute; inset:0; z-index:120; background:var(--paper); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:40px; text-align:center;';
+  el.innerHTML = `
+    <img class="brand-logo" src="/icon.svg" alt="Fieldnote" />
+    <div style="font-family:'Fraunces',serif; font-style:italic; font-size:23px; color:var(--ink);">${t('gate_title')}</div>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule);">${t('gate_sub')}</div>
+    <div id="lang-btns" style="display:flex; flex-direction:column; gap:10px; width:240px; margin-top:4px;"></div>`;
+  document.getElementById('phone').appendChild(el);
+  const wrap = el.querySelector('#lang-btns');
+  LANGS.forEach(l => {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = l.native;
+    b.style.cssText = "font-family:'JetBrains Mono',monospace; font-size:15px; padding:15px; background:var(--paper-2); color:var(--ink); border:1px solid var(--rule); border-radius:10px; cursor:pointer;";
+    if (l.code === LANG) b.style.borderColor = 'var(--ink)';
+    b.addEventListener('click', () => { try { localStorage.setItem('fieldnote_lang', l.code); } catch (_e) {} location.reload(); });
+    wrap.appendChild(b);
+  });
+}
+
 async function boot() {
   // Config sanity check.
   if (!MAPBOX_TOKEN || !MAPBOX_TOKEN.startsWith('pk.')) {
@@ -3863,6 +3952,11 @@ async function boot() {
     showFatalError('Supabase config missing. Set SUPABASE_URL and SUPABASE_KEY at the top of the script.');
     return;
   }
+
+  // Language: prompt once, before everything else. The gate reloads on pick so
+  // the whole app renders in the chosen language.
+  loadLang();
+  if (!langChosen()) { showLanguageGate(); return; }
 
   const params = new URLSearchParams(window.location.search);
   let sessionId = params.get('session');
@@ -4222,18 +4316,18 @@ function showNameEntryGate() {
   const guideName = (SESSION && SESSION.guide_name) ? SESSION.guide_name : 'your guide';
   el.innerHTML = `
     <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
-      Joining tour
+      ${t('join_stamp')}
     </div>
     <div style="font-family:'Fraunces',serif; font-style:italic; font-size:24px; color:var(--ink); max-width:280px; line-height:1.3;">
-      What's your name?
+      ${t('join_q')}
     </div>
     <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:280px; line-height:1.5;">
-      So ${guideName} can recognize you on the map.
+      ${t('join_sub', { guide: guideName })}
     </div>
     <input
       id="name-gate-input"
       type="text"
-      placeholder="your name"
+      placeholder="${t('join_ph')}"
       maxlength="40"
       autocomplete="given-name"
       style="font-family:'JetBrains Mono',monospace; font-size:14px; padding:14px 16px; border:1px solid var(--rule); background:var(--paper-2); width:260px; border-radius:6px; text-align:center;"
@@ -4242,7 +4336,7 @@ function showNameEntryGate() {
       id="name-gate-submit"
       style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
     >
-      Join tour
+      ${t('join_btn')}
     </button>
     <div id="name-gate-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
   `;
@@ -4255,11 +4349,11 @@ function showNameEntryGate() {
   async function trySubmit() {
     const name = (input.value || '').trim();
     errorEl.textContent = '';
-    if (!name) { input.focus(); errorEl.textContent = 'Enter a name to continue.'; return; }
-    if (name.length > 40) { errorEl.textContent = 'Name is too long.'; return; }
+    if (!name) { input.focus(); errorEl.textContent = t('join_err_empty'); return; }
+    if (name.length > 40) { errorEl.textContent = t('join_err_long'); return; }
 
     btn.disabled = true;
-    btn.textContent = 'Joining…';
+    btn.textContent = t('join_joining');
     try {
       const { error } = await supabaseClient
         .from('session_passengers')
@@ -8770,7 +8864,7 @@ function updateNextStopBanner() {
   if (!next) next = stops.find(s => !ACTIVE_STOP_IDS.has(s.id));
   if (!next) { el.hidden = true; return; }   // no stops, or all activated
   el.innerHTML = '';
-  const label = document.createElement('span'); label.className = 'nsb-label'; label.textContent = 'Next';
+  const label = document.createElement('span'); label.className = 'nsb-label'; label.textContent = t('nsb_next');
   const nm = document.createElement('span'); nm.className = 'nsb-name'; nm.textContent = next.name || 'Stop';
   el.appendChild(label); el.appendChild(nm);
   if (next.driveSecs != null && isFinite(next.driveSecs)) {
@@ -9269,6 +9363,7 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   // Update the install button label/disabled state (Already installed vs
   // Install website).
   refreshMenuInstallBtn();
+  const llbl = document.getElementById('menu-language-label'); if (llbl) llbl.textContent = t('menu_language');
   openScreen('screen-menu');
 });
 
@@ -9281,6 +9376,9 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
       closePopup();
       renderPins();
       while (screenStack.length) closeScreen();
+    } else if (action === 'language') {
+      while (screenStack.length) closeScreen();
+      showLanguageGate();
     } else if (action === 'about') {
       openScreen('screen-about');
     } else if (action === 'share-invite') {
@@ -10231,7 +10329,12 @@ function onSessionUpdated(row) {
 function showSessionEnded() {
   if (ROLE === 'guide') return;   // guide is redirecting anyway
   const screen = document.getElementById('session-ended-screen');
-  if (screen) screen.classList.add('show');
+  if (screen) {
+    const st = screen.querySelector('.session-ended-stamp'); if (st) st.textContent = t('ended_stamp');
+    const ti = screen.querySelector('.session-ended-title'); if (ti) ti.textContent = t('ended_title');
+    const su = screen.querySelector('.session-ended-sub'); if (su) su.textContent = t('ended_sub');
+    screen.classList.add('show');
+  }
   // Stop any further realtime work on this page — the session is over.
   try { if (_stopActivationChannel) _stopActivationChannel.unsubscribe(); } catch {}
   try { if (_sessionChannel) _sessionChannel.unsubscribe(); } catch {}
