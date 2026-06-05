@@ -241,6 +241,21 @@
     text-shadow: 0 0 4px var(--paper), 0 0 8px var(--paper), 0 1px 2px var(--paper);
     z-index: 5; pointer-events: none;
   }
+  /* Next-stop banner — compact pill, bottom-centre, above the zoom controls. */
+  .next-stop-banner {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 34px);
+    z-index: 6; pointer-events: none; max-width: calc(100% - 120px);
+    display: flex; align-items: baseline; gap: 7px; white-space: nowrap;
+    padding: 7px 13px; border-radius: 999px;
+    background: var(--paper); border: 1px solid var(--rule);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+    font-family: 'Fraunces', serif; font-size: 14px; color: var(--ink);
+  }
+  .next-stop-banner[hidden] { display: none; }
+  .nsb-label { font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--rule); }
+  .nsb-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+  .nsb-eta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #2563eb; }
 
   /* pins */
   .pin-group { cursor: pointer; }
@@ -2351,6 +2366,9 @@
     <div class="map-stage" id="stage">
       <div id="mapbox-map"></div>
 
+      <!-- Next-stop banner: name + driving ETA (guide-computed, read from the tour). -->
+      <div class="next-stop-banner" id="next-stop-banner" hidden></div>
+
       <svg class="overlay-svg" id="overlay">
         <g id="pins-layer"></g>
         <g id="you-layer"></g>
@@ -2994,7 +3012,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Reorder stops (drag) + driving ETA between stops · build 2026-06-04-2330';
+const BUILD_VERSION = '0.6 · Next-stop ETA banner for passengers (guide-computed) · build 2026-06-04-2352';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3645,6 +3663,7 @@ function reshapeTour(raw) {
         lng: s.lng,
         lat: s.lat,
         activation_radius_m: s.activation_radius_m,
+        driveSecs: s.drive_secs_from_prev,   // driving seconds from the previous stop (guide-computed)
         pins: (s.pins || [])
           .slice()
           .sort((a, b) => a.ordinal - b.ordinal)
@@ -4016,7 +4035,7 @@ async function loadSessionAndTour(sessionId) {
     .select(`
       id, slug, name, subtitle, home_lng, home_lat,
       stops (
-        id, ordinal, name, subtitle, lng, lat, activation_radius_m,
+        id, ordinal, name, subtitle, lng, lat, activation_radius_m, drive_secs_from_prev,
         pins (
           id, ordinal, title, body, lng, lat, trigger_radius_m, category
         )
@@ -4460,7 +4479,7 @@ async function loadTourDirectly(slug) {
     .select(`
       id, slug, name, subtitle, home_lng, home_lat,
       stops (
-        id, ordinal, name, subtitle, lng, lat, activation_radius_m,
+        id, ordinal, name, subtitle, lng, lat, activation_radius_m, drive_secs_from_prev,
         pins (
           id, ordinal, title, body, lng, lat, trigger_radius_m, category
         )
@@ -5188,6 +5207,12 @@ async function tbReorderStops(tourId, stopIds) {
   const { error } = await supabaseClient.rpc('reorder_stops', { p_guide_token: token, p_tour_id: tourId, p_stop_ids: stopIds });
   return error ? { error: error.message } : { ok: true };
 }
+// Persist guide-computed per-leg driving seconds so passengers read them for free.
+async function tbSetTourDriveEtas(tourId, stopIds, secs) {
+  const token = getStoredGuideToken(); if (!token) return;
+  try { await supabaseClient.rpc('set_tour_drive_etas', { p_guide_token: token, p_tour_id: tourId, p_stop_ids: stopIds, p_secs: secs }); }
+  catch (_e) { /* best-effort */ }
+}
 // Move a pin / stop one step in the walking order; renumber + persist.
 async function tbMovePin(stop, pin, dir) {
   const all = stop.pins || [];
@@ -5227,7 +5252,7 @@ async function tbDeletePin(id) {
 async function tbLoadTourDetail(tourId) {
   const { data, error } = await supabaseClient
     .from('tours')
-    .select('id, slug, name, subtitle, home_lng, home_lat, owner_guide_id, stops ( id, ordinal, name, subtitle, lng, lat, activation_radius_m, pins ( id, ordinal, title, body, lng, lat, trigger_radius_m, category ) )')
+    .select('id, slug, name, subtitle, home_lng, home_lat, owner_guide_id, stops ( id, ordinal, name, subtitle, lng, lat, activation_radius_m, drive_secs_from_prev, pins ( id, ordinal, title, body, lng, lat, trigger_radius_m, category ) )')
     .eq('id', tourId).single();
   if (error) { console.warn('[tb] load detail failed', error); return null; }
   if (data && data.stops) {
@@ -5632,6 +5657,11 @@ async function tbMaybeFetchEtas() {
     const prev = {};
     (route.legs || []).forEach((leg, i) => { const dest = stops[i + 1]; if (dest) prev[dest.id] = { dur: leg.duration, dist: leg.distance }; });
     _tbEta = { total: { dur: route.duration, dist: route.distance }, prev };
+    // Persist per-leg seconds onto the tour's stops → passengers read them with
+    // no Mapbox call. Also update the in-memory builder stops.
+    const pids = [], psecs = [];
+    stops.forEach(s => { const p = prev[s.id]; if (p) { const v = Math.round(p.dur); pids.push(s.id); psecs.push(v); s.drive_secs_from_prev = v; } });
+    if (pids.length) tbSetTourDriveEtas(_tbTour.id, pids, psecs);
     if (_tbEtaSig === sig && document.getElementById('tb-panel')) renderTbEditorPanel();   // paint the numbers in
   } catch (_e) { _tbEta = null; }   // sig stays set → no refetch loop; straight-line fallback
 }
@@ -8696,6 +8726,28 @@ function renderAll() {
   renderPassengers();
   renderYou();
   updateMapZoomReadout();
+  updateNextStopBanner();
+}
+
+// Show the upcoming stop + its driving ETA (from the previous stop) as a small
+// banner. "Next" = the first stop, by order, not yet activated. The ETA is
+// guide-computed and stored on the tour (drive_secs_from_prev), so this reads
+// it with no Mapbox call. First stop has no leg → name only.
+function updateNextStopBanner() {
+  const el = document.getElementById('next-stop-banner');
+  if (!el) return;
+  const stops = (TOUR && TOUR.stops) || [];
+  const next = stops.find(s => !ACTIVE_STOP_IDS.has(s.id));
+  if (!next) { el.hidden = true; return; }   // no stops, or all activated
+  el.innerHTML = '';
+  const label = document.createElement('span'); label.className = 'nsb-label'; label.textContent = 'Next';
+  const nm = document.createElement('span'); nm.className = 'nsb-name'; nm.textContent = next.name || 'Stop';
+  el.appendChild(label); el.appendChild(nm);
+  if (next.driveSecs != null && isFinite(next.driveSecs)) {
+    const t = document.createElement('span'); t.className = 'nsb-eta'; t.textContent = '🚗 ~' + tbFmtDur(next.driveSecs);
+    el.appendChild(t);
+  }
+  el.hidden = false;
 }
 
 const SVGNS = 'http://www.w3.org/2000/svg';
