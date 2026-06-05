@@ -2465,10 +2465,10 @@
            but with a distinct accent so users see a different message
            rather than thinking the same banner reappeared. -->
       <div class="install-prompt" id="install-prompt">
-        <div class="install-prompt-text">Install Fieldnote on your phone to keep notifications reliable even if you close the browser.</div>
+        <div class="install-prompt-text" data-i18n="install_text">Install Fieldnote on your phone to keep notifications reliable even if you close the browser.</div>
         <div class="install-prompt-row">
           <button type="button" class="install-prompt-btn" id="install-prompt-dismiss">Not now</button>
-          <button type="button" class="install-prompt-btn primary" id="install-prompt-install">Install</button>
+          <button type="button" class="install-prompt-btn primary" id="install-prompt-install" data-i18n="install_btn">Install</button>
         </div>
       </div>
 
@@ -2847,63 +2847,63 @@
 
       <!-- Step 1 — welcome + why -->
       <div class="intro-step" data-step="welcome">
-        <div class="intro-stamp">Welcome to Fieldnote</div>
-        <h2 class="intro-title">Your live tour companion</h2>
-        <p class="intro-body">Fieldnote shows you on the tour map and reveals each stop as your guide activates it — plus warnings and "time to head back to the bus" alerts.</p>
+        <div class="intro-stamp" data-i18n="intro_w_stamp">Welcome to Fieldnote</div>
+        <h2 class="intro-title" data-i18n="intro_w_title">Your live tour companion</h2>
+        <p class="intro-body" data-i18n="intro_w_body">Fieldnote shows you on the tour map and reveals each stop as your guide activates it — plus warnings and "time to head back to the bus" alerts.</p>
         <div class="intro-point">
           <span class="intro-point-icon">📍</span>
-          <span><b>Why location?</b> So you appear on the map and stops light up near you. It's only shared during this tour — never in the background.</span>
+          <span data-i18n-html="intro_w_p1"><b>Why location?</b> So you appear on the map and stops light up near you. It's only shared during this tour — never in the background.</span>
         </div>
         <div class="intro-point">
           <span class="intro-point-icon">📲</span>
-          <span><b>Adding to your home screen is safe.</b> It only runs while you're using it or during the tour — it can't track you in the background — and you can delete it in one tap, like any app.</span>
+          <span data-i18n-html="intro_w_p2"><b>Adding to your home screen is safe.</b> It only runs while you're using it or during the tour — it can't track you in the background — and you can delete it in one tap, like any app.</span>
         </div>
         <div class="intro-actions">
-          <button class="intro-btn ghost" id="intro-skip-all">Skip</button>
-          <button class="intro-btn primary" data-intro-next>Get started</button>
+          <button class="intro-btn ghost" id="intro-skip-all" data-i18n="intro_skip">Skip</button>
+          <button class="intro-btn primary" data-intro-next data-i18n="intro_w_cta">Get started</button>
         </div>
       </div>
 
       <!-- Step 2 — notifications -->
       <div class="intro-step" data-step="notify" hidden>
-        <div class="intro-stamp">Step 1 of 3</div>
-        <h2 class="intro-title">Stay notified</h2>
-        <p class="intro-body">Get a buzz when your guide starts a stop, sends a warning, calls everyone back to the bus, or changes the departure time — even with your phone locked.</p>
+        <div class="intro-stamp" data-i18n="intro_step1">Step 1 of 3</div>
+        <h2 class="intro-title" data-i18n="intro_n_title">Stay notified</h2>
+        <p class="intro-body" data-i18n="intro_n_body">Get a buzz when your guide starts a stop, sends a warning, calls everyone back to the bus, or changes the departure time — even with your phone locked.</p>
         <div class="intro-status" id="intro-notify-status"></div>
         <div class="intro-actions">
-          <button class="intro-btn ghost" data-intro-next>Skip</button>
-          <button class="intro-btn primary" id="intro-enable-notify">Enable notifications</button>
+          <button class="intro-btn ghost" data-intro-next data-i18n="intro_skip">Skip</button>
+          <button class="intro-btn primary" id="intro-enable-notify" data-i18n="intro_n_cta">Enable notifications</button>
         </div>
       </div>
 
       <!-- Step 3 — location -->
       <div class="intro-step" data-step="location" hidden>
-        <div class="intro-stamp">Step 2 of 3</div>
-        <h2 class="intro-title">Share your location</h2>
-        <p class="intro-body">Allow location so you show up on the map and stops reveal as you reach them. Only shared with your guide during this tour.</p>
+        <div class="intro-stamp" data-i18n="intro_step2">Step 2 of 3</div>
+        <h2 class="intro-title" data-i18n="intro_l_title">Share your location</h2>
+        <p class="intro-body" data-i18n="intro_l_body">Allow location so you show up on the map and stops reveal as you reach them. Only shared with your guide during this tour.</p>
         <div class="intro-status" id="intro-location-status"></div>
         <div class="intro-actions">
-          <button class="intro-btn ghost" data-intro-next>Skip</button>
-          <button class="intro-btn primary" id="intro-allow-location">Allow location</button>
+          <button class="intro-btn ghost" data-intro-next data-i18n="intro_skip">Skip</button>
+          <button class="intro-btn primary" id="intro-allow-location" data-i18n="intro_l_cta">Allow location</button>
         </div>
       </div>
 
       <!-- Step 4 — install -->
       <div class="intro-step" data-step="install" hidden>
-        <div class="intro-stamp">Step 3 of 3</div>
-        <h2 class="intro-title">Add to home screen</h2>
-        <p class="intro-body">Install Fieldnote for reliable notifications even when the app is closed. Safe to add, easy to remove.</p>
+        <div class="intro-stamp" data-i18n="intro_step3">Step 3 of 3</div>
+        <h2 class="intro-title" data-i18n="intro_i_title">Add to home screen</h2>
+        <p class="intro-body" data-i18n="intro_i_body">Install Fieldnote for reliable notifications even when the app is closed. Safe to add, easy to remove.</p>
         <div class="intro-status" id="intro-install-status"></div>
         <div class="intro-actions">
-          <button class="intro-btn ghost" data-intro-next>Skip</button>
-          <button class="intro-btn primary" id="intro-install">Install</button>
+          <button class="intro-btn ghost" data-intro-next data-i18n="intro_skip">Skip</button>
+          <button class="intro-btn primary" id="intro-install" data-i18n="intro_i_cta">Install</button>
         </div>
       </div>
 
       <!-- Step 5 — when it works + done -->
       <div class="intro-step" data-step="done" hidden>
-        <div class="intro-stamp">You're set</div>
-        <h2 class="intro-title">When notifications reach you</h2>
+        <div class="intro-stamp" data-i18n="intro_d_stamp">You're set</div>
+        <h2 class="intro-title" data-i18n="intro_d_title">When notifications reach you</h2>
         <div class="intro-point">
           <span class="intro-point-icon" aria-label="Android">
             <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
@@ -2913,7 +2913,7 @@
               </g>
             </svg>
           </span>
-          <span><b>Android:</b> work even with the app closed once notifications are on.</span>
+          <span data-i18n-html="intro_d_android"><b>Android:</b> work even with the app closed once notifications are on.</span>
         </div>
         <div class="intro-point">
           <span class="intro-point-icon" aria-label="iPhone">
@@ -2922,7 +2922,7 @@
               <path d="M14.6 4.86c.72-.87 1.2-2.08 1.07-3.29-1.03.05-2.28.69-3.02 1.56-.66.77-1.24 2.01-1.08 3.18 1.15.09 2.32-.59 3.03-1.45z"/>
             </svg>
           </span>
-          <span><b>iPhone:</b> work when you've added Fieldnote to your home screen. In a plain Safari tab, keep it open during the tour.</span>
+          <span data-i18n-html="intro_d_iphone"><b>iPhone:</b> work when you've added Fieldnote to your home screen. In a plain Safari tab, keep it open during the tour.</span>
         </div>
         <div class="intro-point">
           <span class="intro-point-icon" aria-label="Battery">
@@ -2932,10 +2932,10 @@
               <line x1="6" y1="12.5" x2="11" y2="12.5"/>
             </svg>
           </span>
-          <span>If your phone aggressively closes apps, keep Fieldnote open during key moments to be safe.</span>
+          <span data-i18n="intro_d_battery">If your phone aggressively closes apps, keep Fieldnote open during key moments to be safe.</span>
         </div>
         <div class="intro-actions">
-          <button class="intro-btn primary" id="intro-done">Start the tour</button>
+          <button class="intro-btn primary" id="intro-done" data-i18n="intro_d_cta">Start the tour</button>
         </div>
       </div>
     </div>
@@ -3048,7 +3048,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Language gate (EN/ES/ZH) + i18n framework + first-load flow localized · build 2026-06-05-0035';
+const BUILD_VERSION = '0.6 · i18n phase 2: intro/permissions wizard + install prompt localized · build 2026-06-05-0058';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3102,6 +3102,22 @@ const I18N = {
     ended_stamp: 'Fieldnote · Tour ended', ended_title: "That's a wrap.",
     ended_sub: 'Your guide has ended this tour. Thanks for walking with us.',
     nsb_next: 'Next',
+    intro_skip: 'Skip',
+    intro_w_stamp: 'Welcome to Fieldnote', intro_w_title: 'Your live tour companion',
+    intro_w_body: 'Fieldnote shows you on the tour map and reveals each stop as your guide activates it — plus warnings and "time to head back to the bus" alerts.',
+    intro_w_p1: "<b>Why location?</b> So you appear on the map and stops light up near you. It's only shared during this tour — never in the background.",
+    intro_w_p2: "<b>Adding to your home screen is safe.</b> It only runs while you're using it or during the tour — it can't track you in the background — and you can delete it in one tap, like any app.",
+    intro_w_cta: 'Get started',
+    intro_step1: 'Step 1 of 3', intro_step2: 'Step 2 of 3', intro_step3: 'Step 3 of 3',
+    intro_n_title: 'Stay notified', intro_n_body: 'Get a buzz when your guide starts a stop, sends a warning, calls everyone back to the bus, or changes the departure time — even with your phone locked.', intro_n_cta: 'Enable notifications',
+    intro_l_title: 'Share your location', intro_l_body: 'Allow location so you show up on the map and stops reveal as you reach them. Only shared with your guide during this tour.', intro_l_cta: 'Allow location',
+    intro_i_title: 'Add to home screen', intro_i_body: 'Install Fieldnote for reliable notifications even when the app is closed. Safe to add, easy to remove.', intro_i_cta: 'Install',
+    intro_d_stamp: "You're set", intro_d_title: 'When notifications reach you',
+    intro_d_android: '<b>Android:</b> work even with the app closed once notifications are on.',
+    intro_d_iphone: "<b>iPhone:</b> work when you've added Fieldnote to your home screen. In a plain Safari tab, keep it open during the tour.",
+    intro_d_battery: 'If your phone aggressively closes apps, keep Fieldnote open during key moments to be safe.',
+    intro_d_cta: 'Start the tour',
+    install_text: 'Install Fieldnote on your phone to keep notifications reliable even if you close the browser.', install_btn: 'Install',
   },
   es: {
     gate_title: 'Elige tu idioma', gate_sub: 'Puedes cambiarlo luego en el menú.',
@@ -3112,6 +3128,22 @@ const I18N = {
     ended_stamp: 'Fieldnote · Tour finalizado', ended_title: 'Eso es todo.',
     ended_sub: 'Tu guía ha finalizado este tour. Gracias por acompañarnos.',
     nsb_next: 'Siguiente',
+    intro_skip: 'Omitir',
+    intro_w_stamp: 'Bienvenido a Fieldnote', intro_w_title: 'Tu compañero de tour en vivo',
+    intro_w_body: 'Fieldnote te muestra en el mapa del tour y revela cada parada cuando tu guía la activa, además de avisos y alertas de "hora de volver al autobús".',
+    intro_w_p1: '<b>¿Por qué la ubicación?</b> Para que aparezcas en el mapa y las paradas se iluminen cerca de ti. Solo se comparte durante este tour, nunca en segundo plano.',
+    intro_w_p2: '<b>Añadirlo a tu pantalla de inicio es seguro.</b> Solo funciona mientras lo usas o durante el tour —no puede rastrearte en segundo plano— y puedes borrarlo con un toque, como cualquier app.',
+    intro_w_cta: 'Empezar',
+    intro_step1: 'Paso 1 de 3', intro_step2: 'Paso 2 de 3', intro_step3: 'Paso 3 de 3',
+    intro_n_title: 'Mantente al tanto', intro_n_body: 'Recibe un aviso cuando tu guía inicia una parada, envía una advertencia, llama a todos al autobús o cambia la hora de salida, incluso con el teléfono bloqueado.', intro_n_cta: 'Activar notificaciones',
+    intro_l_title: 'Comparte tu ubicación', intro_l_body: 'Permite la ubicación para aparecer en el mapa y que las paradas se revelen al llegar. Solo se comparte con tu guía durante este tour.', intro_l_cta: 'Permitir ubicación',
+    intro_i_title: 'Añadir a pantalla de inicio', intro_i_body: 'Instala Fieldnote para notificaciones fiables incluso con la app cerrada. Seguro de añadir, fácil de quitar.', intro_i_cta: 'Instalar',
+    intro_d_stamp: 'Todo listo', intro_d_title: 'Cuándo te llegan las notificaciones',
+    intro_d_android: '<b>Android:</b> funcionan incluso con la app cerrada una vez activadas las notificaciones.',
+    intro_d_iphone: '<b>iPhone:</b> funcionan cuando has añadido Fieldnote a tu pantalla de inicio. En una pestaña normal de Safari, mantenla abierta durante el tour.',
+    intro_d_battery: 'Si tu teléfono cierra apps de forma agresiva, mantén Fieldnote abierto en los momentos clave por seguridad.',
+    intro_d_cta: 'Empezar el tour',
+    install_text: 'Instala Fieldnote en tu teléfono para mantener las notificaciones fiables aunque cierres el navegador.', install_btn: 'Instalar',
   },
   zh: {
     gate_title: '选择语言', gate_sub: '稍后可在菜单中更改。',
@@ -3122,11 +3154,34 @@ const I18N = {
     ended_stamp: 'Fieldnote · 行程已结束', ended_title: '行程结束。',
     ended_sub: '你的向导已结束本次行程。感谢你的同行。',
     nsb_next: '下一站',
+    intro_skip: '跳过',
+    intro_w_stamp: '欢迎使用 Fieldnote', intro_w_title: '你的实时导览伙伴',
+    intro_w_body: 'Fieldnote 会在导览地图上显示你的位置，并在向导激活每个停靠点时为你揭示它，还有警示和“该回到大巴了”的提醒。',
+    intro_w_p1: '<b>为什么需要定位？</b> 让你出现在地图上，附近的停靠点会亮起。仅在本次导览期间共享，绝不在后台共享。',
+    intro_w_p2: '<b>添加到主屏幕是安全的。</b> 它只在你使用时或导览期间运行——无法在后台追踪你——而且你可以像任何应用一样一键删除。',
+    intro_w_cta: '开始',
+    intro_step1: '第 1 步，共 3 步', intro_step2: '第 2 步，共 3 步', intro_step3: '第 3 步，共 3 步',
+    intro_n_title: '保持通知', intro_n_body: '当向导开始一个停靠点、发送警示、召集大家回大巴或更改出发时间时，你会收到提醒——即使手机已锁屏。', intro_n_cta: '开启通知',
+    intro_l_title: '共享你的位置', intro_l_body: '允许定位，让你出现在地图上，并在到达时揭示停靠点。仅在本次导览期间与你的向导共享。', intro_l_cta: '允许定位',
+    intro_i_title: '添加到主屏幕', intro_i_body: '安装 Fieldnote，即使应用关闭也能可靠地收到通知。添加安全，移除方便。', intro_i_cta: '安装',
+    intro_d_stamp: '设置完成', intro_d_title: '通知何时送达',
+    intro_d_android: '<b>安卓：</b> 开启通知后，即使应用关闭也能收到。',
+    intro_d_iphone: '<b>iPhone：</b> 将 Fieldnote 添加到主屏幕后即可收到。在普通的 Safari 标签页中，请在导览期间保持打开。',
+    intro_d_battery: '如果你的手机会主动关闭应用，请在关键时刻保持 Fieldnote 打开以防万一。',
+    intro_d_cta: '开始导览',
+    install_text: '在手机上安装 Fieldnote，即使关闭浏览器也能保持通知可靠。', install_btn: '安装',
   },
 };
 let LANG = 'en';
 function loadLang() { try { const l = localStorage.getItem('fieldnote_lang'); if (l && I18N[l]) LANG = l; } catch (_e) {} }
 function langChosen() { try { return !!localStorage.getItem('fieldnote_lang'); } catch (_e) { return false; } }
+// Localize static HTML elements tagged with data-i18n (textContent) or
+// data-i18n-html (innerHTML, for strings with inline <b> etc.). Run once on
+// boot after LANG is known; dynamic screens use t() directly.
+function applyStaticI18n() {
+  document.querySelectorAll('[data-i18n]').forEach(el => { const v = t(el.getAttribute('data-i18n')); if (v != null) el.textContent = v; });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => { const v = t(el.getAttribute('data-i18n-html')); if (v != null) el.innerHTML = v; });
+}
 function t(key, params) {
   let s = (I18N[LANG] && I18N[LANG][key] != null) ? I18N[LANG][key]
         : (I18N.en[key] != null ? I18N.en[key] : key);
@@ -3957,6 +4012,7 @@ async function boot() {
   // the whole app renders in the chosen language.
   loadLang();
   if (!langChosen()) { showLanguageGate(); return; }
+  applyStaticI18n();   // localize tagged static HTML (intro wizard, install prompt, …)
 
   const params = new URLSearchParams(window.location.search);
   let sessionId = params.get('session');
