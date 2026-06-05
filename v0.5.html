@@ -2547,7 +2547,7 @@
           <h2 id="popup-title">…</h2>
           <p id="popup-body-el">…</p>
           <div class="popup-actions">
-            <button class="popup-ok" id="popup-ok">Continue</button>
+            <button class="popup-ok" id="popup-ok" data-i18n="pop_continue">Continue</button>
           </div>
         </div>
       </div>
@@ -2815,7 +2815,7 @@
 
       </div>
       <div class="stop-arrival-actions">
-        <button class="stop-arrival-ok" id="stop-arrival-ok">Got it</button>
+        <button class="stop-arrival-ok" id="stop-arrival-ok" data-i18n="pop_gotit">Got it</button>
       </div>
     </div>
   </div>
@@ -2832,7 +2832,7 @@
       </div>
       <div class="update-popup-body" id="update-popup-body"></div>
       <div class="update-popup-actions">
-        <button class="stop-arrival-ok" id="update-popup-ok">Got it</button>
+        <button class="stop-arrival-ok" id="update-popup-ok" data-i18n="pop_gotit">Got it</button>
       </div>
     </div>
   </div>
@@ -3048,7 +3048,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Content i18n: translated stops/spots shown to passengers · build 2026-06-05-1608';
+const BUILD_VERSION = '0.6 · i18n: all tour content translated + more UI chrome · build 2026-06-05-1636';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3121,6 +3121,7 @@ const I18N = {
     loading_joining: 'Joining session…',
     reward_stamp: '🎉 On time!', reward_title: 'Nice — you made it back!', reward_body: "You're at the bus with time to spare. Sit back and enjoy the ride.",
     menu_group_chat: 'Group chat', menu_reset: 'Reset visited pins', menu_about: 'About this build',
+    pop_continue: 'Continue', pop_gotit: 'Got it', menu_your_name: 'Your name', menu_enable_notif: 'Enable notifications',
   },
   es: {
     gate_title: 'Elige tu idioma', gate_sub: 'Puedes cambiarlo luego en el menú.',
@@ -3150,6 +3151,7 @@ const I18N = {
     loading_joining: 'Uniéndote a la sesión…',
     reward_stamp: '🎉 ¡A tiempo!', reward_title: '¡Bien, llegaste a tiempo!', reward_body: 'Estás en el autobús con tiempo de sobra. Relájate y disfruta del viaje.',
     menu_group_chat: 'Chat del grupo', menu_reset: 'Restablecer paradas vistas', menu_about: 'Acerca de esta versión',
+    pop_continue: 'Continuar', pop_gotit: 'Entendido', menu_your_name: 'Tu nombre', menu_enable_notif: 'Activar notificaciones',
   },
   zh: {
     gate_title: '选择语言', gate_sub: '稍后可在菜单中更改。',
@@ -3179,6 +3181,7 @@ const I18N = {
     loading_joining: '正在加入…',
     reward_stamp: '🎉 准时！', reward_title: '太好了——你赶回来了！', reward_body: '你已到达大巴，还有充足时间。请坐好，享受旅程。',
     menu_group_chat: '群聊', menu_reset: '重置已访问的点', menu_about: '关于此版本',
+    pop_continue: '继续', pop_gotit: '知道了', menu_your_name: '你的名字', menu_enable_notif: '开启通知',
   },
 };
 let LANG = 'en';
@@ -9427,7 +9430,7 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   if (editNameItem) {
     editNameItem.style.display = (SESSION && ROLE === 'passenger') ? '' : 'none';
     const labelEl = document.getElementById('menu-edit-name-label');
-    if (labelEl) labelEl.textContent = MY_NAME ? `Your name · ${MY_NAME}` : 'Your name';
+    if (labelEl) labelEl.textContent = MY_NAME ? `${t('menu_your_name')} · ${MY_NAME}` : t('menu_your_name');
   }
   // Populate guide name, active stop, and current warnings at the top of
   // the menu from whatever state we have right now.
@@ -11611,7 +11614,7 @@ function refreshNotificationsMenuItem() {
     item.style.opacity = '';
   } else {
     item.style.display = '';
-    label.textContent = 'Enable notifications';
+    label.textContent = t('menu_enable_notif');
     item.disabled = false;
     item.style.opacity = '';
     if (hint) { hint.hidden = true; hint.innerHTML = ''; }
