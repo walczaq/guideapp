@@ -3052,7 +3052,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · place-names toggle, About → developer info, v0.6 labels · build 2026-06-05-1738';
+const BUILD_VERSION = '0.6 · bus-pin map-remove now retracts from passengers · build 2026-06-05-1748';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -8036,13 +8036,12 @@ function openBusPinPopup() {
           updateVisibilityControlUI();
           updateBroadcastBanner();
         } else if (action === 'remove') {
-          // Remove pin AND turn off the pill — same effect as toggling pill off.
-          BUS_PIN_ON = false;
-          BUS_PIN_PLACING = false;
-          BUS_PIN = null;
-          renderBusPinOnGuideMap();
-          updateBroadcastBanner();
-          updateVisibilityControlUI();
+          // Remove pin AND turn off the pill, AND broadcast the off-sentinel so
+          // passengers' bus marker disappears too. clearBusPin({retract}) owns
+          // all the local state reset + the retract; doing it inline here (the
+          // old code) skipped the sentinel, so the pin lingered on passenger
+          // maps after the guide removed it.
+          clearBusPin({ retract: true });
         }
         closeBusPinPopup();
       });
