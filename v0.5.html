@@ -256,6 +256,31 @@
   .nsb-label { font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--rule); }
   .nsb-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
   .nsb-eta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #2563eb; }
+  /* Guide "which stop is next?" prompt (after deactivating a stop). */
+  .nsp-backdrop {
+    position: absolute; inset: 0; z-index: 95; background: rgba(26,29,26,0.42);
+    display: flex; align-items: flex-end; justify-content: center; padding: 16px;
+  }
+  .nsp-card {
+    width: 100%; max-width: 420px; background: var(--paper); border: 1px solid var(--ink); border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35); padding: 16px 16px calc(16px + env(safe-area-inset-bottom,0px));
+    max-height: 72vh; display: flex; flex-direction: column;
+  }
+  .nsp-title { font-family:'Fraunces',serif; font-weight:700; font-size:19px; color:var(--ink); }
+  .nsp-sub { font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--rule); margin:4px 0 12px; }
+  .nsp-list { overflow-y:auto; display:flex; flex-direction:column; gap:8px; }
+  .nsp-stop {
+    display:flex; align-items:center; gap:10px; padding:11px 12px; cursor:pointer; text-align:left;
+    background:var(--paper); border:1px solid var(--rule); border-radius:10px; font-family:'Fraunces',serif; font-size:15px; color:var(--ink);
+  }
+  .nsp-stop.suggested { border-color:#2563eb; box-shadow:0 0 0 2px rgba(37,99,235,0.25); }
+  .nsp-num { flex:0 0 auto; width:22px; height:22px; border-radius:50%; background:var(--ink); color:var(--paper); display:inline-flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; }
+  .nsp-stop .nsp-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .nsp-stop .nsp-eta { font-family:'JetBrains Mono',monospace; font-size:10px; color:#2563eb; white-space:nowrap; }
+  .nsp-skip {
+    margin-top:12px; align-self:center; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase;
+    padding:9px 16px; background:transparent; border:1px solid var(--rule); border-radius:8px; color:var(--rule); cursor:pointer;
+  }
 
   /* pins */
   .pin-group { cursor: pointer; }
@@ -3012,7 +3037,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · Next-stop ETA banner for passengers (guide-computed) · build 2026-06-04-2352';
+const BUILD_VERSION = '0.6 · Guide picks next stop (prompt after deactivate) → passenger banner · build 2026-06-05-0010';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4011,7 +4036,7 @@ async function loadSessionAndTour(sessionId) {
   // Fetch the session row.
   const { data: session, error: sessionErr } = await supabaseClient
     .from('sessions')
-    .select('id, label, tour_slug, guide_name, started_at, ended_at, chat_url')
+    .select('id, label, tour_slug, guide_name, started_at, ended_at, chat_url, next_stop_id')
     .eq('id', sessionId)
     .single();
 
@@ -8737,7 +8762,12 @@ function updateNextStopBanner() {
   const el = document.getElementById('next-stop-banner');
   if (!el) return;
   const stops = (TOUR && TOUR.stops) || [];
-  const next = stops.find(s => !ACTIVE_STOP_IDS.has(s.id));
+  // Prefer the guide's declared next stop (until it's been activated); else the
+  // first not-yet-activated stop.
+  let next = null;
+  const declared = SESSION && SESSION.next_stop_id;
+  if (declared && !ACTIVE_STOP_IDS.has(declared)) next = stops.find(s => s.id === declared);
+  if (!next) next = stops.find(s => !ACTIVE_STOP_IDS.has(s.id));
   if (!next) { el.hidden = true; return; }   // no stops, or all activated
   el.innerHTML = '';
   const label = document.createElement('span'); label.className = 'nsb-label'; label.textContent = 'Next';
@@ -9603,12 +9633,59 @@ async function activateStop(stop, opts) {
   }
   renderPins();
   renderStopList();
+  updateNextStopBanner();
   return { ok: true, row: data };
 }
 
 // Calls the deactivate_stop RPC. On success, removes from ACTIVE_STOP_IDS,
 // re-renders. Realtime DELETE event fans out to other clients; their
 // onStopDeactivated handler hides the pins on their end.
+// Guide sets the session's "next stop" (drives the passenger banner). stopId
+// null clears it (falls back to first not-yet-activated).
+async function setSessionNextStop(stopId) {
+  const token = getStoredGuideToken();
+  if (!token || !SESSION) return { error: 'Not signed in.' };
+  const { error } = await supabaseClient.rpc('set_session_next_stop', {
+    p_session_id: SESSION.id, p_guide_token: token, p_stop_id: (stopId == null ? null : stopId),
+  });
+  if (error) { console.warn('[next-stop] set failed', error); return { error: error.message }; }
+  SESSION = Object.assign({}, SESSION, { next_stop_id: (stopId == null ? null : stopId) });
+  updateNextStopBanner();
+  return { ok: true };
+}
+
+// Guide-only prompt (after an explicit deactivate): pick the next stop that
+// passengers see as "Next". Suggests the next stop by order.
+function showNextStopPrompt(fromStop) {
+  if (ROLE !== 'guide') return;
+  const stops = ((TOUR && TOUR.stops) || []).slice().sort((a, b) => a.ordinal - b.ordinal);
+  if (stops.length < 2) return;
+  let el = document.getElementById('next-stop-prompt'); if (el) el.remove();
+  let suggested = fromStop ? stops.find(s => s.ordinal > fromStop.ordinal && !ACTIVE_STOP_IDS.has(s.id)) : null;
+  if (!suggested) suggested = stops.find(s => !ACTIVE_STOP_IDS.has(s.id));
+  el = document.createElement('div');
+  el.id = 'next-stop-prompt'; el.className = 'nsp-backdrop';
+  el.innerHTML = `
+    <div class="nsp-card">
+      <div class="nsp-title">Heading to the next stop?</div>
+      <div class="nsp-sub">Pick what passengers see as “Next”.</div>
+      <div class="nsp-list" id="nsp-list"></div>
+      <button class="nsp-skip" id="nsp-skip" type="button">Not yet</button>
+    </div>`;
+  document.getElementById('phone').appendChild(el);
+  const list = document.getElementById('nsp-list');
+  stops.forEach(s => {
+    const b = document.createElement('button'); b.type = 'button';
+    b.className = 'nsp-stop' + (suggested && s.id === suggested.id ? ' suggested' : '');
+    const eta = (s.driveSecs != null && isFinite(s.driveSecs)) ? ` · 🚗 ~${tbFmtDur(s.driveSecs)}` : '';
+    b.innerHTML = `<span class="nsp-num">${s.ordinal}</span><span class="nsp-name">${(s.name || 'Stop').replace(/</g, '&lt;')}</span><span class="nsp-eta">${eta}</span>`;
+    b.addEventListener('click', async () => { el.remove(); await setSessionNextStop(s.id); });
+    list.appendChild(b);
+  });
+  el.querySelector('#nsp-skip').addEventListener('click', () => el.remove());
+  el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
+}
+
 async function deactivateStop(stop) {
   const token = getStoredGuideToken();
   if (!token) {
@@ -9632,6 +9709,7 @@ async function deactivateStop(stop) {
   }
   renderPins();
   renderStopList();
+  updateNextStopBanner();
   return { ok: true };
 }
 
@@ -9803,7 +9881,12 @@ function wireStopModalHandlers() {
     if (result && result.ok) {
       // For end-session we redirect inside endCurrentSession() — this branch
       // basically won't run, but dismissing is harmless if it does.
+      const wasDeactivate = (mode === 'deactivate');
+      const theStop = _modalStop;
       dismissActivateStopModal(false);
+      // After an EXPLICIT deactivate (not the one-active supersede), ask the
+      // guide which stop is next → that drives the passengers' banner.
+      if (wasDeactivate && theStop) showNextStopPrompt(theStop);
     } else {
       activateBtn.disabled = false;
       activateBtn.textContent = 'Try again';
@@ -10139,6 +10222,7 @@ function onSessionUpdated(row) {
   if (row.ended_at) {
     showSessionEnded();
   }
+  updateNextStopBanner();   // guide may have changed the next stop
 }
 
 // Show the full-screen "Tour ended" state. Hides the map + bottom sheet by
