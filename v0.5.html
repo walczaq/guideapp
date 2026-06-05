@@ -3049,7 +3049,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · i18n: warning-level badge labels · build 2026-06-05-1648';
+const BUILD_VERSION = '0.6 · i18n: localized push notifications (per subscriber) · build 2026-06-05-1655';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -11590,6 +11590,7 @@ async function subscribePushAndSave() {
     p_auth: auth,
     p_passenger_id: (typeof PASSENGER_ID !== 'undefined' ? PASSENGER_ID : null),
     p_user_agent: (navigator.userAgent || '').slice(0, 500),
+    p_lang: LANG,
   });
   if (error) {
     console.warn('[push] save_push_subscription failed', error);
