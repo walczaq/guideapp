@@ -3052,7 +3052,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · bus-pin map-remove now retracts from passengers · build 2026-06-05-1748';
+const BUILD_VERSION = '0.6 · Translate button moved to tours list · build 2026-06-05-1803';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -5517,6 +5517,17 @@ async function tbLoadTourDetail(tourId) {
 // ── Manager screen ──
 let _tbTours = [];
 let _tbTourDeleteConfirm = null;
+// Per-tour "is it fully translated?" cache for the tours-list Translate button.
+// Computed lazily from tbLoadTourDetail (front-end only — no extra backend),
+// keyed by tour id. Reset whenever the list reloads so it reflects fresh edits.
+let _tbTranslatedCache = {};
+// Paint a list-row Translate button to reflect translated state.
+function tbApplyTrState(btn, done) {
+  if (!btn) return;
+  btn.textContent = done ? '✓ Translated (ES/ZH)' : '🌐 Translate';
+  btn.style.color = done ? '#15803d' : '';
+  btn.style.borderColor = done ? '#15803d' : '';
+}
 async function showTourManager() {
   hideLoading();
   let el = document.getElementById('tour-manager');
@@ -5545,6 +5556,7 @@ async function showTourManager() {
   document.getElementById('tb-new').addEventListener('click', tbNewTourFlow);
   _tbTours = await tbListTours();
   _tbTourDeleteConfirm = null;
+  _tbTranslatedCache = {};
   renderTbTourList();
 }
 
@@ -5568,6 +5580,35 @@ function renderTbTourList() {
     row.appendChild(meta);
     const actions = document.createElement('div'); actions.className = 'tb-actions';
     actions.appendChild(smMakeBtn('Edit', 'primary', () => openTourEditor(t.id)));
+    // Translate → ES + ZH via the edge function (DeepL). Lives here on the
+    // list (not buried in the editor) so guides can translate without opening.
+    // Only tours with stops can be translated.
+    if (Number(t.stop_count) > 0) {
+      const trBtn = smMakeBtn('🌐 Translate', '', async (ev) => {
+        ev.stopPropagation();
+        const btn = ev.currentTarget;
+        btn.disabled = true; btn.textContent = 'Translating…';
+        btn.style.color = ''; btn.style.borderColor = '';
+        const r = await tbTranslateTour(t.id);
+        btn.disabled = false;
+        if (r.error) { tbApplyTrState(btn, false); console.warn('[tb] translate failed', r.error); return; }
+        _tbTranslatedCache[t.id] = true;
+        tbApplyTrState(btn, true);
+      });
+      // Reflect current translated state. Use the cache if we have it; else
+      // lazily load detail once and update this button in place.
+      if (_tbTranslatedCache[t.id] !== undefined) {
+        tbApplyTrState(trBtn, _tbTranslatedCache[t.id]);
+      } else {
+        tbLoadTourDetail(t.id).then(detail => {
+          if (!detail) return;
+          const done = tbTourTranslated(detail);
+          _tbTranslatedCache[t.id] = done;
+          if (trBtn.isConnected && !trBtn.disabled) tbApplyTrState(trBtn, done);
+        }).catch(() => {});
+      }
+      actions.appendChild(trBtn);
+    }
     // Duplicate → a new editable tour you own — the way to make your own
     // version of a base tour, or a sandbox copy of your own. Opens it to edit.
     const dupBtn = smMakeBtn('Duplicate / Customize', '', async (ev) => {
@@ -5846,10 +5887,9 @@ function tbWirePanelDrag(editorEl) {
 }
 
 function tbCloseEditor() {
-  // Fire-and-forget: auto-translate any new/changed content on leave. No-op if
-  // nothing changed or the DeepL key isn't configured.
-  const _tid = _tbTour && _tbTour.id;
-  if (_tid) { tbTranslateTour(_tid).catch(() => {}); }
+  // Translation is now an explicit action on the tours list (renderTbTourList),
+  // not an implicit side effect of closing the editor — so guides control when
+  // DeepL runs. The list re-checks each tour's translated state on open.
   if (_tbEditorMap) { try { _tbEditorMap.remove(); } catch (_e) {} _tbEditorMap = null; }
   _tbStopMarkers = []; _tbPinMarkers = [];
   const el = document.getElementById('tour-editor'); if (el) el.remove();
@@ -6065,19 +6105,7 @@ function renderTbEditorPanel() {
   sl.textContent = headTxt;
   hdr.appendChild(sl);
   const hdrActs = document.createElement('div'); hdrActs.style.cssText = 'display:flex; gap:6px; flex:0 0 auto; flex-wrap:wrap; justify-content:flex-end;';
-  if (nStops >= 1) {
-    const done = tbTourTranslated(_tbTour);
-    const tr = smMakeBtn(done ? '✓ Translated (ES/ZH)' : '🌐 Translate', '', async (ev) => {
-      const btn = ev.currentTarget; btn.textContent = 'Translating…'; btn.disabled = true;
-      const r = await tbTranslateTour(_tbTour.id);
-      if (r.error) { btn.disabled = false; btn.textContent = '🌐 Translate'; console.warn('[tb] translate failed', r.error); return; }
-      const fresh = await tbLoadTourDetail(_tbTour.id); if (fresh) _tbTour = fresh;
-      renderTbEditorPanel();   // recomputes → shows "✓ Translated"
-    });
-    tr.classList.add('tb-mini');
-    if (done) tr.classList.add('tb-done');
-    hdrActs.appendChild(tr);
-  }
+  // (Translate moved to the tours list — see renderTbTourList.)
   if (nStops >= 2) {
     const ro = smMakeBtn('↕ Reorder', '', () => tbOpenReorderStops());
     ro.classList.add('tb-mini');
