@@ -3052,7 +3052,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · notifications on/off toggle · build 2026-06-05-2157';
+const BUILD_VERSION = '0.6 · notifications on/off toggle (RPC unsubscribe) · build 2026-06-05-2211';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -11753,9 +11753,12 @@ async function subscribePushAndSave() {
 }
 
 // Turn notifications OFF: record the opt-out, delete this device's server-side
-// subscription row (so the Edge Functions stop targeting it immediately — the
-// push_subscriptions DELETE policy allows the passenger to remove their own
-// row), and unsubscribe the browser's pushManager subscription. Idempotent.
+// subscription row (so the Edge Functions stop targeting it immediately), and
+// unsubscribe the browser's pushManager subscription. The delete goes through
+// the unsubscribe_push_subscription RPC (SECURITY DEFINER) — a direct client
+// DELETE removes 0 rows because push_subscriptions has RLS with no SELECT policy
+// (push keys aren't world-readable), so PostgREST can't see the row to delete
+// it. Idempotent.
 async function unsubscribePushAndDelete() {
   setNotifOptedOut(true);
   try {
@@ -11766,8 +11769,8 @@ async function unsubscribePushAndDelete() {
     if (sub) {
       const endpoint = sub.endpoint;
       if (SESSION && endpoint) {
-        const { error } = await supabaseClient.from('push_subscriptions')
-          .delete().eq('session_id', SESSION.id).eq('endpoint', endpoint);
+        const { error } = await supabaseClient.rpc('unsubscribe_push_subscription', {
+          p_session_id: SESSION.id, p_endpoint: endpoint });
         if (error) console.warn('[push] delete subscription row failed', error);
       }
       try { await sub.unsubscribe(); } catch (e) { console.warn('[push] pushManager.unsubscribe failed', e); }
