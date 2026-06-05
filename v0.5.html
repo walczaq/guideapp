@@ -3048,7 +3048,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · i18n phase 3: reward popup, loading, menu items · build 2026-06-05-1554';
+const BUILD_VERSION = '0.6 · Content i18n: translated stops/spots shown to passengers · build 2026-06-05-1608';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3196,6 +3196,13 @@ function t(key, params) {
         : (I18N.en[key] != null ? I18N.en[key] : key);
   if (params) for (const k in params) s = s.split('{' + k + '}').join(params[k]);
   return s;
+}
+// Pick a translated tour-content string (stop/pin name/body) for the current
+// language from its *_i18n map ({es,zh,…}); fall back to the original (English).
+function i18nText(map, fallback) {
+  if (LANG === 'en') return fallback;
+  if (map && typeof map === 'object' && map[LANG]) return map[LANG];
+  return fallback;
 }
 
 const SUPABASE_URL = 'https://xgelrfdrdvrlltcsquqh.supabase.co';
@@ -3818,6 +3825,7 @@ function reshapeTour(raw) {
         lat: s.lat,
         activation_radius_m: s.activation_radius_m,
         driveSecs: s.drive_secs_from_prev,   // driving seconds from the previous stop (guide-computed)
+        nameI18n: s.name_i18n, subtitleI18n: s.subtitle_i18n,
         pins: (s.pins || [])
           .slice()
           .sort((a, b) => a.ordinal - b.ordinal)
@@ -3830,6 +3838,7 @@ function reshapeTour(raw) {
             lat: p.lat,
             radius: p.trigger_radius_m,
             category: p.category || 'pin',
+            titleI18n: p.title_i18n, bodyI18n: p.body_i18n,
           })),
       })),
   };
@@ -4219,9 +4228,9 @@ async function loadSessionAndTour(sessionId) {
     .select(`
       id, slug, name, subtitle, home_lng, home_lat,
       stops (
-        id, ordinal, name, subtitle, lng, lat, activation_radius_m, drive_secs_from_prev,
+        id, ordinal, name, subtitle, lng, lat, activation_radius_m, drive_secs_from_prev, name_i18n, subtitle_i18n,
         pins (
-          id, ordinal, title, body, lng, lat, trigger_radius_m, category
+          id, ordinal, title, body, lng, lat, trigger_radius_m, category, title_i18n, body_i18n
         )
       )
     `)
@@ -4663,9 +4672,9 @@ async function loadTourDirectly(slug) {
     .select(`
       id, slug, name, subtitle, home_lng, home_lat,
       stops (
-        id, ordinal, name, subtitle, lng, lat, activation_radius_m, drive_secs_from_prev,
+        id, ordinal, name, subtitle, lng, lat, activation_radius_m, drive_secs_from_prev, name_i18n, subtitle_i18n,
         pins (
-          id, ordinal, title, body, lng, lat, trigger_radius_m, category
+          id, ordinal, title, body, lng, lat, trigger_radius_m, category, title_i18n, body_i18n
         )
       )
     `)
@@ -8930,7 +8939,7 @@ function updateNextStopBanner() {
   if (!next) { el.hidden = true; return; }   // no stops, or all activated
   el.innerHTML = '';
   const label = document.createElement('span'); label.className = 'nsb-label'; label.textContent = t('nsb_next');
-  const nm = document.createElement('span'); nm.className = 'nsb-name'; nm.textContent = next.name || 'Stop';
+  const nm = document.createElement('span'); nm.className = 'nsb-name'; nm.textContent = i18nText(next.nameI18n, next.name) || 'Stop';
   el.appendChild(label); el.appendChild(nm);
   if (next.driveSecs != null && isFinite(next.driveSecs)) {
     const t = document.createElement('span'); t.className = 'nsb-eta'; t.textContent = '🚗 ~' + tbFmtDur(next.driveSecs);
@@ -9240,8 +9249,8 @@ function showPopup(pin) {
   } else {
     popupStamp.textContent = `Pin № ${lbl} · Arrived`;
   }
-  popupTitle.textContent = pin.title;
-  popupBodyEl.textContent = pin.body;
+  popupTitle.textContent = i18nText(pin.titleI18n, pin.title);
+  popupBodyEl.textContent = i18nText(pin.bodyI18n, pin.body);
   popup.classList.add('show');
 }
 
@@ -9252,8 +9261,8 @@ function showCategoryPopup(p) {
   const warn = isZoneCat(p.category);
   popup.classList.toggle('warn', warn);
   popupStamp.textContent = `${cat.emoji} ${cat.label}`;
-  popupTitle.textContent = p.title || cat.label;
-  popupBodyEl.textContent = p.body || (warn ? 'Marked by your guide — take care here.' : '');
+  popupTitle.textContent = i18nText(p.titleI18n, p.title) || cat.label;
+  popupBodyEl.textContent = i18nText(p.bodyI18n, p.body) || (warn ? 'Marked by your guide — take care here.' : '');
   popup.classList.add('show');
 }
 function closePopup() { popup.classList.remove('show'); popup.classList.remove('warn'); popup.classList.remove('reward'); }
@@ -10522,7 +10531,7 @@ function populateArrivalModalContent(stop) {
   if (!stamp || !nameEl) return;
   console.log('[arrival populate]', stop.name, 'meta:', ACTIVATION_META.get(stop.id));
   stamp.textContent = `Stop № ${String(stop.ordinal).padStart(2, '0')} · Now`;
-  nameEl.textContent = stop.name || '';
+  nameEl.textContent = i18nText(stop.nameI18n, stop.name) || '';
 
   const meta = ACTIVATION_META.get(stop.id) || {};
   const duration = meta.duration_minutes ?? 20;
