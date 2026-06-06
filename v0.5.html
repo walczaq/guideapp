@@ -3060,7 +3060,7 @@ window.__fnParsed = true;
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · trial fixes + render-path crash guards (no-fix passengers, home-less tours) · build 2026-06-06-1131';
+const BUILD_VERSION = '0.6 · auto-frame stop on activation (for no-GPS passengers) · build 2026-06-06-1218';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -10718,6 +10718,41 @@ function startSessionPoll() {
 // "Got it" (which records ack in localStorage). Plays the chime on each
 // show — including the resume re-show — so the user gets an audible cue
 // when they come back to a phone that had the screen locked.
+// When a stop becomes the passenger's focus (guide activates it, or they join
+// while it's already active), frame the stop + its revealed pins so they can
+// SEE where it is on the map. This matters most for a passenger with no GPS
+// dot to orient by. Frames each stop at most once per session (so flipping back
+// to the tab doesn't re-yank the camera), and never overrides a passenger who's
+// actively following their own live location.
+const _framedStops = new Set();
+function frameStopOverview(stop) {
+  if (!map || !stop || ROLE !== 'passenger') return;
+  if (_framedStops.has(stop.id)) return;
+  if (state.following && Number.isFinite(state.youLng)) return;   // don't fight live follow
+  const pts = [{ lng: stop.lng, lat: stop.lat }]
+    .concat((stop.pins || []).map(p => ({ lng: p.lng, lat: p.lat })))
+    .filter(p => Number.isFinite(p.lng) && Number.isFinite(p.lat));
+  if (!pts.length) return;
+  _framedStops.add(stop.id);
+  // An auto-frame ends follow + the walk-triggered auto-detail so the GPS tick
+  // / first-walk zoom can't immediately fight it.
+  state.following = false;
+  state.autoDetailDone = true;
+  const rc = document.getElementById('recenter');
+  if (rc) rc.classList.remove('active');
+  try {
+    if (pts.length === 1) {
+      map.easeTo({ center: [pts[0].lng, pts[0].lat], zoom: ZOOM_DETAIL, duration: 700 });
+    } else {
+      const lngs = pts.map(p => p.lng), lats = pts.map(p => p.lat);
+      map.fitBounds(
+        [[Math.min.apply(null, lngs), Math.min.apply(null, lats)],
+         [Math.max.apply(null, lngs), Math.max.apply(null, lats)]],
+        { padding: 64, maxZoom: 16.5, duration: 700 });
+    }
+  } catch (_e) { /* invalid camera — leave the view as-is */ }
+}
+
 function showStopArrivalModal(stop) {
   if (!stop) return;
   // If we're already showing this stop, don't restart the animation.
@@ -10728,6 +10763,7 @@ function showStopArrivalModal(stop) {
   }
   _arrivalStop = stop;
   _arrivalStop_lastShown = stop;
+  frameStopOverview(stop);   // move the map to the stop (esp. for no-GPS passengers)
   populateArrivalModalContent(stop);
   const backdrop = document.getElementById('stop-arrival-backdrop');
   if (!backdrop) return;
