@@ -3041,6 +3041,14 @@
 </div>
 
 <script>
+// Old-browser blank-page guard. This single inline script uses modern JS
+// (e.g. `??` nullish coalescing). A browser too old to PARSE it (iOS Safari
+// < 13.4, old Android WebViews) skips the WHOLE block → blank page. Setting a
+// flag as the very first statement lets a tiny ES5 guard at the end of <body>
+// detect "main script never ran" and show a clear message instead of a blank
+// screen. (Mapbox GL v3 also requires a modern browser, so we don't attempt to
+// run on those devices — we just fail gracefully with guidance.)
+window.__fnParsed = true;
 // ╭──────────────────────────────────────────────────────╮
 // │  v0.5 — STOPS + ACTIVATION BROADCASTS                │
 // │  Chunks shipped: A (schema + reshape), B (guide-side │
@@ -3052,7 +3060,7 @@
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · notifications on/off toggle (RPC unsubscribe) · build 2026-06-05-2211';
+const BUILD_VERSION = '0.6 · trial fixes: passenger names self-heal, camera zoomstart/fit guard, old-browser fallback · build 2026-06-06-1122';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -7181,7 +7189,10 @@ function initMap(token) {
   const framePoints = [
     ...((TOUR.stops || []).map(s => ({ lng: s.lng, lat: s.lat }))),
     ...allPins(),
-  ];
+  ].filter(p => p && Number.isFinite(p.lng) && Number.isFinite(p.lat));   // a single
+  // undefined/NaN coord would make Math.min/max below NaN → NaN bounds → NaN
+  // center → the camera collapses to the whole globe. Data is clean today, but
+  // this makes the framing robust to any future bad stop/pin coordinate.
   if (!framePoints.length && TOUR.home) framePoints.push({ lng: TOUR.home.lng, lat: TOUR.home.lat });
   if (!framePoints.length) framePoints.push({ lng: -21.94, lat: 64.15 });
   const lngs = framePoints.map(p => p.lng);
@@ -7247,7 +7258,22 @@ function initMap(token) {
     // the canvas matches, then apply the guide's whole-tour framing now that
     // fitBounds has valid dimensions to compute a zoom from.
     try { map.resize(); } catch (_e) {}
-    if (guideFitBounds) { try { map.fitBounds(guideFitBounds, { padding: 40, animate: false }); } catch (_e) {} }
+    // Frame the tour — but only once the container actually has height. On a
+    // PWA/100dvh layout race the container can briefly report 0 height, and
+    // fitBounds against a zero-height viewport computes a near-zoom-0 camera
+    // (the whole-globe view seen in the trial). Wait for real size, then fit
+    // with a maxZoom clamp so a tiny/degenerate bounds can't over- or
+    // under-zoom. Retry briefly; fit anyway if size never settles.
+    (function fitGuide(attempt) {
+      if (!guideFitBounds || !map) return;
+      const host = document.getElementById('mapbox-map');
+      if (host && host.clientHeight < 40 && attempt < 12) {
+        setTimeout(() => fitGuide(attempt + 1), 150);
+        return;
+      }
+      try { map.resize(); } catch (_e) {}
+      try { map.fitBounds(guideFitBounds, { padding: 40, maxZoom: 16, animate: false }); } catch (_e) {}
+    })(0);
     loosenPoiLayers(map);
     renderAll();
     updateZoomPresetButtons();
@@ -7288,7 +7314,21 @@ function initMap(token) {
   map.on('dragstart', () => {
     if (state.following) {
       state.following = false;
-      document.getElementById('recenter').classList.remove('active');
+      const rc = document.getElementById('recenter');
+      if (rc) rc.classList.remove('active');
+    }
+  });
+
+  // user pinch/scroll ZOOM must also break follow. Without this, follow stayed
+  // on through a zoom and the per-fix setCenter (see onPosition) yanked the
+  // view back the instant the guide tried to zoom — the "fights manual zoom"
+  // bug. Guard on originalEvent so PROGRAMMATIC zooms (zoom presets, the
+  // recenter ease) don't cancel follow.
+  map.on('zoomstart', (e) => {
+    if (e && e.originalEvent && state.following) {
+      state.following = false;
+      const rc = document.getElementById('recenter');
+      if (rc) rc.classList.remove('active');
     }
   });
 
@@ -7444,6 +7484,14 @@ function startGuideShell() {
   // the passenger list rows so "no signal" status flips correctly.
   if (_stateTickHandle) clearInterval(_stateTickHandle);
   _stateTickHandle = setInterval(() => {
+    // Reconcile names from session_passengers every tick. Names are otherwise
+    // merged only once at startup + via individual realtime events; a single
+    // missed/late event (mobile backgrounding, mid-tour join) would otherwise
+    // leave that passenger showing the id.slice(-4) fallback for the whole tour.
+    // This cheap re-pull (one row per passenger) self-heals it within 5s and
+    // makes session_passengers the authoritative name source. catchUpPassengerNames
+    // re-renders the dots + list itself.
+    catchUpPassengerNames().catch(() => {});
     if (PASSENGERS.size > 0) {
       renderPassengers();
       renderPassengerList();
@@ -8256,8 +8304,11 @@ function startPassengerNamesSubscription() {
 // Used by both the map labels and the bottom-sheet list rows.
 function passengerDisplayName(p, passengerId) {
   if (p && p.name) return p.name;
-  // Fallback to last 4 chars of passenger_id — better than blank.
-  return passengerId ? passengerId.slice(-4) : '?';
+  // No name yet — a location row arrived before this passenger's name was
+  // reconciled from session_passengers. Show a neutral placeholder, NOT
+  // id.slice(-4) (that rendered ID gibberish like "MvgJ" for "Venu"):
+  // registration guarantees a real name, which the 5s reconcile fills in.
+  return '…';
 }
 
 // Render the passenger list rows in the bottom sheet. Each row: color dot
@@ -12627,6 +12678,30 @@ function wireJoystickToggle() {
     }
   };
 }
+</script>
+<script>
+/* ES5-only fallback. Runs even when the big app script above fails to PARSE on
+   an old browser (which silently skips that whole block → blank page). If the
+   app never set its parsed flag, show a clear message instead of a blank screen.
+   Deliberately uses only ES5 syntax so it itself parses everywhere. */
+(function () {
+  if (window.__fnParsed) return;
+  try {
+    var el = document.createElement('div');
+    el.setAttribute('style',
+      'position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;display:flex;' +
+      'align-items:center;justify-content:center;padding:24px;background:#f4ede0;' +
+      'color:#1a1d1a;font-family:-apple-system,Helvetica,Arial,sans-serif;text-align:center;');
+    el.innerHTML =
+      '<div style="max-width:340px;line-height:1.5">' +
+      '<div style="font-size:34px;font-weight:700;margin-bottom:12px">Fieldnote</div>' +
+      '<p style="font-size:16px;margin:0 0 10px">This browser is too old to run Fieldnote.</p>' +
+      '<p style="font-size:14px;color:#555;margin:0">Please update your phone’s software, ' +
+      'or open this link in the latest Safari or Chrome.</p>' +
+      '</div>';
+    document.body.appendChild(el);
+  } catch (e) { /* nothing more we can do */ }
+})();
 </script>
 </body>
 </html>
