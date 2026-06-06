@@ -3060,7 +3060,7 @@ window.__fnParsed = true;
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · trial fixes: passenger names self-heal, camera zoomstart/fit guard, old-browser fallback · build 2026-06-06-1122';
+const BUILD_VERSION = '0.6 · trial fixes + render-path crash guards (no-fix passengers, home-less tours) · build 2026-06-06-1131';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -7775,6 +7775,13 @@ function renderPassengers() {
   const HALO_R = 16;
   const now = Date.now();
   for (const [passengerId, p] of PASSENGERS) {
+    // Skip passengers with no valid fix. These exist legitimately: a name-only
+    // record is pre-seeded from session_passengers for anyone who joined but
+    // hasn't sent GPS yet (screen locked / no first fix). Projecting their
+    // undefined lng/lat makes Mapbox throw "Invalid LngLat (NaN, NaN)", which
+    // aborts the dot loop so later passengers' dots vanish. They show in the
+    // Control Center list ("no fix yet") but have no map dot until a fix lands.
+    if (!Number.isFinite(p.lng) || !Number.isFinite(p.lat)) continue;
     const { x, y } = project(p.lng, p.lat);
     const [colorA, colorB] = colorsForPassenger(passengerId);
     const isSelected = SELECTED_PASSENGER === passengerId;
@@ -9073,9 +9080,20 @@ function project(lng, lat) {
 
 function pxPerMeter() {
   if (!map) return 1;
-  const p1 = map.project([TOUR.home.lng, TOUR.home.lat]);
-  const p2 = map.project([TOUR.home.lng, TOUR.home.lat + 1/111000]);
-  return Math.abs(p2.y - p1.y);
+  // Reference point for the meter→pixel scale. TOUR.home is now optional (a
+  // home-less tour is valid), so fall back to the first stop, then the live map
+  // center. Without this, `TOUR.home.lng` throws on a home-less tour and takes
+  // down the whole render path (renderPins → renderAll, fired on every move).
+  const ref = (TOUR && TOUR.home) || (TOUR && (TOUR.stops || [])[0]) || null;
+  let lng = ref && ref.lng, lat = ref && ref.lat;
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+    const c = map.getCenter && map.getCenter();
+    if (!c) return 1;
+    lng = c.lng; lat = c.lat;
+  }
+  const p1 = map.project([lng, lat]);
+  const p2 = map.project([lng, lat + 1 / 111000]);
+  return Math.abs(p2.y - p1.y) || 1;
 }
 
 function renderAll() {
