@@ -3081,7 +3081,7 @@ window.__fnParsed = true;
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · passenger presence heartbeat (app-open without GPS) · build 2026-06-09-1312';
+const BUILD_VERSION = '0.6 · presence heartbeat starts independent of map load · build 2026-06-09-1318';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4343,6 +4343,12 @@ async function loadSessionAndTour(sessionId) {
   }
 
   initMap(MAPBOX_TOKEN);
+
+  // Presence heartbeat — started here, NOT inside map.on('load'), so a passenger
+  // counts as "present" whether or not the map canvas comes up (R2-F). By this
+  // point a passenger is guaranteed registered (ensurePassengerNameRegistered
+  // above), so the heartbeat's UPDATE has a row to touch.
+  if (ROLE === 'passenger') startPresenceHeartbeat();
 
   // Now that we have a session, start the sync worker. It will pick up any
   // leftover rows from a previous page-load and stream new fixes to Supabase.
@@ -7325,7 +7331,6 @@ function initMap(token) {
       setTimeout(() => { try { maybeRemindChatSetup(); } catch (_e) {} }, _chatWait);
     } else {
       startPassengerGuideListening();
-      startPresenceHeartbeat();   // GPS-free "app is open" signal (R2-F)
       if (introNeeded()) {
         maybeShowIntro();   // intro drives the location/notif/install asks
       } else {
