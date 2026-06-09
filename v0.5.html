@@ -3076,7 +3076,7 @@ window.__fnParsed = true;
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · round-2 trial fixes (R2-A,C,D,E,F,G,H) · build 2026-06-09-1243';
+const BUILD_VERSION = '0.6 · treasure-map dotted passenger trails (smooth + round dots) · build 2026-06-09-1250';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -7726,12 +7726,32 @@ async function catchUpPassengers({ merge = false } = {}) {
   updatePassengerCount();
 }
 
+// Catmull-Rom spline → cubic-bezier SVG path string. Curves smoothly through
+// every point so the trail reads as a flowing hand-drawn line rather than
+// angular straight segments. Endpoints are clamped (no overshoot off the ends).
+function trailSmoothPath(pts) {
+  const n = pts.length;
+  const r = (v) => Math.round(v * 10) / 10;
+  if (n < 2) return '';
+  if (n === 2) return 'M' + r(pts[0].x) + ',' + r(pts[0].y) + ' L' + r(pts[1].x) + ',' + r(pts[1].y);
+  let d = 'M' + r(pts[0].x) + ',' + r(pts[0].y);
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6, c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6, c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ' C' + r(c1x) + ',' + r(c1y) + ' ' + r(c2x) + ',' + r(c2y) + ' ' + r(p2.x) + ',' + r(p2.y);
+  }
+  return d;
+}
+
 // Render the in-memory PASSENGERS map as SVG dots + trails.
 // Two SVG layers: the trails go behind the dots (so dot stays visually on top).
 //
-// Trails: one <polyline> per passenger holding all their positions. Browsers
-// handle thousand-point polylines comfortably; this is far cheaper than
-// drawing one segment-element per pair of points.
+// Trails: a smooth curved path per "run" (continuous online stretch), stroked
+// with round dots — a treasure-map dotted line.
 //
 // Called after the catch-up query, after every realtime event (chunk D),
 // and on every map move/zoom (so dots/trails track the map projection).
@@ -7740,63 +7760,61 @@ function renderPassengers() {
   passengersLayer.innerHTML = '';
   if (PASSENGERS.size === 0) return;
 
-  // Pass 1: trails (so they render below dots).
-  // Each trail rendered as a sequence of dashed line segments. The dashed
-  // stroke is the visual style; the per-segment rendering is so we can fade
-  // older segments (lower opacity) toward the start of the trail.
-  //
-  // Selection-aware: when a passenger is selected, their trail keeps the
-  // age-based fade but at higher overall opacity; other trails ghost.
+  // Pass 1: trails (below dots), drawn as a smooth curved path stroked with
+  // round dots — a treasure-map dotted line, not hard polylines. The trail is
+  // time-ordered (a late store-and-forward flush would otherwise zig-zag back)
+  // and split into RUNS across offline gaps (>3 min) so a screen-lock / lost-
+  // signal gap is never bridged by a straight line — this also segments the
+  // trail by stop, since transit gaps far exceed 3 min. Each run is smoothed
+  // (Catmull-Rom) and dotted; older runs fade. Selection-aware: selected
+  // brighter, others ghost.
+  const TRAIL_GAP_MS = 3 * 60 * 1000;
+  const SVGNS_T = 'http://www.w3.org/2000/svg';
   for (const [passengerId, p] of PASSENGERS) {
     if (!p.trail || p.trail.length < 2) continue;
     const [colorA] = colorsForPassenger(passengerId);
     const isSelected = SELECTED_PASSENGER === passengerId;
     const noneSelected = SELECTED_PASSENGER === null;
-    // Selection multiplier on top of per-segment age-opacity. Selected = 1.0,
-    // default = 0.85 (matches old solid-line look), unselected-when-other-
-    // selected = 0.08 (ghost).
-    let selMul;
-    if (noneSelected) selMul = 0.85;
-    else if (isSelected) selMul = 1.0;
-    else selMul = 0.08;
+    const selMul = noneSelected ? 0.9 : (isSelected ? 1.0 : 0.1);
 
-    // R2-E/R2-C: order points by recorded time (a late store-and-forward flush
-    // arrives out of order and would otherwise zig-zag the line back), and break
-    // the polyline across offline gaps (>3 min) so we never draw a straight line
-    // bridging a screen-lock / lost-signal gap. This also segments the trail by
-    // stop in practice, since transit gaps far exceed 3 min.
-    const TRAIL_GAP_MS = 3 * 60 * 1000;
     const ordered = p.trail.slice().sort((a, b) =>
       (a.ts && b.ts) ? (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0) : 0);
-    const projected = ordered.map(t => ({ pt: project(t.lng, t.lat), ts: t.ts }));
-    const N = projected.length;
-    for (let i = 0; i < N - 1; i++) {
-      // Don't bridge an offline gap with a straight line.
-      const ta = projected[i].ts, tb = projected[i + 1].ts;
-      if (ta && tb && (Date.parse(tb) - Date.parse(ta)) > TRAIL_GAP_MS) continue;
-      // Age fade: oldest segment ~0.25 opacity multiplier, newest 1.0.
-      // Linear ramp from old → new. Combined with selection multiplier.
-      const ageT = N <= 2 ? 1 : i / (N - 2);          // 0 = oldest, 1 = newest
-      const ageOpacity = 0.25 + 0.75 * ageT;
-      const segOpacity = ageOpacity * selMul;
-
-      const a = projected[i].pt;
-      const b = projected[i + 1].pt;
-      const seg = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      seg.setAttribute('class', 'passenger-trail');
-      seg.setAttribute('data-passenger-id', passengerId);
-      seg.setAttribute('x1', a.x);
-      seg.setAttribute('y1', a.y);
-      seg.setAttribute('x2', b.x);
-      seg.setAttribute('y2', b.y);
-      seg.setAttribute('stroke', colorA);
-      seg.setAttribute('stroke-width', '3');
-      seg.setAttribute('stroke-linecap', 'round');
-      // Dashed pattern: 2px dash, 4px gap. Reads as dotted at typical zoom.
-      seg.setAttribute('stroke-dasharray', '2 4');
-      seg.setAttribute('opacity', String(segOpacity));
-      passengersLayer.appendChild(seg);
+    // Split into runs separated by offline gaps.
+    const runs = [];
+    let run = [];
+    for (let i = 0; i < ordered.length; i++) {
+      if (i > 0) {
+        const ta = ordered[i - 1].ts, tb = ordered[i].ts;
+        if (ta && tb && (Date.parse(tb) - Date.parse(ta)) > TRAIL_GAP_MS) {
+          if (run.length) runs.push(run);
+          run = [];
+        }
+      }
+      run.push(ordered[i]);
     }
+    if (run.length) runs.push(run);
+
+    runs.forEach((rpts, ri) => {
+      if (rpts.length < 2) return;
+      const proj = rpts.map(t => project(t.lng, t.lat));
+      const d = trailSmoothPath(proj);
+      if (!d) return;
+      // Older runs fade toward 0.45; newest run full. selMul on top.
+      const runFade = runs.length <= 1 ? 1 : (0.45 + 0.55 * (ri / (runs.length - 1)));
+      const path = document.createElementNS(SVGNS_T, 'path');
+      path.setAttribute('class', 'passenger-trail');
+      path.setAttribute('data-passenger-id', passengerId);
+      path.setAttribute('d', d);
+      path.setAttribute('stroke', colorA);
+      path.setAttribute('stroke-width', '3.5');
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+      // Round dots: a ~0-length dash with a round cap renders a dot of
+      // diameter ≈ stroke-width, repeated every 11px → treasure-map dotted line.
+      path.setAttribute('stroke-dasharray', '0.1 11');
+      path.setAttribute('opacity', String(selMul * runFade));
+      passengersLayer.appendChild(path);
+    });
   }
 
   // Pass 2: dots (drawn after trails so they sit visually on top).
