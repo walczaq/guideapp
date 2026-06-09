@@ -1,9 +1,10 @@
 // Fieldnote v0.5 — Service Worker.
 //
 // Responsibilities:
-//   1. Offline app shell  — precache the HTML + the critical CDN scripts so
-//      the app loads (and shows its OWN reconnecting UI) when the device is
-//      offline, instead of the browser's "you are offline" error page.
+//   1. Offline app shell  — precache the HTML + the critical scripts (now
+//      self-hosted same-origin under /vendor) so the app loads (and shows its
+//      OWN reconnecting UI) when the device is offline, instead of the
+//      browser's "you are offline" error page.
 //   2. 'push'             — surface the Edge Function payload as a notification.
 //   3. 'notificationclick'— focus an existing tab, else open the deep link.
 //
@@ -11,34 +12,42 @@
 // an old version" trap):
 //   - Navigations: NETWORK-FIRST. When online the freshest HTML always wins
 //     and is copied into the cache; the cache is only the offline fallback.
-//   - Critical CDN libs (mapbox-gl, supabase-js, idb, qrcode, fonts CSS):
-//     CACHE-FIRST on their versioned URLs (stable, safe to pin).
+//   - Critical libs (mapbox-gl, supabase-js, idb, qrcode): SELF-HOSTED
+//     same-origin under /vendor (versioned filenames) and precached as part
+//     of the app shell — a successful first HTML load now guarantees the
+//     libs are cached too, with no third-party CDN in the boot path.
+//   - Fonts CSS (Google Fonts): CACHE-FIRST best-effort. Graceful
+//     degradation only — a miss falls typography back to Georgia/monospace,
+//     never blocks boot.
 //   - Everything else (Supabase REST/realtime, Mapbox tiles, font binaries):
 //     PASSTHROUGH — never cached; they just fail offline and the app copes.
 //
 // /sw.js itself is served no-cache (see /_headers), so SW updates propagate
 // on next app open; bumping SHELL_CACHE purges the old shell on activate.
 
-const SHELL_CACHE = 'fieldnote-shell-v4';   // bumped: force clean re-cache of mapbox-gl lib (blank-map fix)
+const SHELL_CACHE = 'fieldnote-shell-v5';   // bumped: libs moved CDN → same-origin /vendor (precached with shell)
 
 // Same-origin shell assets — these MUST cache for the app to boot offline.
+// Includes the /vendor libs: same origin as the HTML, so if the first page
+// load succeeded, these fetches succeed too (same connection, same CDN edge),
+// making first-open precache deterministic instead of best-effort.
 const SHELL_URLS = [
   '/v0.5',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
   '/badge-72.png',
+  '/vendor/mapbox-gl-v3.8.0.css',
+  '/vendor/mapbox-gl-v3.8.0.js',
+  '/vendor/supabase-js-2.108.1.umd.js',
+  '/vendor/idb-8.0.3.umd.js',
+  '/vendor/qrcode-generator-1.4.4.min.js',
 ];
 
-// Cross-origin libraries the page <script>/<link> tags pull in. Versioned
-// URLs, CORS-friendly CDNs — cached best-effort (a single failure must not
-// abort install).
+// Cross-origin extras — cached best-effort (a failure must not abort
+// install). Only the fonts CSS remains since the libs moved to /vendor;
+// fonts are pure graceful degradation (typography, never boot).
 const CDN_URLS = [
-  'https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css',
-  'https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
-  'https://cdn.jsdelivr.net/npm/idb@8/build/umd.js',
-  'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js',
   'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap',
 ];
 
@@ -66,7 +75,8 @@ self.addEventListener('install', (event) => {
     // Same-origin shell must succeed.
     try { await cache.addAll(SHELL_URLS); }
     catch (err) { console.warn('[sw] shell precache failed', err); }
-    // CDN libs best-effort, individually so one failure doesn't abort.
+    // Cross-origin extras (fonts CSS) best-effort, individually so one
+    // failure doesn't abort.
     await Promise.allSettled(CDN_URLS.map((u) => cache.add(u).catch((e) => {
       console.warn('[sw] cdn precache failed', u, e);
     })));
@@ -87,6 +97,11 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
+// Fonts CSS, plus the OLD CDN lib URLs (api.mapbox.com/mapbox-gl-js/*,
+// cdn.jsdelivr.net/npm/*). The lib prefixes are kept for the transition
+// window: a client whose cached shell is still the pre-/vendor HTML keeps
+// its CDN <script> tags served cache-first until the next online navigation
+// replaces the shell.
 function isCdnAsset(url) {
   return CDN_URLS.includes(url) ||
     url.startsWith('https://api.mapbox.com/mapbox-gl-js/') ||
@@ -123,15 +138,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Same-origin static shell assets → cache-first.
+  // 2. Same-origin static shell assets (incl. /vendor libs) → cache-first.
+  //    /vendor/ filenames are versioned, so cache-first is safe to pin; a
+  //    lib upgrade ships under a new filename + SHELL_CACHE bump.
   if (sameOrigin && (SHELL_URLS.includes(url.pathname) ||
+      url.pathname.startsWith('/vendor/') ||
       url.pathname === '/icon-192.png' || url.pathname === '/icon-512.png' ||
       url.pathname === '/badge-72.png' || url.pathname === '/manifest.json')) {
     event.respondWith(cacheFirst(req));
     return;
   }
 
-  // 3. Critical CDN libs → cache-first on versioned URLs.
+  // 3. Fonts CSS + legacy CDN lib URLs → cache-first on versioned URLs.
   if (isCdnAsset(url.href.split('#')[0]) || isCdnAsset(url.origin + url.pathname)) {
     event.respondWith(cacheFirst(req));
     return;

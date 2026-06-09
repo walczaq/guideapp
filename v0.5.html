@@ -20,15 +20,28 @@
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>Fieldnote v0.6</title>
+<!-- Boot-critical libraries: SELF-HOSTED same-origin under /vendor (pinned
+     versions, byte-identical to the CDN builds they replace). This removes the
+     third-party-CDN dependency from first load — the libs now ship from the
+     same Cloudflare origin as the HTML, so they're faster and far more reliable
+     on weak Iceland/rural signal, and the service worker can precache them
+     deterministically as part of the app shell (see sw.js SHELL_URLS). The
+     boot-failure safety net below stays as defense-in-depth.
+       - mapbox-gl  v3.8.0   (api.mapbox.com/mapbox-gl-js/v3.8.0/*)
+       - supabase-js 2.108.1 (cdn.jsdelivr.net/npm/@supabase/supabase-js@2)
+       - idb        8.0.3    (cdn.jsdelivr.net/npm/idb@8/build/umd.js)
+       - qrcode-generator 1.4.4 (cdn.jsdelivr.net/npm/qrcode-generator@1.4.4) -->
+<link href="/vendor/mapbox-gl-v3.8.0.css" rel="stylesheet">
+<script src="/vendor/mapbox-gl-v3.8.0.js"></script>
+<script src="/vendor/supabase-js-2.108.1.umd.js"></script>
+<script src="/vendor/idb-8.0.3.umd.js"></script>
+<script src="/vendor/qrcode-generator-1.4.4.min.js"></script>
+<!-- Fonts stay on Google's CDN as graceful degradation: a failed font fetch on
+     weak signal only falls typography back to Georgia/monospace — it never
+     blocks boot (unlike the libs above, which the app cannot run without). -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css" rel="stylesheet">
-<script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/idb@8/build/umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 <style>
   :root {
     --ink: #1a1d1a;
@@ -3155,19 +3168,22 @@
 window.__fnParsed = true;
 
 // ── Boot-failure safety net ───────────────────────────────────────────────
-// The app depends on third-party libraries loaded from CDNs in <head>
-// (mapbox-gl, supabase-js, idb). On a poor connection — e.g. a moving bus on
-// patchy rural signal, on a phone's FIRST open before the service worker has
-// cached them — any one of those <script> tags can silently fail to load. The
-// next line of app code that touches the missing global then throws at top
-// level, boot() never runs, and the passenger is left on a frozen "Searching"
-// screen with no explanation. This was the real cause of "wouldn't load on a
-// couple of iPhones" on the first live tour — it was never about old devices
-// (the oldest was an iPhone 12). This handler turns that silent dead-end into a
-// clear, recoverable message with one-tap retry (a reload usually succeeds: the
-// lib often cached on the first try, or signal recovered). __fnBootOk flips true
-// once boot() has confirmed its dependencies, so genuine post-load runtime
-// errors never trigger this overlay.
+// The app depends on libraries loaded by <script> tags in <head> (mapbox-gl,
+// supabase-js, idb). These are now SELF-HOSTED same-origin under /vendor —
+// which removed the third-party-CDN fragility that caused "wouldn't load on a
+// couple of iPhones" on the first live tour (a CDN <script> silently failing
+// on patchy signal during a phone's FIRST open, before the service worker had
+// cached it; never about old devices — the oldest was an iPhone 12). Same-
+// origin + SW shell precache makes that failure mode far less likely, but a
+// weak connection can still drop ANY request mid-transfer on a cold first
+// load, so this net stays as defense-in-depth: if a lib is missing, the next
+// app line that touches the absent global throws at top level, boot() never
+// runs, and without this handler the passenger would be stuck on a frozen
+// "Searching" screen. It turns that dead-end into a clear, recoverable
+// message with one-tap retry (a reload usually succeeds: the lib is often
+// cached from the first try, or signal recovered). __fnBootOk flips true once
+// boot() has confirmed its dependencies, so genuine post-load runtime errors
+// never trigger this overlay.
 window.__fnBootOk = false;
 function showBootError() {
   if (window.__fnBootOk) return;
@@ -3212,7 +3228,7 @@ window.addEventListener('unhandledrejection', function () {
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · boot-failure retry screen (CDN-fail resilience) + reliable iOS Allow-location + boarding · build 2026-06-09-1608';
+const BUILD_VERSION = '0.6 · self-hosted libs (/vendor, no third-party CDN on boot) + boot-retry net + reliable iOS Allow-location + boarding · build 2026-06-09-2236';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4252,12 +4268,13 @@ function showLanguageGate() {
 }
 
 async function boot() {
-  // Dependency check FIRST. The CDN libs (supabase-js, mapbox-gl) are loaded by
-  // <script> tags in <head>; on a weak connection one can fail to load on the
-  // first open. Without them the app can do nothing — show a recoverable retry
-  // screen instead of silently freezing on "Searching". (idb is intentionally
-  // not required here: it's only the offline location queue, and it's served
-  // from the same CDN host as supabase-js, so the supabase check covers it.)
+  // Dependency check FIRST. The libs (supabase-js, mapbox-gl) are loaded by
+  // <script> tags in <head> — same-origin /vendor copies, but on a weak
+  // connection a request can still fail mid-transfer on a cold first open.
+  // Without them the app can do nothing — show a recoverable retry screen
+  // instead of silently freezing on "Searching". (idb is intentionally not
+  // required here: it's only the offline location queue, and it's served from
+  // the same origin as everything else, so the supabase check covers it.)
   if (!supabaseClient || typeof mapboxgl === 'undefined') {
     showBootError();
     return;

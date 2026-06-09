@@ -17,3 +17,10 @@
 # cache + revalidate.
 /manifest.json
   Cache-Control: public, max-age=300, must-revalidate
+
+# Self-hosted libraries. Filenames carry their version (mapbox-gl-v3.8.0.js
+# etc.), so the content of a given URL never changes — safe to cache
+# aggressively at the browser/edge. A lib upgrade ships under a NEW filename
+# referenced from the HTML, never by overwriting an old one.
+/vendor/*
+  Cache-Control: public, max-age=31536000, immutable
