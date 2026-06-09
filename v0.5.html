@@ -347,6 +347,14 @@
      not SVG presentation attributes, so stroke lives here). */
   .you-trail { fill: none; stroke: var(--you); }
   .you-trail.guide { stroke: #2563eb; }
+  /* Route line — connects the stops as they're activated (the session log),
+     drawn behind everything on both passenger + guide maps. Sepia dashed line
+     (treasure-map route, distinct from the round-dot breadcrumb). Per-leg
+     opacity is set inline so older legs fade as new ones are added. */
+  .route-line {
+    fill: none; stroke: #6b4f2e; stroke-width: 3;
+    stroke-linecap: round; stroke-dasharray: 7 5; pointer-events: none;
+  }
 
   /* Guide dot — beacon blue. Used both in the guide's own view and (later,
      once chunk F lands) in passenger views when guide visibility is on. */
@@ -3114,7 +3122,7 @@ window.__fnParsed = true;
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · GPS-free spot check-in (tap spot → I\'m here → guide) · build 2026-06-09-1427';
+const BUILD_VERSION = '0.6 · session-log route line between stops (fades as it grows) · build 2026-06-09-1439';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -9553,8 +9561,38 @@ function pinTitleLabel(text) {
   return lbl;
 }
 
+// Route line — connects stops in ordinal order up to the furthest-activated
+// stop (the session's progress), behind everything, on both passenger + guide
+// maps. No GPS / no API — just the known stop coords. Each leg fades as newer
+// legs are added (newest full → older step down), so it reads as "where we've
+// been → where we are". Reconstructs on reload from _maxActivatedOrdinal (seeded
+// by the stop-activation catch-up), so a late joiner still sees the route so far.
+function renderRouteLine(layer) {
+  if (!layer || !map || !Number.isFinite(_maxActivatedOrdinal)) return;
+  const stops = ((TOUR && TOUR.stops) || [])
+    .filter(s => Number.isFinite(s.lng) && Number.isFinite(s.lat) && Number.isFinite(s.ordinal))
+    .sort((a, b) => a.ordinal - b.ordinal)
+    .filter(s => s.ordinal <= _maxActivatedOrdinal);
+  if (stops.length < 2) return;
+  const SVGNS_T = 'http://www.w3.org/2000/svg';
+  const nLegs = stops.length - 1;
+  for (let i = 0; i < nLegs; i++) {
+    const a = project(stops[i].lng, stops[i].lat);
+    const b = project(stops[i + 1].lng, stops[i + 1].lat);
+    if (![a.x, a.y, b.x, b.y].every(Number.isFinite)) continue;
+    const op = Math.max(0.18, 1 - (nLegs - 1 - i) * 0.22);   // newest leg full; older fade by step
+    const ln = document.createElementNS(SVGNS_T, 'line');
+    ln.setAttribute('class', 'route-line');
+    ln.setAttribute('x1', a.x); ln.setAttribute('y1', a.y);
+    ln.setAttribute('x2', b.x); ln.setAttribute('y2', b.y);
+    ln.setAttribute('opacity', String(op));
+    layer.appendChild(ln);
+  }
+}
+
 function renderPins() {
   pinsLayer.innerHTML = '';
+  renderRouteLine(pinsLayer);   // session-log route, behind the pins (both roles)
   const ppm = pxPerMeter();
 
   // ── Danger / border ZONES — drawn first (underneath everything) as a
