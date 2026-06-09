@@ -3081,7 +3081,7 @@ window.__fnParsed = true;
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · dotted breadcrumb trail in passenger view too · build 2026-06-09-1258';
+const BUILD_VERSION = '0.6 · passenger presence heartbeat (app-open without GPS) · build 2026-06-09-1312';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -7325,6 +7325,7 @@ function initMap(token) {
       setTimeout(() => { try { maybeRemindChatSetup(); } catch (_e) {} }, _chatWait);
     } else {
       startPassengerGuideListening();
+      startPresenceHeartbeat();   // GPS-free "app is open" signal (R2-F)
       if (introNeeded()) {
         maybeShowIntro();   // intro drives the location/notif/install asks
       } else {
@@ -7479,6 +7480,38 @@ let _noFixNudgeTimer = null;
 let _youTrail = [];
 const YOU_TRAIL_MIN_M = 6;     // min metres between recorded breadcrumb points
 const YOU_TRAIL_MAX = 800;     // cap (oldest dropped)
+
+// ── Presence heartbeat (R2-F) ──
+// A GPS-free "the app is open right now" signal. The passenger pings
+// touch_passenger_presence every ~45s WHILE FOREGROUNDED, so the guide can tell
+// "present, using the app (no location)" from "joined then left" — which no
+// other signal gives without GPS. Suspends on screen-lock (like GPS), so it's a
+// foreground-presence signal, not background tracking.
+const PRESENCE_PING_MS = 45000;
+const PRESENCE_FRESH_MS = 120000;   // guide treats a passenger as "present" if pinged within 2 min
+let _presenceTimer = null;
+let _presenceWired = false;
+async function touchPresence() {
+  if (ROLE !== 'passenger' || !SESSION) return;
+  if (typeof PASSENGER_ID === 'undefined' || !PASSENGER_ID) return;
+  if (typeof document !== 'undefined' && document.visibilityState && document.visibilityState !== 'visible') return;
+  try {
+    await supabaseClient.rpc('touch_passenger_presence',
+      { p_session_id: SESSION.id, p_passenger_id: PASSENGER_ID });
+  } catch (_e) { /* offline — the next ping covers it */ }
+}
+function startPresenceHeartbeat() {
+  if (ROLE !== 'passenger') return;
+  if (_presenceTimer) clearInterval(_presenceTimer);
+  touchPresence();                          // immediate first ping
+  _presenceTimer = setInterval(touchPresence, PRESENCE_PING_MS);
+  if (!_presenceWired) {
+    _presenceWired = true;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') touchPresence();   // ping on foreground
+    });
+  }
+}
 
 // ── 6b. GUIDE SHELL ──
 // Counterpart to startGeolocation, called instead when ROLE === 'guide'.
@@ -8302,7 +8335,7 @@ async function catchUpPassengerNames() {
   if (!SESSION) return;
   const { data, error } = await supabaseClient
     .from('session_passengers')
-    .select('passenger_id, name, in_bus')
+    .select('passenger_id, name, in_bus, last_seen')
     .eq('session_id', SESSION.id);
   if (error) {
     console.warn('session_passengers catch-up failed', error);
@@ -8322,6 +8355,7 @@ async function catchUpPassengerNames() {
       p.name = row.name;
     }
     p.inBus = !!row.in_bus;
+    p.lastSeen = row.last_seen ? Date.parse(row.last_seen) : null;
   }
   // Re-render dots (for labels) and the bottom-sheet list.
   renderPassengers();
@@ -8355,6 +8389,7 @@ function startPassengerNamesSubscription() {
           p.name = row.name;
         }
         p.inBus = !!row.in_bus;
+        p.lastSeen = row.last_seen ? Date.parse(row.last_seen) : null;
         renderPassengers();
         renderPassengerList();
         updateBusHeadcount();
@@ -8442,13 +8477,17 @@ function renderPassengerList() {
     status.style.cssText =
       'font-family:JetBrains Mono,monospace; font-size:9px; letter-spacing:0.1em;' +
       'text-transform:uppercase; color:var(--rule);';
-    // R2-F: the sticky, self-reported "at the bus" status takes precedence —
-    // it's the one signal that doesn't need GPS and survives a screen-lock, so
-    // a no-location passenger who tapped "I'm at the bus" still reads as ✓.
+    // Status precedence (R2-F): the sticky, self-reported "at the bus" wins —
+    // the one signal that needs no GPS and survives screen-lock. Then GPS
+    // states. Then the GPS-free presence heartbeat: "present" (app open, pinged
+    // within 2 min) → "away · Nm" (was here, now backgrounded/closed) → "no
+    // location" (in the roster but no presence signal yet).
     if (p.inBus) { status.textContent = '✓ at bus'; status.style.color = '#15803d'; }
-    else if (!hasLocation) status.textContent = 'present · no location';
-    else if (state === 'disconnected') status.textContent = 'no signal';
-    else status.textContent = 'live';
+    else if (hasLocation && state === 'disconnected') status.textContent = 'no signal';
+    else if (hasLocation) status.textContent = 'live';
+    else if (p.lastSeen && (now - p.lastSeen) < PRESENCE_FRESH_MS) { status.textContent = 'present'; status.style.color = '#15803d'; }
+    else if (p.lastSeen) status.textContent = 'away · ' + Math.max(1, Math.round((now - p.lastSeen) / 60000)) + 'm';
+    else status.textContent = 'no location';
     row.appendChild(status);
 
     row.addEventListener('click', () => togglePassengerSelection(passengerId));
