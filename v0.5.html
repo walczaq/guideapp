@@ -3102,7 +3102,7 @@ window.__fnParsed = true;
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · privacy: stop-sharing-location toggle + privacy blurb · build 2026-06-09-1335';
+const BUILD_VERSION = '0.6 · guide list: per-passenger notifications 🔔/🔕 (stop-1 setup check) · build 2026-06-09-1410';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -8433,6 +8433,20 @@ async function catchUpPassengerNames() {
   renderPassengers();
   renderPassengerList();
   updateBusHeadcount();
+  catchUpPushStatus().catch(() => {});   // refresh per-passenger 🔔/🔕 (same cadence)
+}
+
+// Mark which passengers have notifications enabled (a push subscription for
+// this session) so the guide can see at stop 1 who'll actually receive alerts.
+// push_subscriptions has no SELECT policy, so this reads via a SECURITY DEFINER
+// RPC that returns only passenger_ids (no keys).
+async function catchUpPushStatus() {
+  if (!SESSION || ROLE !== 'guide') return;
+  const { data, error } = await supabaseClient.rpc('list_push_passengers', { p_session_id: SESSION.id });
+  if (error) { console.warn('push status fetch failed', error); return; }
+  const withPush = new Set((data || []).map(r => (typeof r === 'string' ? r : r.passenger_id)));
+  for (const [pid, p] of PASSENGERS) p.hasPush = withPush.has(pid);
+  renderPassengerList();
 }
 
 function startPassengerNamesSubscription() {
@@ -8543,6 +8557,15 @@ function renderPassengerList() {
       (hasLocation ? '' : ' opacity:0.55;');
     nameEl.textContent = passengerDisplayName(p, passengerId);
     row.appendChild(nameEl);
+
+    // Notifications indicator — 🔔 (alerts on / has a push subscription) vs 🔕
+    // (off, dimmed). Lets the guide see at stop 1 who will actually receive a
+    // push, separate from whether they're sharing location.
+    const bell = document.createElement('div');
+    bell.style.cssText = 'font-size:13px; flex-shrink:0; line-height:1;' + (p.hasPush ? '' : ' opacity:0.3;');
+    bell.textContent = p.hasPush ? '🔔' : '🔕';
+    bell.title = p.hasPush ? 'Notifications on' : 'Notifications off';
+    row.appendChild(bell);
 
     // Status text — small mono caption on the right.
     const status = document.createElement('div');
