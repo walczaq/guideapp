@@ -3153,6 +3153,54 @@
 // screen. (Mapbox GL v3 also requires a modern browser, so we don't attempt to
 // run on those devices — we just fail gracefully with guidance.)
 window.__fnParsed = true;
+
+// ── Boot-failure safety net ───────────────────────────────────────────────
+// The app depends on third-party libraries loaded from CDNs in <head>
+// (mapbox-gl, supabase-js, idb). On a poor connection — e.g. a moving bus on
+// patchy rural signal, on a phone's FIRST open before the service worker has
+// cached them — any one of those <script> tags can silently fail to load. The
+// next line of app code that touches the missing global then throws at top
+// level, boot() never runs, and the passenger is left on a frozen "Searching"
+// screen with no explanation. This was the real cause of "wouldn't load on a
+// couple of iPhones" on the first live tour — it was never about old devices
+// (the oldest was an iPhone 12). This handler turns that silent dead-end into a
+// clear, recoverable message with one-tap retry (a reload usually succeeds: the
+// lib often cached on the first try, or signal recovered). __fnBootOk flips true
+// once boot() has confirmed its dependencies, so genuine post-load runtime
+// errors never trigger this overlay.
+window.__fnBootOk = false;
+function showBootError() {
+  if (window.__fnBootOk) return;
+  if (document.getElementById('fn-boot-error')) return;   // idempotent
+  try {
+    var el = document.createElement('div');
+    el.id = 'fn-boot-error';
+    el.setAttribute('style',
+      'position:fixed;inset:0;z-index:100000;display:flex;flex-direction:column;' +
+      'align-items:center;justify-content:center;gap:18px;padding:32px;text-align:center;' +
+      'background:#f4ede0;color:#1a1d1a;font-family:-apple-system,Helvetica,Arial,sans-serif;');
+    el.innerHTML =
+      '<div style="font-family:Georgia,serif;font-style:italic;font-size:23px">Couldn’t finish loading</div>' +
+      '<div style="font-size:14px;line-height:1.6;color:#555;max-width:300px">' +
+      'Check your internet connection and try again. A weak signal on the first open can interrupt loading.</div>' +
+      '<button id="fn-boot-retry" type="button" style="margin-top:6px;font-size:15px;padding:14px 28px;' +
+      'background:#1a1d1a;color:#f4ede0;border:none;border-radius:10px;cursor:pointer;' +
+      'font-family:-apple-system,Helvetica,Arial,sans-serif">Try again</button>';
+    document.body.appendChild(el);
+    var btn = document.getElementById('fn-boot-retry');
+    if (btn) btn.addEventListener('click', function () { location.reload(); });
+  } catch (_e) { /* nothing more we can do */ }
+}
+// Catch the top-level throw from a missing CDN global (line ~4155 etc.).
+// Resource 404s don't bubble to this non-capture listener, so this fires only
+// for actual script exceptions, and only before boot has its dependencies.
+window.addEventListener('error', function (e) {
+  if (!window.__fnBootOk && e && (e.error || e.message)) showBootError();
+});
+window.addEventListener('unhandledrejection', function () {
+  if (!window.__fnBootOk) showBootError();
+});
+
 // ╭──────────────────────────────────────────────────────╮
 // │  v0.5 — STOPS + ACTIVATION BROADCASTS                │
 // │  Chunks shipped: A (schema + reshape), B (guide-side │
@@ -3164,7 +3212,7 @@ window.__fnParsed = true;
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · boarding/headcount screen + Start tour (home→route) + persisted breadcrumb · build 2026-06-09-1514';
+const BUILD_VERSION = '0.6 · boot-failure retry screen (CDN-fail resilience) + reliable iOS Allow-location + boarding · build 2026-06-09-1608';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3715,6 +3763,12 @@ let _dbPromise = null;
 // share the same open DB instead of racing.
 function openDB() {
   if (_dbPromise) return _dbPromise;
+  // idb is non-critical (offline location queue). If its CDN script failed to
+  // load, degrade gracefully — the live path still works — instead of throwing
+  // a ReferenceError that would bubble as an unhandled rejection.
+  if (typeof idb === 'undefined' || !idb.openDB) {
+    return Promise.reject(new Error('idb unavailable'));
+  }
   _dbPromise = idb.openDB(DB_NAME, DB_VERSION, {
     upgrade(db, oldVersion, newVersion) {
       // upgrade() runs once, the first time the user visits with this DB_VERSION.
@@ -4152,8 +4206,16 @@ let map = null;  // Mapbox map instance
 
 // `window.supabase` is the global injected by the CDN bundle (which owns that name);
 // we destructure createClient out and name our instance `supabaseClient` to avoid shadowing.
-const { createClient } = window.supabase;
-const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+// Guarded: if the supabase-js <script> failed to load (poor signal on first open)
+// window.supabase is undefined — leave supabaseClient null and let boot()'s
+// dependency check surface the recoverable "couldn't load" screen instead of
+// throwing here at top level (which would abort the whole script silently).
+let supabaseClient = null;
+try {
+  if (window.supabase && window.supabase.createClient) {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+} catch (_e) { supabaseClient = null; }
 
 // ── 4. BOOT ──
 // Three URL states for v0.3 chunk A:
@@ -4190,6 +4252,20 @@ function showLanguageGate() {
 }
 
 async function boot() {
+  // Dependency check FIRST. The CDN libs (supabase-js, mapbox-gl) are loaded by
+  // <script> tags in <head>; on a weak connection one can fail to load on the
+  // first open. Without them the app can do nothing — show a recoverable retry
+  // screen instead of silently freezing on "Searching". (idb is intentionally
+  // not required here: it's only the offline location queue, and it's served
+  // from the same CDN host as supabase-js, so the supabase check covers it.)
+  if (!supabaseClient || typeof mapboxgl === 'undefined') {
+    showBootError();
+    return;
+  }
+  // Dependencies are present and boot is proceeding normally — from here on,
+  // genuine runtime errors should NOT trigger the boot-failure overlay.
+  window.__fnBootOk = true;
+
   // Config sanity check.
   if (!MAPBOX_TOKEN || !MAPBOX_TOKEN.startsWith('pk.')) {
     showFatalError('Mapbox token missing. Paste your public token (pk.…) into the MAPBOX_TOKEN constant.');
@@ -12183,7 +12259,14 @@ function wireIntro() {
     const st = document.getElementById('intro-location-status');
     locBtn.disabled = true;
     if (st) { st.textContent = 'Check your screen for the location prompt…'; st.className = 'intro-status'; }
-    startGeolocation();   // fires the OS permission prompt
+    // R2-A: route the explicit "Allow location" tap through the gesture-bound
+    // one-shot getCurrentPosition path. On iOS Safari a bare watchPosition (what
+    // startGeolocation uses) can have its first fix silently dropped even when
+    // requested from a tap; getCurrentPosition *inside* the gesture reliably
+    // forces the OS prompt + a fresh fix, then we hand off to the continuous
+    // watch. This was the likely cause of trial passengers who tapped Allow but
+    // still sent zero fixes.
+    requestLocationOnTap();
     setTimeout(introNext, 800);
   });
 
