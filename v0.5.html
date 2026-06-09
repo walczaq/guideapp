@@ -3228,7 +3228,13 @@ window.addEventListener('unhandledrejection', function () {
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · self-hosted libs (/vendor, no third-party CDN on boot) + boot-retry net + reliable iOS Allow-location + boarding · build 2026-06-09-2236';
+const BUILD_VERSION = '0.6 · quiet console (debug-gated) + self-hosted libs (/vendor) + boot-retry net + reliable iOS Allow-location · build 2026-06-09-2253';
+
+// Verbose tracing — OFF in production so real warnings/errors aren't buried under
+// the per-render [maybeShow]/[catch-up]/[realtime] spam (~1800 lines a session).
+// Flip FN_DEBUG here, or set window.FN_DEBUG = true in the console, to re-enable.
+const FN_DEBUG = false;
+function dlog() { if (FN_DEBUG || window.FN_DEBUG) { try { console.log.apply(console, arguments); } catch (_e) {} } }
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -10619,7 +10625,7 @@ async function catchUpStopActivations() {
       warning_level: row.warning_level || 'none',
     });
   }
-  console.log('[catch-up] stop_activations rows:', (data || []).length,
+  dlog('[catch-up] stop_activations rows:', (data || []).length,
     'active set now:', [...ACTIVE_STOP_IDS]);
 }
 
@@ -11162,7 +11168,7 @@ function subscribeStopActivations() {
       // On reconnect, run catch-up so any activations we missed during the
       // disconnect get applied. The catch-up uses ACTIVE_STOP_IDS, which is
       // append-only, so re-running is safe even when we have nothing missed.
-      console.log('[realtime] stop_activations channel status:', status);
+      dlog('[realtime] stop_activations channel status:', status);
       if (status === 'SUBSCRIBED' && _stopActivationSubscribed) {
         catchUpStopActivations().then(() => {
           renderPins();
@@ -12927,14 +12933,14 @@ function dismissStopArrivalModal(opts) {
 // onStopActivated() because they just tapped through the activate-confirm
 // modal seconds before.
 function maybeShowPendingStopAnnouncement() {
-  console.log('[maybeShow] enter — role:', ROLE,
+  dlog('[maybeShow] enter — role:', ROLE,
     'TOUR:', !!TOUR, 'SESSION:', SESSION ? SESSION.id : null,
     'active:', TOUR && [...ACTIVE_STOP_IDS],
     'modalOpen:', !!_arrivalStop);
   if (!TOUR || !SESSION) return;
   if (_arrivalStop) return;          // a modal is already open
   const acked = getAckedStops(SESSION.id);
-  console.log('[maybeShow] acked stops:', [...acked]);
+  dlog('[maybeShow] acked stops:', [...acked]);
   let candidate = null;
   for (const stop of TOUR.stops) {
     if (!ACTIVE_STOP_IDS.has(stop.id)) continue;
@@ -12942,10 +12948,10 @@ function maybeShowPendingStopAnnouncement() {
     if (!candidate || stop.ordinal > candidate.ordinal) candidate = stop;
   }
   if (candidate) {
-    console.log('[maybeShow] showing candidate:', candidate.name, 'id:', candidate.id);
+    dlog('[maybeShow] showing candidate:', candidate.name, 'id:', candidate.id);
     showStopArrivalModal(candidate);
   } else {
-    console.log('[maybeShow] no candidate (all active stops acked, or none active)');
+    dlog('[maybeShow] no candidate (all active stops acked, or none active)');
   }
 }
 
