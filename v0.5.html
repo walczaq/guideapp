@@ -342,6 +342,11 @@
   }
   .you-dot { fill: var(--you); stroke: var(--paper); stroke-width: 2.5; }
   .you-halo { fill: var(--ink); opacity: 0.12; }
+  /* The passenger's own breadcrumb — a treasure-map dotted line of where
+     they've walked. Coloured to match the you-dot (var() only resolves in CSS,
+     not SVG presentation attributes, so stroke lives here). */
+  .you-trail { fill: none; stroke: var(--you); }
+  .you-trail.guide { stroke: #2563eb; }
 
   /* Guide dot — beacon blue. Used both in the guide's own view and (later,
      once chunk F lands) in passenger views when guide visibility is on. */
@@ -3076,7 +3081,7 @@ window.__fnParsed = true;
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · treasure-map dotted passenger trails (smooth + round dots) · build 2026-06-09-1250';
+const BUILD_VERSION = '0.6 · dotted breadcrumb trail in passenger view too · build 2026-06-09-1258';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -7468,6 +7473,12 @@ async function prewarmOfflineTiles() {
 // are at the browser's discretion — we ask for high accuracy but don't get a guarantee.
 let geoWatchId = null;
 let _noFixNudgeTimer = null;
+// The passenger's own walking breadcrumb (in-memory, this session). Drawn as a
+// treasure-map dotted trail in the passenger view. Distance-gated so standing
+// still doesn't cluster dots from GPS jitter; capped so a full day stays bounded.
+let _youTrail = [];
+const YOU_TRAIL_MIN_M = 6;     // min metres between recorded breadcrumb points
+const YOU_TRAIL_MAX = 800;     // cap (oldest dropped)
 
 // ── 6b. GUIDE SHELL ──
 // Counterpart to startGeolocation, called instead when ROLE === 'guide'.
@@ -9054,6 +9065,15 @@ function onGpsSuccess(pos) {
   state.accuracy = pos.coords.accuracy;
   state.heading = pos.coords.heading;  // null if not moving
 
+  // Record the passenger's own walking breadcrumb for the dotted trail.
+  if (ROLE === 'passenger' && Number.isFinite(state.youLng) && Number.isFinite(state.youLat)) {
+    const last = _youTrail[_youTrail.length - 1];
+    if (!last || metersBetween(last.lng, last.lat, state.youLng, state.youLat) >= YOU_TRAIL_MIN_M) {
+      _youTrail.push({ lng: state.youLng, lat: state.youLat, ts: Date.now() });
+      if (_youTrail.length > YOU_TRAIL_MAX) _youTrail.shift();
+    }
+  }
+
   updateSignal();
 
   // Triggers (chime + popup) are passenger-only — guides don't get pinged
@@ -9437,8 +9457,45 @@ function addTitlePlates() {
   });
 }
 
+// Draw the passenger's own breadcrumb as a treasure-map dotted line — same look
+// as the guide's passenger trails: time-ordered, split into runs across >3-min
+// gaps, smoothed (Catmull-Rom) and dotted, older runs faded. Coloured via the
+// .you-trail CSS class (matches the you-dot).
+function renderYouTrail() {
+  if (!map || _youTrail.length < 2) return;
+  const TRAIL_GAP_MS = 3 * 60 * 1000;
+  const SVGNS_T = 'http://www.w3.org/2000/svg';
+  const guideCls = (ROLE === 'guide') ? ' guide' : '';
+  const runs = []; let run = [];
+  for (let i = 0; i < _youTrail.length; i++) {
+    if (i > 0 && (_youTrail[i].ts - _youTrail[i - 1].ts) > TRAIL_GAP_MS) {
+      if (run.length) runs.push(run);
+      run = [];
+    }
+    run.push(_youTrail[i]);
+  }
+  if (run.length) runs.push(run);
+  runs.forEach((rpts, ri) => {
+    if (rpts.length < 2) return;
+    const proj = rpts.map(t => project(t.lng, t.lat));
+    const d = trailSmoothPath(proj);
+    if (!d) return;
+    const runFade = runs.length <= 1 ? 1 : (0.4 + 0.6 * (ri / (runs.length - 1)));
+    const path = document.createElementNS(SVGNS_T, 'path');
+    path.setAttribute('class', 'you-trail' + guideCls);
+    path.setAttribute('d', d);
+    path.setAttribute('stroke-width', '3.5');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    path.setAttribute('stroke-dasharray', '0.1 11');
+    path.setAttribute('opacity', String(0.9 * runFade));
+    youLayer.appendChild(path);
+  });
+}
+
 function renderYou() {
   youLayer.innerHTML = '';
+  if (ROLE === 'passenger') renderYouTrail();   // breadcrumb behind the you-dot
   if (state.youLng == null) return;
   const { x, y } = project(state.youLng, state.youLat);
   const ppm = pxPerMeter();
