@@ -356,6 +356,34 @@
     stroke-linecap: round; stroke-dasharray: 7 5; pointer-events: none;
   }
 
+  /* Boarding / headcount screen (guide, before "Start tour"). */
+  .boarding-screen {
+    position: fixed; inset: 0; z-index: 49; display: none;   /* above control center (30), below .screen overlays (50) so Share/Menu open on top */
+    background: var(--paper); overflow-y: auto;
+    padding: calc(max(env(safe-area-inset-top,0px),24px)) 20px calc(24px + env(safe-area-inset-bottom,0px));
+  }
+  .boarding-screen.show { display: block; }
+  .boarding-inner { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; min-height: 100%; }
+  .boarding-stamp { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--rule); text-align:center; margin-top:8px; }
+  .boarding-headline { text-align:center; margin:18px 0 2px; }
+  .boarding-count { font-family:'Fraunces',serif; font-size:64px; font-weight:700; color:var(--ink); line-height:1; }
+  .boarding-count-label { font-family:'Fraunces',serif; font-style:italic; font-size:20px; color:#4a4a4a; }
+  .boarding-sub { text-align:center; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); margin-bottom:18px; }
+  .boarding-list { flex:1 1 auto; }
+  .boarding-row { display:flex; align-items:center; gap:10px; padding:12px 6px; border-bottom:1px solid var(--rule); font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink); }
+  .boarding-row::before { content:'✓'; color:#15803d; font-weight:700; }
+  .boarding-share {
+    margin-top:18px; width:100%; padding:14px; background:var(--paper); color:var(--ink);
+    border:1px solid var(--ink); border-radius:10px; font-family:'JetBrains Mono',monospace;
+    font-size:12px; letter-spacing:0.14em; text-transform:uppercase; cursor:pointer;
+  }
+  .boarding-start {
+    margin-top:8px; width:100%; padding:16px; background:var(--ink); color:var(--paper);
+    border:none; border-radius:10px; font-family:'JetBrains Mono',monospace; font-size:13px;
+    letter-spacing:0.14em; text-transform:uppercase; cursor:pointer;
+  }
+  .boarding-start:active, .boarding-share:active { transform: scale(0.99); }
+
   /* Guide dot — beacon blue. Used both in the guide's own view and (later,
      once chunk F lands) in passenger views when guide visibility is on. */
   .you-dot.guide {
@@ -2590,6 +2618,20 @@
     </div>
   </div>
 
+  <!-- BOARDING (guide only, before "Start tour") — fullscreen headcount of who
+       has boarded; tapping Start stamps the tour start + home and reveals the
+       control center. -->
+  <div class="boarding-screen" id="boarding-screen">
+    <div class="boarding-inner">
+      <div class="boarding-stamp" id="boarding-stamp">Fieldnote · Boarding</div>
+      <div class="boarding-headline"><span class="boarding-count" id="boarding-count">0</span> <span class="boarding-count-label">aboard</span></div>
+      <div class="boarding-sub" id="boarding-sub">Waiting for passengers to join…</div>
+      <div class="boarding-list" id="boarding-list"></div>
+      <button class="boarding-share" id="boarding-share" type="button">Share invite link</button>
+      <button class="boarding-start" id="boarding-start">Start tour</button>
+    </div>
+  </div>
+
   <!-- MENU -->
   <div class="screen" id="screen-menu">
     <div class="status-bar"></div>
@@ -3122,7 +3164,7 @@ window.__fnParsed = true;
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · session-log route line between stops (fades as it grows) · build 2026-06-09-1439';
+const BUILD_VERSION = '0.6 · boarding/headcount screen + Start tour (home→route) + persisted breadcrumb · build 2026-06-09-1514';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -4342,7 +4384,7 @@ async function loadSessionAndTour(sessionId) {
   // Fetch the session row.
   const { data: session, error: sessionErr } = await supabaseClient
     .from('sessions')
-    .select('id, label, tour_slug, guide_name, started_at, ended_at, chat_url, next_stop_id')
+    .select('id, label, tour_slug, guide_name, started_at, ended_at, chat_url, next_stop_id, tour_started_at, home_lng, home_lat')
     .eq('id', sessionId)
     .single();
 
@@ -4410,7 +4452,10 @@ async function loadSessionAndTour(sessionId) {
   // counts as "present" whether or not the map canvas comes up (R2-F). By this
   // point a passenger is guaranteed registered (ensurePassengerNameRegistered
   // above), so the heartbeat's UPDATE has a row to touch.
-  if (ROLE === 'passenger') startPresenceHeartbeat();
+  if (ROLE === 'passenger') {
+    startPresenceHeartbeat();
+    restoreYouTrail();   // bring back this session's breadcrumb after a reload (#2)
+  }
 
   // Now that we have a session, start the sync worker. It will pick up any
   // leftover rows from a previous page-load and stream new fixes to Supabase.
@@ -7278,6 +7323,59 @@ function loosenPoiLayers(m) {
 // 'load' (WebGL blocked, GPU blocklist, dead tiles) must not strand a guide
 // with no stop controls.
 let _roleShellStarted = false;
+// ── Boarding screen (#1) — guide headcount before "Start tour" ──
+function showBoarding() {
+  const el = document.getElementById('boarding-screen');
+  if (el) { el.classList.add('show'); renderBoarding(); }
+}
+function hideBoarding() {
+  const el = document.getElementById('boarding-screen');
+  if (el) el.classList.remove('show');
+}
+// Live headcount + name list of who has joined (boarded). Self-guards so it's a
+// no-op unless the boarding screen is up.
+function renderBoarding() {
+  const screen = document.getElementById('boarding-screen');
+  if (!screen || !screen.classList.contains('show')) return;
+  const named = Array.from(PASSENGERS.values()).filter(p => p && p.name);
+  const countEl = document.getElementById('boarding-count');
+  if (countEl) countEl.textContent = String(named.length);
+  const subEl = document.getElementById('boarding-sub');
+  if (subEl) subEl.textContent = named.length
+    ? 'Tap Start when everyone’s aboard.' : 'Waiting for passengers to join…';
+  const listEl = document.getElementById('boarding-list');
+  if (listEl) {
+    listEl.innerHTML = '';
+    named.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    for (const p of named) {
+      const row = document.createElement('div');
+      row.className = 'boarding-row';
+      row.textContent = p.name;
+      listEl.appendChild(row);
+    }
+  }
+}
+// "Start tour": stamp tour_started_at + capture home (guide GPS if we have a
+// fix, else the tour's home coord), then reveal the control center.
+async function startTour() {
+  const token = getStoredGuideToken();
+  if (!token || !SESSION) { hideBoarding(); return; }
+  const hLng = Number.isFinite(state.youLng) ? state.youLng : (TOUR && TOUR.home ? TOUR.home.lng : null);
+  const hLat = Number.isFinite(state.youLat) ? state.youLat : (TOUR && TOUR.home ? TOUR.home.lat : null);
+  const { error } = await supabaseClient.rpc('start_tour', {
+    p_session_id: SESSION.id, p_guide_token: token, p_home_lng: hLng, p_home_lat: hLat });
+  if (error) { console.warn('start_tour failed', error); }
+  SESSION = Object.assign({}, SESSION, { tour_started_at: new Date().toISOString(), home_lng: hLng, home_lat: hLat });
+  hideBoarding();
+  try { renderAll(); } catch (_e) {}
+}
+(() => {
+  const b = document.getElementById('boarding-start');
+  if (b) b.addEventListener('click', () => { startTour(); });
+  const sh = document.getElementById('boarding-share');
+  if (sh) sh.addEventListener('click', () => { try { openShareScreen(); } catch (_e) {} });
+})();
+
 function startRoleShell() {
   if (_roleShellStarted) return;
   _roleShellStarted = true;
@@ -7287,6 +7385,9 @@ function startRoleShell() {
   if (ROLE === 'guide') {
     startGeolocation();
     startGuideShell();
+    // Boarding/headcount first: until the guide taps "Start tour", show the
+    // boarding screen over the control center (#1).
+    if (!(SESSION && SESSION.tour_started_at)) showBoarding();
     // Chat-setup nudge: not before 10 min into the session (8s floor on resume).
     const _startedMs = (SESSION && SESSION.started_at) ? Date.parse(SESSION.started_at) : Date.now();
     const _chatWait = Math.max(8000, 10 * 60 * 1000 - (Date.now() - _startedMs));
@@ -7571,6 +7672,27 @@ let _noFixNudgeTimer = null;
 let _youTrail = [];
 const YOU_TRAIL_MIN_M = 6;     // min metres between recorded breadcrumb points
 const YOU_TRAIL_MAX = 800;     // cap (oldest dropped)
+
+// Persist the breadcrumb per session (#2) so it survives a reload — the
+// passenger's "where I've walked" isn't lost when the tab reloads. Stored in
+// localStorage keyed by session ("the user_session file"); stale other-session
+// trails are pruned on restore so storage stays bounded.
+function youTrailKey() { return (typeof SESSION !== 'undefined' && SESSION) ? ('fieldnote_trail_' + SESSION.id) : null; }
+function saveYouTrail() {
+  const k = youTrailKey(); if (!k) return;
+  try { localStorage.setItem(k, JSON.stringify(_youTrail)); } catch (_e) { /* quota/private — ignore */ }
+}
+function restoreYouTrail() {
+  const k = youTrailKey(); if (!k) return;
+  try {
+    const raw = localStorage.getItem(k);
+    if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr)) _youTrail = arr.slice(-YOU_TRAIL_MAX); }
+    for (let i = localStorage.length - 1; i >= 0; i--) {     // prune other sessions' trails
+      const key = localStorage.key(i);
+      if (key && key.indexOf('fieldnote_trail_') === 0 && key !== k) localStorage.removeItem(key);
+    }
+  } catch (_e) { /* ignore */ }
+}
 
 // Passenger location-sharing opt-out (privacy). When on, the passenger stops
 // BROADCASTING their location to the guide (no new passenger_locations rows) —
@@ -8621,6 +8743,7 @@ function passengerDisplayName(p, passengerId) {
 // when applicable. Tapping a row selects the passenger (same as tapping
 // their dot on the map).
 function renderPassengerList() {
+  renderBoarding();   // keep the boarding headcount live too (no-op unless shown)
   const listEl = document.getElementById('guide-sheet-list');
   if (!listEl) return;
   // Sort: passengers with an actual location first (active dots), then
@@ -9325,6 +9448,7 @@ function onGpsSuccess(pos) {
     if (!last || metersBetween(last.lng, last.lat, state.youLng, state.youLat) >= YOU_TRAIL_MIN_M) {
       _youTrail.push({ lng: state.youLng, lat: state.youLat, ts: Date.now() });
       if (_youTrail.length > YOU_TRAIL_MAX) _youTrail.shift();
+      saveYouTrail();   // persist per session so it survives reload (#2)
     }
   }
 
@@ -9568,17 +9692,28 @@ function pinTitleLabel(text) {
 // been → where we are". Reconstructs on reload from _maxActivatedOrdinal (seeded
 // by the stop-activation catch-up), so a late joiner still sees the route so far.
 function renderRouteLine(layer) {
-  if (!layer || !map || !Number.isFinite(_maxActivatedOrdinal)) return;
-  const stops = ((TOUR && TOUR.stops) || [])
+  if (!layer || !map) return;
+  const allStops = ((TOUR && TOUR.stops) || [])
     .filter(s => Number.isFinite(s.lng) && Number.isFinite(s.lat) && Number.isFinite(s.ordinal))
-    .sort((a, b) => a.ordinal - b.ordinal)
-    .filter(s => s.ordinal <= _maxActivatedOrdinal);
-  if (stops.length < 2) return;
+    .sort((a, b) => a.ordinal - b.ordinal);
+  // Stops reached so far (activated, by ordinal).
+  let reached = Number.isFinite(_maxActivatedOrdinal)
+    ? allStops.filter(s => s.ordinal <= _maxActivatedOrdinal) : [];
+  // Home origin (#1): once the tour is started + a boarding location was
+  // captured, the route starts at home — and we show the leg to the first
+  // attraction immediately (even before it's activated).
+  const started = !!(SESSION && SESSION.tour_started_at);
+  const home = (started && Number.isFinite(SESSION.home_lng) && Number.isFinite(SESSION.home_lat))
+    ? { lng: SESSION.home_lng, lat: SESSION.home_lat } : null;
+  let pts = reached.slice();
+  if (home && pts.length === 0 && allStops.length) pts = [allStops[0]];   // home → first attraction at start
+  if (home) pts = [home].concat(pts);
+  if (pts.length < 2) return;
   const SVGNS_T = 'http://www.w3.org/2000/svg';
-  const nLegs = stops.length - 1;
+  const nLegs = pts.length - 1;
   for (let i = 0; i < nLegs; i++) {
-    const a = project(stops[i].lng, stops[i].lat);
-    const b = project(stops[i + 1].lng, stops[i + 1].lat);
+    const a = project(pts[i].lng, pts[i].lat);
+    const b = project(pts[i + 1].lng, pts[i + 1].lat);
     if (![a.x, a.y, b.x, b.y].every(Number.isFinite)) continue;
     const op = Math.max(0.18, 1 - (nLegs - 1 - i) * 0.22);   // newest leg full; older fade by step
     const ln = document.createElementNS(SVGNS_T, 'line');
@@ -11175,6 +11310,8 @@ function onSessionUpdated(row) {
     showSessionEnded();
   }
   updateNextStopBanner();   // guide may have changed the next stop
+  // Tour just started / home set → redraw so the route line's home leg appears.
+  try { renderAll(); } catch (_e) {}
 }
 
 // Show the full-screen "Tour ended" state. Hides the map + bottom sheet by
