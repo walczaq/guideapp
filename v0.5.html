@@ -3102,7 +3102,7 @@ window.__fnParsed = true;
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · guide list: per-passenger notifications 🔔/🔕 (stop-1 setup check) · build 2026-06-09-1410';
+const BUILD_VERSION = '0.6 · trails: active-stop only + steep old→new fade · build 2026-06-09-1421';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -7863,11 +7863,82 @@ function trailSmoothPath(pts) {
   return d;
 }
 
+// Timestamp (ms) the current stop became active — the earliest activated_at
+// among active stops. null when NO stop is active. Trails only show during an
+// active stop, windowed to "since this stop started" (#2). Falls back to 0
+// (show all) if a stop is active but we somehow lack its activation time.
+function activeStopSince() {
+  if (!ACTIVE_STOP_IDS || ACTIVE_STOP_IDS.size === 0) return null;
+  let earliest = Infinity;
+  for (const sid of ACTIVE_STOP_IDS) {
+    const m = ACTIVATION_META.get(sid);
+    const t = (m && m.activated_at) ? Date.parse(m.activated_at) : NaN;
+    if (Number.isFinite(t) && t < earliest) earliest = t;
+  }
+  return Number.isFinite(earliest) ? earliest : 0;
+}
+
+// Draw a time-ordered point list as a treasure-map dotted trail on `layer`:
+// ordered, split into runs across offline gaps (>3 min, never bridged), each run
+// smoothed (Catmull-Rom) and round-dotted, with a STEEP per-position fade across
+// the whole trail (oldest faint → newest bright) so it's obvious which way the
+// person walked (#3). Chunks each run so opacity can ramp along it.
+// opts: { color, colorClass, selMul, dataId }
+function drawDottedTrail(layer, points, opts) {
+  if (!layer || !map || !points || points.length < 2) return;
+  opts = opts || {};
+  const SVGNS_T = 'http://www.w3.org/2000/svg';
+  const GAP_MS = 3 * 60 * 1000;
+  const selMul = (opts.selMul != null) ? opts.selMul : 1;
+  const cls = opts.colorClass || 'passenger-trail';
+  const ms = (t) => (typeof t === 'number') ? t : Date.parse(t);
+  const ordered = points.slice().sort((a, b) => {
+    const da = ms(a.ts), db = ms(b.ts);
+    return (da && db) ? (da - db) : 0;
+  });
+  // gap-split into runs
+  const runs = []; let run = [];
+  for (let i = 0; i < ordered.length; i++) {
+    if (i > 0) {
+      const da = ms(ordered[i - 1].ts), db = ms(ordered[i].ts);
+      if (da && db && (db - da) > GAP_MS) { if (run.length) runs.push(run); run = []; }
+    }
+    run.push(ordered[i]);
+  }
+  if (run.length) runs.push(run);
+  const total = ordered.length;
+  const MIN_OP = 0.1, CHUNK = 3;
+  let globalIdx = 0;
+  for (const rpts of runs) {
+    for (let s = 0; s < rpts.length - 1; s += CHUNK) {
+      const seg = rpts.slice(s, Math.min(rpts.length, s + CHUNK + 1));   // +1 overlap = continuity
+      if (seg.length < 2) continue;
+      const d = trailSmoothPath(seg.map(t => project(t.lng, t.lat)));
+      if (!d) continue;
+      const mid = globalIdx + s + seg.length / 2;
+      const tNorm = total <= 1 ? 1 : Math.min(1, mid / (total - 1));
+      const op = selMul * (MIN_OP + (1 - MIN_OP) * Math.pow(tNorm, 2));   // steep ramp
+      const path = document.createElementNS(SVGNS_T, 'path');
+      path.setAttribute('class', cls);
+      if (opts.dataId) path.setAttribute('data-passenger-id', opts.dataId);
+      path.setAttribute('d', d);
+      if (opts.color) path.setAttribute('stroke', opts.color);
+      path.setAttribute('stroke-width', '3.5');
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+      path.setAttribute('stroke-dasharray', '0.1 11');
+      path.setAttribute('opacity', String(op));
+      layer.appendChild(path);
+    }
+    globalIdx += rpts.length;
+  }
+}
+
 // Render the in-memory PASSENGERS map as SVG dots + trails.
 // Two SVG layers: the trails go behind the dots (so dot stays visually on top).
 //
-// Trails: a smooth curved path per "run" (continuous online stretch), stroked
-// with round dots — a treasure-map dotted line.
+// Trails: a treasure-map dotted line, shown only during an active stop (#2),
+// windowed to that stop, with a steep old→new fade (#3).
 //
 // Called after the catch-up query, after every realtime event (chunk D),
 // and on every map move/zoom (so dots/trails track the map projection).
@@ -7884,53 +7955,19 @@ function renderPassengers() {
   // trail by stop, since transit gaps far exceed 3 min. Each run is smoothed
   // (Catmull-Rom) and dotted; older runs fade. Selection-aware: selected
   // brighter, others ghost.
-  const TRAIL_GAP_MS = 3 * 60 * 1000;
-  const SVGNS_T = 'http://www.w3.org/2000/svg';
-  for (const [passengerId, p] of PASSENGERS) {
-    if (!p.trail || p.trail.length < 2) continue;
-    const [colorA] = colorsForPassenger(passengerId);
-    const isSelected = SELECTED_PASSENGER === passengerId;
-    const noneSelected = SELECTED_PASSENGER === null;
-    const selMul = noneSelected ? 0.9 : (isSelected ? 1.0 : 0.1);
-
-    const ordered = p.trail.slice().sort((a, b) =>
-      (a.ts && b.ts) ? (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0) : 0);
-    // Split into runs separated by offline gaps.
-    const runs = [];
-    let run = [];
-    for (let i = 0; i < ordered.length; i++) {
-      if (i > 0) {
-        const ta = ordered[i - 1].ts, tb = ordered[i].ts;
-        if (ta && tb && (Date.parse(tb) - Date.parse(ta)) > TRAIL_GAP_MS) {
-          if (run.length) runs.push(run);
-          run = [];
-        }
-      }
-      run.push(ordered[i]);
+  // #2: trails only show during an active stop, windowed to since it started.
+  const sinceMs = activeStopSince();
+  const tms = (t) => (typeof t === 'number') ? t : Date.parse(t);
+  if (sinceMs != null) {
+    for (const [passengerId, p] of PASSENGERS) {
+      if (!p.trail || p.trail.length < 2) continue;
+      const [colorA] = colorsForPassenger(passengerId);
+      const isSelected = SELECTED_PASSENGER === passengerId;
+      const noneSelected = SELECTED_PASSENGER === null;
+      const selMul = noneSelected ? 0.9 : (isSelected ? 1.0 : 0.1);
+      const pts = p.trail.filter(t => { const x = tms(t.ts); return x && x >= sinceMs; });
+      drawDottedTrail(passengersLayer, pts, { color: colorA, selMul, dataId: passengerId });
     }
-    if (run.length) runs.push(run);
-
-    runs.forEach((rpts, ri) => {
-      if (rpts.length < 2) return;
-      const proj = rpts.map(t => project(t.lng, t.lat));
-      const d = trailSmoothPath(proj);
-      if (!d) return;
-      // Older runs fade toward 0.45; newest run full. selMul on top.
-      const runFade = runs.length <= 1 ? 1 : (0.45 + 0.55 * (ri / (runs.length - 1)));
-      const path = document.createElementNS(SVGNS_T, 'path');
-      path.setAttribute('class', 'passenger-trail');
-      path.setAttribute('data-passenger-id', passengerId);
-      path.setAttribute('d', d);
-      path.setAttribute('stroke', colorA);
-      path.setAttribute('stroke-width', '3.5');
-      path.setAttribute('stroke-linecap', 'round');
-      path.setAttribute('stroke-linejoin', 'round');
-      // Round dots: a ~0-length dash with a round cap renders a dot of
-      // diameter ≈ stroke-width, repeated every 11px → treasure-map dotted line.
-      path.setAttribute('stroke-dasharray', '0.1 11');
-      path.setAttribute('opacity', String(selMul * runFade));
-      passengersLayer.appendChild(path);
-    });
   }
 
   // Pass 2: dots (drawn after trails so they sit visually on top).
@@ -9599,34 +9636,13 @@ function addTitlePlates() {
 // .you-trail CSS class (matches the you-dot).
 function renderYouTrail() {
   if (!map || _youTrail.length < 2) return;
-  const TRAIL_GAP_MS = 3 * 60 * 1000;
-  const SVGNS_T = 'http://www.w3.org/2000/svg';
-  const guideCls = (ROLE === 'guide') ? ' guide' : '';
-  const runs = []; let run = [];
-  for (let i = 0; i < _youTrail.length; i++) {
-    if (i > 0 && (_youTrail[i].ts - _youTrail[i - 1].ts) > TRAIL_GAP_MS) {
-      if (run.length) runs.push(run);
-      run = [];
-    }
-    run.push(_youTrail[i]);
-  }
-  if (run.length) runs.push(run);
-  runs.forEach((rpts, ri) => {
-    if (rpts.length < 2) return;
-    const proj = rpts.map(t => project(t.lng, t.lat));
-    const d = trailSmoothPath(proj);
-    if (!d) return;
-    const runFade = runs.length <= 1 ? 1 : (0.4 + 0.6 * (ri / (runs.length - 1)));
-    const path = document.createElementNS(SVGNS_T, 'path');
-    path.setAttribute('class', 'you-trail' + guideCls);
-    path.setAttribute('d', d);
-    path.setAttribute('stroke-width', '3.5');
-    path.setAttribute('stroke-linecap', 'round');
-    path.setAttribute('stroke-linejoin', 'round');
-    path.setAttribute('stroke-dasharray', '0.1 11');
-    path.setAttribute('opacity', String(0.9 * runFade));
-    youLayer.appendChild(path);
-  });
+  // #2: only show the breadcrumb during an active stop, windowed to since it
+  // started. #3 steep fade + smoothing handled by the shared helper.
+  const sinceMs = activeStopSince();
+  if (sinceMs == null) return;
+  const pts = _youTrail.filter(t => t.ts && t.ts >= sinceMs);
+  const guideCls = (ROLE === 'guide') ? 'you-trail guide' : 'you-trail';
+  drawDottedTrail(youLayer, pts, { colorClass: guideCls, selMul: 1 });
 }
 
 function renderYou() {
