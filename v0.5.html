@@ -2704,6 +2704,18 @@
           <div class="menu-label" id="menu-at-bus-label" data-i18n="menu_at_bus">I'm at the bus</div>
           <span class="menu-chevron">›</span>
         </button>
+        <!-- Privacy: stop / resume sharing location with the guide. GPS-only —
+             the app stays usable and presence stays on. Passenger + session. -->
+        <button class="menu-item" data-action="share-loc" id="menu-share-loc" style="display:none;">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/>
+              <circle cx="12" cy="10" r="2.5"/>
+            </svg>
+          </div>
+          <div class="menu-label" id="menu-share-loc-label">Stop sharing my location</div>
+          <span class="menu-chevron">›</span>
+        </button>
         <button class="menu-item" data-action="reset">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2794,6 +2806,15 @@
       </div>
       <div class="about-block muted">
         Built as one HTML file plus a service worker, backed by Supabase (Postgres + realtime + edge functions) and Mapbox, deployed on Cloudflare at fieldnote.guide. Earlier layers still work: stop activation broadcasts (v0.5), invite-code auth and realtime passenger dots (v0.4), and offline-queued GPS fixes synced when back online (v0.3).
+      </div>
+      <div class="about-block">
+        <b>Your location & privacy.</b>
+        While you're on a tour, the app shares your live location with your guide so
+        they can see you on the map and reveal stops as you arrive — only during the
+        tour, only with your guide, never in the background. You can stop sharing any
+        time from the menu (<b>Stop sharing my location</b>); the app keeps working and
+        you'll still get stops, warnings and bus alerts. Your location is used only to
+        run the tour — never sold or shared with anyone else.
       </div>
       <div class="about-block muted">
         Contact: help@fieldnote.guide
@@ -3081,7 +3102,7 @@ window.__fnParsed = true;
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · S1: guide control center mounts even if the map fails to load · build 2026-06-09-1328';
+const BUILD_VERSION = '0.6 · privacy: stop-sharing-location toggle + privacy blurb · build 2026-06-09-1335';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3165,6 +3186,9 @@ const I18N = {
     reward_stamp: '🎉 On time!', reward_title: 'Nice — you made it back!', reward_body: "You're at the bus with time to spare. Sit back and enjoy the ride.",
     menu_group_chat: 'Group chat', menu_reset: 'Reset visited pins', menu_about: 'About this build',
     menu_at_bus: "I'm at the bus", at_bus_done: "✓ Marked you as back at the bus.",
+    menu_loc_stop: 'Stop sharing my location', menu_loc_share: 'Share my location',
+    loc_stopped: "Location sharing off — your guide can't see where you are. The app still works.",
+    loc_resumed: 'Sharing your location with your guide again.',
     pop_continue: 'Continue', pop_gotit: 'Got it', menu_your_name: 'Your name', menu_enable_notif: 'Enable notifications',
     share_title: 'Share invite', share_sub: "Scan with another phone's camera, or copy the link.", share_copy: 'Copy link', share_copied: 'Copied',
     menu_title: 'Menu', notif_on: 'Notifications · on', notif_off: 'Notifications · off', notif_blocked: 'Notifications blocked · tap to fix',
@@ -3201,6 +3225,9 @@ const I18N = {
     reward_stamp: '🎉 ¡A tiempo!', reward_title: '¡Bien, llegaste a tiempo!', reward_body: 'Estás en el autobús con tiempo de sobra. Relájate y disfruta del viaje.',
     menu_group_chat: 'Chat del grupo', menu_reset: 'Restablecer paradas vistas', menu_about: 'Acerca de esta versión',
     menu_at_bus: 'Estoy en el autobús', at_bus_done: '✓ Te marcamos como de vuelta en el autobús.',
+    menu_loc_stop: 'Dejar de compartir mi ubicación', menu_loc_share: 'Compartir mi ubicación',
+    loc_stopped: 'Ubicación desactivada: tu guía no puede verte. La app sigue funcionando.',
+    loc_resumed: 'Compartiendo tu ubicación con tu guía de nuevo.',
     pop_continue: 'Continuar', pop_gotit: 'Entendido', menu_your_name: 'Tu nombre', menu_enable_notif: 'Activar notificaciones',
     share_title: 'Compartir invitación', share_sub: 'Escanéalo con la cámara de otro teléfono o copia el enlace.', share_copy: 'Copiar enlace', share_copied: 'Copiado',
     menu_title: 'Menú', notif_on: 'Notificaciones · activadas', notif_off: 'Notificaciones · desactivadas', notif_blocked: 'Notificaciones bloqueadas · toca para arreglar',
@@ -3237,6 +3264,9 @@ const I18N = {
     reward_stamp: '🎉 准时！', reward_title: '太好了——你赶回来了！', reward_body: '你已到达大巴，还有充足时间。请坐好，享受旅程。',
     menu_group_chat: '群聊', menu_reset: '重置已访问的点', menu_about: '关于此版本',
     menu_at_bus: '我在大巴上', at_bus_done: '✓ 已标记你已回到大巴。',
+    menu_loc_stop: '停止共享我的位置', menu_loc_share: '共享我的位置',
+    loc_stopped: '位置共享已关闭——向导看不到你的位置。应用仍可使用。',
+    loc_resumed: '已重新与向导共享你的位置。',
     pop_continue: '继续', pop_gotit: '知道了', menu_your_name: '你的名字', menu_enable_notif: '开启通知',
     share_title: '分享邀请', share_sub: '用另一部手机的相机扫描，或复制链接。', share_copy: '复制链接', share_copied: '已复制',
     menu_title: '菜单', notif_on: '通知 · 已开启', notif_off: '通知 · 已关闭', notif_blocked: '通知被屏蔽 · 点按修复',
@@ -7510,6 +7540,19 @@ let _youTrail = [];
 const YOU_TRAIL_MIN_M = 6;     // min metres between recorded breadcrumb points
 const YOU_TRAIL_MAX = 800;     // cap (oldest dropped)
 
+// Passenger location-sharing opt-out (privacy). When on, the passenger stops
+// BROADCASTING their location to the guide (no new passenger_locations rows) —
+// but the app stays fully usable (stops/warnings/bus alerts still arrive) and
+// they still count as "present" via the heartbeat. Their own dot/breadcrumb is
+// local-only, so it keeps working. Persisted per device.
+let _locationSharingOff = false;
+try { _locationSharingOff = localStorage.getItem('fieldnote_loc_off') === '1'; } catch (_e) {}
+function setLocationSharingOff(v) {
+  _locationSharingOff = !!v;
+  try { if (v) localStorage.setItem('fieldnote_loc_off', '1'); else localStorage.removeItem('fieldnote_loc_off'); }
+  catch (_e) { /* private mode — ignore */ }
+}
+
 // ── Presence heartbeat (R2-F) ──
 // A GPS-free "the app is open right now" signal. The passenger pings
 // touch_passenger_presence every ~45s WHILE FOREGROUNDED, so the guide can tell
@@ -9166,7 +9209,9 @@ function onGpsSuccess(pos) {
   const now = Date.now();
   const _persistInterval = (ACTIVE_STOP_IDS && ACTIVE_STOP_IDS.size > 0)
     ? QUEUE_INTERVAL_MS : TRANSIT_HEARTBEAT_MS;
-  if (SESSION && ROLE === 'passenger' && now - _lastQueuedAt >= _persistInterval) {
+  // `!_locationSharingOff`: respect the passenger's "Stop sharing my location"
+  // choice — no new location rows leave the device while it's on (privacy).
+  if (SESSION && ROLE === 'passenger' && !_locationSharingOff && now - _lastQueuedAt >= _persistInterval) {
     _lastQueuedAt = now;
     queueLocation({
       lng: state.youLng,
@@ -9941,6 +9986,14 @@ document.getElementById('burger-btn').addEventListener('click', () => {
     const lbl = document.getElementById('menu-at-bus-label');
     if (lbl) lbl.textContent = t('menu_at_bus');
   }
+  // "Stop / Share my location" — passenger-only, in-session. Label reflects the
+  // ACTION offered (stop when sharing, share when stopped).
+  const shareLocItem = document.getElementById('menu-share-loc');
+  if (shareLocItem) {
+    shareLocItem.style.display = (SESSION && ROLE === 'passenger') ? '' : 'none';
+    const lbl = document.getElementById('menu-share-loc-label');
+    if (lbl) lbl.textContent = _locationSharingOff ? t('menu_loc_share') : t('menu_loc_stop');
+  }
   // Populate guide name, active stop, and current warnings at the top of
   // the menu from whatever state we have right now.
   renderMenuSessionInfo();
@@ -9969,6 +10022,14 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
       markPassengerInBus();
       while (screenStack.length) closeScreen();
       try { showToast(t('at_bus_done')); } catch (_e) {}
+    } else if (action === 'share-loc') {
+      // Privacy toggle: stop / resume sharing location with the guide. GPS only
+      // — the app and presence keep working. Flip in place, update the label,
+      // confirm with a toast (menu stays open so the new state is visible).
+      setLocationSharingOff(!_locationSharingOff);
+      const lbl = document.getElementById('menu-share-loc-label');
+      if (lbl) lbl.textContent = _locationSharingOff ? t('menu_loc_share') : t('menu_loc_stop');
+      try { showToast(_locationSharingOff ? t('loc_stopped') : t('loc_resumed')); } catch (_e) {}
     } else if (action === 'language') {
       while (screenStack.length) closeScreen();
       showLanguageGate();
