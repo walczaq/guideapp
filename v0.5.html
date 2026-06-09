@@ -639,7 +639,7 @@
     font-variation-settings: "opsz" 90;
   }
   .popup-body p { font-size: 15px; line-height: 1.55; color: #2a2e2a; }
-  .popup-actions { margin-top: 18px; }
+  .popup-actions { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
   .popup-ok {
     width: 100%;
     padding: 12px 16px;
@@ -650,6 +650,17 @@
     cursor: pointer; transition: transform 0.1s;
   }
   .popup-ok:active { transform: scale(0.97); }
+  /* "Arrived" check-in — GPS-free way for a passenger to tell the guide they
+     reached this spot. Green so it reads as the affirmative action vs. Close. */
+  .popup-arrived {
+    width: 100%; padding: 12px 16px;
+    background: #15803d; color: #fff;
+    border: 1px solid #15803d; border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    cursor: pointer; transition: transform 0.1s;
+  }
+  .popup-arrived:active { transform: scale(0.97); }
 
   /* GPS error banner — when location fails or is denied */
   .gps-banner {
@@ -2563,6 +2574,7 @@
           <h2 id="popup-title">…</h2>
           <p id="popup-body-el">…</p>
           <div class="popup-actions">
+            <button class="popup-arrived" id="popup-arrived" style="display:none;" data-i18n="pop_arrived">✓ I'm here</button>
             <button class="popup-ok" id="popup-ok" data-i18n="pop_continue">Continue</button>
           </div>
         </div>
@@ -3102,7 +3114,7 @@ window.__fnParsed = true;
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · trails: active-stop only + steep old→new fade · build 2026-06-09-1421';
+const BUILD_VERSION = '0.6 · GPS-free spot check-in (tap spot → I\'m here → guide) · build 2026-06-09-1427';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3190,6 +3202,10 @@ const I18N = {
     loc_stopped: "Location sharing off — your guide can't see where you are. The app still works.",
     loc_resumed: 'Sharing your location with your guide again.',
     pop_continue: 'Continue', pop_gotit: 'Got it', menu_your_name: 'Your name', menu_enable_notif: 'Enable notifications',
+    pop_arrived: "✓ I'm here", pop_close: 'Close',
+    arrival_sent: "✓ Your guide knows you're at {spot}.",
+    spot_hint: "No location? Tap a spot on the map, then “I'm here” — your guide will know you arrived.",
+    guide_arrival: '{name} checked in at {spot}',
     share_title: 'Share invite', share_sub: "Scan with another phone's camera, or copy the link.", share_copy: 'Copy link', share_copied: 'Copied',
     menu_title: 'Menu', notif_on: 'Notifications · on', notif_off: 'Notifications · off', notif_blocked: 'Notifications blocked · tap to fix',
     arr_stop: 'Stop', arr_now: 'Now', arr_time_at_stop: 'Time at stop', arr_departure: 'Departure', arr_time_left: 'Time left', arr_weather: 'Weather', arr_tba: 'to be added', arr_checking: 'checking…',
@@ -3229,6 +3245,10 @@ const I18N = {
     loc_stopped: 'Ubicación desactivada: tu guía no puede verte. La app sigue funcionando.',
     loc_resumed: 'Compartiendo tu ubicación con tu guía de nuevo.',
     pop_continue: 'Continuar', pop_gotit: 'Entendido', menu_your_name: 'Tu nombre', menu_enable_notif: 'Activar notificaciones',
+    pop_arrived: '✓ Estoy aquí', pop_close: 'Cerrar',
+    arrival_sent: '✓ Tu guía sabe que estás en {spot}.',
+    spot_hint: 'Sin ubicación? Toca un punto en el mapa y luego “Estoy aquí” — tu guía sabrá que llegaste.',
+    guide_arrival: '{name} marcó llegada en {spot}',
     share_title: 'Compartir invitación', share_sub: 'Escanéalo con la cámara de otro teléfono o copia el enlace.', share_copy: 'Copiar enlace', share_copied: 'Copiado',
     menu_title: 'Menú', notif_on: 'Notificaciones · activadas', notif_off: 'Notificaciones · desactivadas', notif_blocked: 'Notificaciones bloqueadas · toca para arreglar',
     arr_stop: 'Parada', arr_now: 'Ahora', arr_time_at_stop: 'Tiempo en la parada', arr_departure: 'Salida', arr_time_left: 'Tiempo restante', arr_weather: 'Clima', arr_tba: 'por confirmar', arr_checking: 'comprobando…',
@@ -3268,6 +3288,10 @@ const I18N = {
     loc_stopped: '位置共享已关闭——向导看不到你的位置。应用仍可使用。',
     loc_resumed: '已重新与向导共享你的位置。',
     pop_continue: '继续', pop_gotit: '知道了', menu_your_name: '你的名字', menu_enable_notif: '开启通知',
+    pop_arrived: '✓ 我到了', pop_close: '关闭',
+    arrival_sent: '✓ 向导已知道你在 {spot}。',
+    spot_hint: '没有定位？点按地图上的某个点，再点“我到了”——向导就会知道你已到达。',
+    guide_arrival: '{name} 在 {spot} 签到',
     share_title: '分享邀请', share_sub: '用另一部手机的相机扫描，或复制链接。', share_copy: '复制链接', share_copied: '已复制',
     menu_title: '菜单', notif_on: '通知 · 已开启', notif_off: '通知 · 已关闭', notif_blocked: '通知被屏蔽 · 点按修复',
     arr_stop: '停靠点', arr_now: '现在', arr_time_at_stop: '停留时间', arr_departure: '出发', arr_time_left: '剩余时间', arr_weather: '天气', arr_tba: '待定', arr_checking: '查询中…',
@@ -7616,6 +7640,8 @@ function startGuideShell() {
     // subscribe — independent table, independent realtime channel.
     await catchUpPassengerNames();
     startPassengerNamesSubscription();
+    await catchUpSpotArrivals();          // #4: GPS-free spot check-ins
+    startSpotArrivalsSubscription();
   })().catch(err => {
     console.warn('Guide shell startup failed', err);
   });
@@ -8486,6 +8512,46 @@ async function catchUpPushStatus() {
   renderPassengerList();
 }
 
+// #4: GPS-free spot arrivals. Apply one arrival row to a passenger's state.
+let _spotArrivalsChannel = null;
+let _spotArrivalsSubscribed = false;
+function applyArrivalRow(row, opts) {
+  if (!row || !row.passenger_id) return;
+  let p = PASSENGERS.get(row.passenger_id);
+  if (!p) { p = { _seenTimestamps: new Set(), trail: [] }; PASSENGERS.set(row.passenger_id, p); }
+  const at = row.arrived_at ? Date.parse(row.arrived_at) : Date.now();
+  if (!p.lastArrival || at >= p.lastArrival.at) p.lastArrival = { title: row.pin_title || '', at };
+  if (opts && opts.live) {
+    const nm = p.name || 'A passenger';
+    try { showToast(t('guide_arrival', { name: nm, spot: row.pin_title || '' })); } catch (_e) {}
+  }
+}
+async function catchUpSpotArrivals() {
+  if (!SESSION || ROLE !== 'guide') return;
+  const { data, error } = await supabaseClient
+    .from('spot_arrivals')
+    .select('passenger_id, pin_title, arrived_at')
+    .eq('session_id', SESSION.id)
+    .order('arrived_at', { ascending: true })
+    .limit(2000);
+  if (error) { console.warn('spot_arrivals catch-up failed', error); return; }
+  for (const row of (data || [])) applyArrivalRow(row, { live: false });
+  renderPassengerList();
+}
+function startSpotArrivalsSubscription() {
+  if (_spotArrivalsSubscribed || !SESSION) return;
+  _spotArrivalsSubscribed = true;
+  _spotArrivalsChannel = supabaseClient
+    .channel(`spot_arrivals:${SESSION.id}`)
+    .on('postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'spot_arrivals', filter: `session_id=eq.${SESSION.id}` },
+      (payload) => { applyArrivalRow(payload.new, { live: true }); renderPassengerList(); })
+    .subscribe();
+  window.addEventListener('beforeunload', () => {
+    if (_spotArrivalsChannel) { try { supabaseClient.removeChannel(_spotArrivalsChannel); } catch {} }
+  });
+}
+
 function startPassengerNamesSubscription() {
   if (_namesSubscribeStarted) return;
   if (!SESSION) return;
@@ -8614,7 +8680,16 @@ function renderPassengerList() {
     // states. Then the GPS-free presence heartbeat: "present" (app open, pinged
     // within 2 min) → "away · Nm" (was here, now backgrounded/closed) → "no
     // location" (in the roster but no presence signal yet).
+    // A manual spot check-in during THIS stop (#4) is a strong "they're here"
+    // signal — especially for no-GPS passengers — so it ranks just under "at bus".
+    const _since = activeStopSince();
+    const freshArrival = p.lastArrival && _since != null && p.lastArrival.at >= _since;
     if (p.inBus) { status.textContent = '✓ at bus'; status.style.color = '#15803d'; }
+    else if (freshArrival) {
+      const ttl = p.lastArrival.title || 'arrived';
+      status.textContent = '✓ ' + (ttl.length > 16 ? ttl.slice(0, 15) + '…' : ttl);
+      status.style.color = '#15803d';
+    }
     else if (hasLocation && state === 'disconnected') status.textContent = 'no signal';
     else if (hasLocation) status.textContent = 'live';
     else if (p.lastSeen && (now - p.lastSeen) < PRESENCE_FRESH_MS) { status.textContent = 'present'; status.style.color = '#15803d'; }
@@ -9809,11 +9884,14 @@ function burstConfetti() {
   setTimeout(() => { try { wrap.remove(); } catch (_e) {} }, 2800);
 }
 
+let _popupPin = null;   // the spot currently shown — used by the "Arrived" button
+let _spotHintShown = false;   // one-time no-GPS "tap spots to check in" hint (#4)
 function showPopup(pin) {
   // Number pins by position in the activated set (matches the labels shown
   // by renderPins). Using activePins() rather than allPins() keeps the
   // popup's "Pin № 03" consistent with what the passenger sees on the map.
   popup.classList.remove('warn');
+  _popupPin = pin;
   const lbl = computeSequenceLabels(activeArrivalPins())[pin.id] || '';
   if (isSideCat(pin.category)) {
     popupStamp.textContent = `⭐ Side quest ${lbl} · Arrived`;
@@ -9822,7 +9900,31 @@ function showPopup(pin) {
   }
   popupTitle.textContent = i18nText(pin.titleI18n, pin.title);
   popupBodyEl.textContent = i18nText(pin.bodyI18n, pin.body);
+  // Passenger spot check-in (#4): offer "✓ I'm here" → logs arrival to the
+  // guide; relabel the dark button to "Close" so the pair reads Arrived/Close.
+  setPopupArrived(ROLE === 'passenger' && pin && pin.id != null);
   popup.classList.add('show');
+}
+
+// Toggle the popup's "Arrived" button + the Close/Continue label.
+function setPopupArrived(show) {
+  const a = document.getElementById('popup-arrived');
+  if (a) a.style.display = show ? '' : 'none';
+  const ok = document.getElementById('popup-ok');
+  if (ok) ok.textContent = show ? t('pop_close') : t('pop_continue');
+}
+
+// Passenger logs that they reached this spot (GPS-free check-in → guide).
+async function logSpotArrival(pin) {
+  if (!SESSION || ROLE !== 'passenger' || !pin) return;
+  try {
+    await supabaseClient.rpc('log_spot_arrival', {
+      p_session_id: SESSION.id,
+      p_passenger_id: PASSENGER_ID,
+      p_pin_id: pin.id,
+      p_pin_title: i18nText(pin.titleI18n, pin.title) || null,
+    });
+  } catch (_e) { /* offline — best effort */ }
 }
 
 // Popup for a typed marker (zone or amenity) — tapped on the map, or auto-
@@ -9834,12 +9936,22 @@ function showCategoryPopup(p) {
   popupStamp.textContent = `${cat.emoji} ${cat.label}`;
   popupTitle.textContent = i18nText(p.titleI18n, p.title) || cat.label;
   popupBodyEl.textContent = i18nText(p.bodyI18n, p.body) || (warn ? 'Marked by your guide — take care here.' : '');
+  _popupPin = null;
+  setPopupArrived(false);   // no spot check-in for zones/amenities
   popup.classList.add('show');
 }
 function closePopup() { popup.classList.remove('show'); popup.classList.remove('warn'); popup.classList.remove('reward'); }
 popupClose.addEventListener('click', closePopup);
 const popupOk = document.getElementById('popup-ok');
 if (popupOk) popupOk.addEventListener('click', closePopup);
+const popupArrived = document.getElementById('popup-arrived');
+if (popupArrived) popupArrived.addEventListener('click', () => {
+  const pin = _popupPin;
+  const spot = pin ? (i18nText(pin.titleI18n, pin.title) || '') : '';
+  logSpotArrival(pin);
+  closePopup();
+  try { showToast(t('arrival_sent', { spot })); } catch (_e) {}
+});
 
 // ── 10. CHIME ──
 let audioCtx = null;
@@ -11174,6 +11286,13 @@ function showStopArrivalModal(stop) {
   _arrivalStop = stop;
   _arrivalStop_lastShown = stop;
   frameStopOverview(stop);   // move the map to the stop (esp. for no-GPS passengers)
+  // #4: a no-GPS passenger has no dot, so introduce the manual check-in once —
+  // tap a spot, then "I'm here", and the guide knows you arrived. Fires after
+  // they'd have dismissed the arrival modal.
+  if (ROLE === 'passenger' && state.youLng == null && !_spotHintShown) {
+    _spotHintShown = true;
+    setTimeout(() => { if (state.youLng == null) { try { showToast(t('spot_hint')); } catch (_e) {} } }, 6000);
+  }
   populateArrivalModalContent(stop);
   const backdrop = document.getElementById('stop-arrival-backdrop');
   if (!backdrop) return;
