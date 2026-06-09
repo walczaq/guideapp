@@ -3081,7 +3081,7 @@ window.__fnParsed = true;
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · presence heartbeat starts independent of map load · build 2026-06-09-1318';
+const BUILD_VERSION = '0.6 · S1: guide control center mounts even if the map fails to load · build 2026-06-09-1328';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -7209,6 +7209,36 @@ function loosenPoiLayers(m) {
   } catch (_e) { /* style not ready — ignore */ }
 }
 
+// Role-specific app startup — control center / data subscriptions / GPS. None
+// of this needs the map CANVAS (the control center is DOM; project() works off
+// the camera transform set at construction). Extracted + guarded so it runs
+// from BOTH map 'load' and the no-load fallback (S1): a map that never fires
+// 'load' (WebGL blocked, GPU blocklist, dead tiles) must not strand a guide
+// with no stop controls.
+let _roleShellStarted = false;
+function startRoleShell() {
+  if (_roleShellStarted) return;
+  _roleShellStarted = true;
+  // GPS runs for everyone — guides need their own location too; what differs is
+  // what gets broadcast. First-time passengers DEFER GPS to the intro wizard's
+  // "Allow location" step so the explanation precedes the OS prompt.
+  if (ROLE === 'guide') {
+    startGeolocation();
+    startGuideShell();
+    // Chat-setup nudge: not before 10 min into the session (8s floor on resume).
+    const _startedMs = (SESSION && SESSION.started_at) ? Date.parse(SESSION.started_at) : Date.now();
+    const _chatWait = Math.max(8000, 10 * 60 * 1000 - (Date.now() - _startedMs));
+    setTimeout(() => { try { maybeRemindChatSetup(); } catch (_e) {} }, _chatWait);
+  } else {
+    startPassengerGuideListening();
+    if (introNeeded()) {
+      maybeShowIntro();   // intro drives the location/notif/install asks
+    } else {
+      startGeolocation();
+    }
+  }
+}
+
 function initMap(token) {
   mapboxgl.accessToken = token;
 
@@ -7310,39 +7340,33 @@ function initMap(token) {
       try { map.resize(); } catch (_e) {}
       try { map.fitBounds(guideFitBounds, { padding: 40, maxZoom: 16, animate: false }); } catch (_e) {}
     })(0);
-    loosenPoiLayers(map);
-    renderAll();
-    updateZoomPresetButtons();
-    refreshGroupChatButton();
-    // GPS runs for everyone — guides need to see their own location too.
-    // What differs by role is what gets *broadcast* (queued + synced):
-    //   passenger → always queues their fixes
-    //   guide     → only queues when "Visible to passengers" is on (chunk F)
-    // For first-time passengers we DEFER startGeolocation to the intro
-    // wizard's "Allow location" step, so the explanation comes before the
-    // OS prompt. The intro guarantees GPS starts on completion.
-    if (ROLE === 'guide') {
-      startGeolocation();
-      startGuideShell();
-      // Chat-setup nudge: not before 10 min into the session (8s floor when
-      // resuming a session that's already older than that).
-      const _startedMs = (SESSION && SESSION.started_at) ? Date.parse(SESSION.started_at) : Date.now();
-      const _chatWait = Math.max(8000, 10 * 60 * 1000 - (Date.now() - _startedMs));
-      setTimeout(() => { try { maybeRemindChatSetup(); } catch (_e) {} }, _chatWait);
-    } else {
-      startPassengerGuideListening();
-      if (introNeeded()) {
-        maybeShowIntro();   // intro drives the location/notif/install asks
-      } else {
-        startGeolocation();
-      }
-    }
+    // Map-canvas rendering — wrapped so a render failure on a degraded map
+    // can't throw before the role shell mounts (S1).
+    try { loosenPoiLayers(map); } catch (_e) {}
+    try { renderAll(); } catch (_e) { console.warn('[map] initial render failed', _e); }
+    try { updateZoomPresetButtons(); } catch (_e) {}
+    try { refreshGroupChatButton(); } catch (_e) {}
+    // Mount the role shell (control center / listeners / GPS) — same call the
+    // no-load fallback uses, guarded so it runs exactly once.
+    startRoleShell();
     // Prefetch the tour-area map tiles for offline use — a few seconds
     // after load so it doesn't compete with first paint. Re-attempts if
     // the device comes online later.
     setTimeout(() => { prewarmOfflineTiles().catch(() => {}); }, 4000);
     window.addEventListener('online', () => { prewarmOfflineTiles().catch(() => {}); });
   });
+
+  // S1 fallback: if 'load' never fires (WebGL blocked, GPU blocklist, dead
+  // tiles), still mount the role shell shortly after the watchdog window so the
+  // guide can run the tour over a blank map instead of being stranded with no
+  // controls. Map-specific framing/rendering stays in the load handler above.
+  setTimeout(() => {
+    if (!_mapLoaded && !_roleShellStarted) {
+      console.warn('[map] load never fired — mounting controls over a blank map (S1 fallback)');
+      try { startRoleShell(); } catch (_e) { console.warn('[map] fallback shell start failed', _e); }
+    }
+  }, 8500);
+
   map.on('move', renderAll);
   map.on('zoom', renderAll);
 
