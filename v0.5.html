@@ -313,13 +313,15 @@
     font-size: 11px; font-weight: 700;
     fill: var(--paper); text-anchor: middle; pointer-events: none;
   }
-  /* Title/name shown under a marker when the "titles" toggle is on. White halo
-     (paint-order stroke) keeps it legible over the map. */
+  /* Title/name shown under a marker when the "titles" toggle is on. Light text
+     on a dark rounded plate (inserted behind each label at render time) so it's
+     legible on ANY map background — the cream-on-light halo treatment washed
+     out on light terrain in the field (R2-H). Matches the app's pill UI. */
   .pin-title-label {
     font-family: 'Fraunces', serif; font-size: 11px; font-weight: 700;
-    fill: var(--ink); text-anchor: middle; pointer-events: none;
-    paint-order: stroke; stroke: var(--paper); stroke-width: 3px; stroke-linejoin: round;
+    fill: var(--paper); text-anchor: middle; pointer-events: none;
   }
+  .pin-title-plate { fill: var(--ink); fill-opacity: 0.82; }
 
   /* Typed markers (danger/border zones + amenity icons) */
   .zone-group, .amenity-group { cursor: pointer; }
@@ -2683,6 +2685,20 @@
              the page can't re-request, so we tell the user how to reset it
              in their browser. Revealed by tapping the blocked menu item. -->
         <div class="menu-notif-hint" id="menu-notif-hint" hidden></div>
+        <!-- Passenger self-report: "I'm at the bus" — sets the sticky in_bus
+             headcount status WITHOUT needing GPS (R2-F). Shown only to
+             passengers in a session. -->
+        <button class="menu-item" data-action="at-bus" id="menu-at-bus" style="display:none;">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 17V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v9"/>
+              <path d="M4 17h16"/>
+              <circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/>
+            </svg>
+          </div>
+          <div class="menu-label" id="menu-at-bus-label" data-i18n="menu_at_bus">I'm at the bus</div>
+          <span class="menu-chevron">›</span>
+        </button>
         <button class="menu-item" data-action="reset">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -3060,7 +3076,7 @@ window.__fnParsed = true;
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · auto-frame stop on activation (for no-GPS passengers) · build 2026-06-06-1218';
+const BUILD_VERSION = '0.6 · round-2 trial fixes (R2-A,C,D,E,F,G,H) · build 2026-06-09-1243';
 
 // ╭──────────────────────────────────────────────────────╮
 // │  CHUNK D — WEB PUSH (passenger notifications)        │
@@ -3143,6 +3159,7 @@ const I18N = {
     loading_joining: 'Joining session…',
     reward_stamp: '🎉 On time!', reward_title: 'Nice — you made it back!', reward_body: "You're at the bus with time to spare. Sit back and enjoy the ride.",
     menu_group_chat: 'Group chat', menu_reset: 'Reset visited pins', menu_about: 'About this build',
+    menu_at_bus: "I'm at the bus", at_bus_done: "✓ Marked you as back at the bus.",
     pop_continue: 'Continue', pop_gotit: 'Got it', menu_your_name: 'Your name', menu_enable_notif: 'Enable notifications',
     share_title: 'Share invite', share_sub: "Scan with another phone's camera, or copy the link.", share_copy: 'Copy link', share_copied: 'Copied',
     menu_title: 'Menu', notif_on: 'Notifications · on', notif_off: 'Notifications · off', notif_blocked: 'Notifications blocked · tap to fix',
@@ -3178,6 +3195,7 @@ const I18N = {
     loading_joining: 'Uniéndote a la sesión…',
     reward_stamp: '🎉 ¡A tiempo!', reward_title: '¡Bien, llegaste a tiempo!', reward_body: 'Estás en el autobús con tiempo de sobra. Relájate y disfruta del viaje.',
     menu_group_chat: 'Chat del grupo', menu_reset: 'Restablecer paradas vistas', menu_about: 'Acerca de esta versión',
+    menu_at_bus: 'Estoy en el autobús', at_bus_done: '✓ Te marcamos como de vuelta en el autobús.',
     pop_continue: 'Continuar', pop_gotit: 'Entendido', menu_your_name: 'Tu nombre', menu_enable_notif: 'Activar notificaciones',
     share_title: 'Compartir invitación', share_sub: 'Escanéalo con la cámara de otro teléfono o copia el enlace.', share_copy: 'Copiar enlace', share_copied: 'Copiado',
     menu_title: 'Menú', notif_on: 'Notificaciones · activadas', notif_off: 'Notificaciones · desactivadas', notif_blocked: 'Notificaciones bloqueadas · toca para arreglar',
@@ -3213,6 +3231,7 @@ const I18N = {
     loading_joining: '正在加入…',
     reward_stamp: '🎉 准时！', reward_title: '太好了——你赶回来了！', reward_body: '你已到达大巴，还有充足时间。请坐好，享受旅程。',
     menu_group_chat: '群聊', menu_reset: '重置已访问的点', menu_about: '关于此版本',
+    menu_at_bus: '我在大巴上', at_bus_done: '✓ 已标记你已回到大巴。',
     pop_continue: '继续', pop_gotit: '知道了', menu_your_name: '你的名字', menu_enable_notif: '开启通知',
     share_title: '分享邀请', share_sub: '用另一部手机的相机扫描，或复制链接。', share_copy: '复制链接', share_copied: '已复制',
     menu_title: '菜单', notif_on: '通知 · 已开启', notif_off: '通知 · 已关闭', notif_blocked: '通知被屏蔽 · 点按修复',
@@ -3987,6 +4006,12 @@ const signalDot = document.getElementById('signal-dot');
 const signalText = document.getElementById('signal-text');
 const gpsBanner = document.getElementById('gps-banner');
 const gpsBannerMsg = document.getElementById('gps-banner-msg');
+// Tap the GPS banner to (re)request location from a user gesture — the only way
+// iOS Safari reliably starts geolocation / shows its permission prompt. (R2-A)
+if (gpsBanner) {
+  gpsBanner.style.cursor = 'pointer';
+  gpsBanner.addEventListener('click', () => { try { requestLocationOnTap(); } catch (_e) {} });
+}
 
 // ── SVG OVERLAY SIZING ──
 // The overlay SVG sits on top of Mapbox. For its internal coordinate system
@@ -7442,6 +7467,7 @@ async function prewarmOfflineTiles() {
 // Using watchPosition for continuous tracking. Accuracy and update frequency
 // are at the browser's discretion — we ask for high accuracy but don't get a guarantee.
 let geoWatchId = null;
+let _noFixNudgeTimer = null;
 
 // ── 6b. GUIDE SHELL ──
 // Counterpart to startGeolocation, called instead when ROLE === 'guide'.
@@ -7688,7 +7714,7 @@ async function catchUpPassengers({ merge = false } = {}) {
     }
     if (p._seenTimestamps.has(row.client_recorded_at)) continue;
     p._seenTimestamps.add(row.client_recorded_at);
-    p.trail.push({ lng: row.lng, lat: row.lat });
+    p.trail.push({ lng: row.lng, lat: row.lat, ts: row.client_recorded_at });
     if (!p.lastUpdate || row.client_recorded_at > p.lastUpdate) {
       p.lng = row.lng;
       p.lat = row.lat;
@@ -7734,17 +7760,28 @@ function renderPassengers() {
     else if (isSelected) selMul = 1.0;
     else selMul = 0.08;
 
-    const projected = p.trail.map(t => project(t.lng, t.lat));
+    // R2-E/R2-C: order points by recorded time (a late store-and-forward flush
+    // arrives out of order and would otherwise zig-zag the line back), and break
+    // the polyline across offline gaps (>3 min) so we never draw a straight line
+    // bridging a screen-lock / lost-signal gap. This also segments the trail by
+    // stop in practice, since transit gaps far exceed 3 min.
+    const TRAIL_GAP_MS = 3 * 60 * 1000;
+    const ordered = p.trail.slice().sort((a, b) =>
+      (a.ts && b.ts) ? (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0) : 0);
+    const projected = ordered.map(t => ({ pt: project(t.lng, t.lat), ts: t.ts }));
     const N = projected.length;
     for (let i = 0; i < N - 1; i++) {
+      // Don't bridge an offline gap with a straight line.
+      const ta = projected[i].ts, tb = projected[i + 1].ts;
+      if (ta && tb && (Date.parse(tb) - Date.parse(ta)) > TRAIL_GAP_MS) continue;
       // Age fade: oldest segment ~0.25 opacity multiplier, newest 1.0.
       // Linear ramp from old → new. Combined with selection multiplier.
       const ageT = N <= 2 ? 1 : i / (N - 2);          // 0 = oldest, 1 = newest
       const ageOpacity = 0.25 + 0.75 * ageT;
       const segOpacity = ageOpacity * selMul;
 
-      const a = projected[i];
-      const b = projected[i + 1];
+      const a = projected[i].pt;
+      const b = projected[i + 1].pt;
       const seg = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       seg.setAttribute('class', 'passenger-trail');
       seg.setAttribute('data-passenger-id', passengerId);
@@ -8376,7 +8413,11 @@ function renderPassengerList() {
     status.style.cssText =
       'font-family:JetBrains Mono,monospace; font-size:9px; letter-spacing:0.1em;' +
       'text-transform:uppercase; color:var(--rule);';
-    if (!hasLocation) status.textContent = 'no fix yet';
+    // R2-F: the sticky, self-reported "at the bus" status takes precedence —
+    // it's the one signal that doesn't need GPS and survives a screen-lock, so
+    // a no-location passenger who tapped "I'm at the bus" still reads as ✓.
+    if (p.inBus) { status.textContent = '✓ at bus'; status.style.color = '#15803d'; }
+    else if (!hasLocation) status.textContent = 'present · no location';
     else if (state === 'disconnected') status.textContent = 'no signal';
     else status.textContent = 'live';
     row.appendChild(status);
@@ -8499,7 +8540,7 @@ function applyIncomingLocationRow(row) {
   if (p._seenTimestamps.has(ts)) return;
   p._seenTimestamps.add(ts);
 
-  p.trail.push({ lng: row.lng, lat: row.lat });
+  p.trail.push({ lng: row.lng, lat: row.lat, ts: ts });
 
   // Update "current" only if this row is newer than what we have. Out-of-order
   // events (rare but possible during reconnection) shouldn't move the dot back.
@@ -8938,12 +8979,49 @@ function startGeolocation() {
       timeout: 30000,     // give up after 30 seconds if no fix
     }
   );
+
+  // R2-F/R2-A: if no fix lands within 30s — common on iOS when the request
+  // wasn't gesture-bound and was silently dropped — nudge with the tappable
+  // banner so the passenger can enable location from a tap and stop being an
+  // invisible "present, no location" dot.
+  if (_noFixNudgeTimer) clearTimeout(_noFixNudgeTimer);
+  _noFixNudgeTimer = setTimeout(() => {
+    if (state.youLng == null && state.gpsMode !== 'real') {
+      showGpsBanner('Location isn’t on yet — tap here to enable it so you appear on the map.');
+    }
+  }, 30000);
+}
+
+// Gesture-bound location (re)request. iOS Safari silently ignores geolocation
+// that doesn't originate from a user tap, so the (now tappable) GPS banner and
+// the first-run "Allow location" step both route through here. A one-shot
+// getCurrentPosition forces the iOS permission prompt + a fresh fix from within
+// the gesture; then we (re)start the continuous watch. Surfaces the specific
+// error code to the passenger via onGpsError. (R2-A — 5 of 16 passengers sent
+// zero fixes; the initial request wasn't gesture-bound on iOS.)
+function requestLocationOnTap() {
+  if (!('geolocation' in navigator)) { startGeolocation(); return; }
+  state.gpsMode = 'searching'; updateSignal();
+  showGpsBanner('Getting your location…');
+  try {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { onGpsSuccess(pos); startGeolocation(); },
+      (err) => { onGpsError(err); },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  } catch (_e) { startGeolocation(); }
 }
 
 // 5-second throttle for queueing fixes. The browser may give us 1-3 fixes per
 // second; we only persist one every 5s to keep DB size + bandwidth sane.
 // State is held in module scope so it survives between handler calls.
 const QUEUE_INTERVAL_MS = 5000;
+// R2-C: during transit (no active stop) we only persist a sparse heartbeat
+// instead of the dense 5s stream — enough for a live bus-following dot, but it
+// cuts the ~630-fix/session waste and the battery drain that itself drives the
+// screen-lock drop-offs. Trails segment per stop as a side effect (the >3-min
+// gap-break in renderPassengers skips these sparse transit points).
+const TRANSIT_HEARTBEAT_MS = 75000;
 let _lastQueuedAt = 0;
 
 function onGpsSuccess(pos) {
@@ -8975,11 +9053,14 @@ function onGpsSuccess(pos) {
     checkStopGeofences();
   }
 
-  // Persist to local queue, throttled. Only queues when:
-  //  - we're inside a session, AND
-  //  - we're a passenger (passenger fixes always queue)
+  // Persist to local queue, throttled. Dense 5s cadence only while a stop is
+  // ACTIVE; during transit, persist at most one heartbeat (R2-C). In-memory
+  // state.youL* is already updated above, so triggers + the passenger's own dot
+  // stay live regardless — this only gates DB writes / the broadcast trail.
   const now = Date.now();
-  if (SESSION && ROLE === 'passenger' && now - _lastQueuedAt >= QUEUE_INTERVAL_MS) {
+  const _persistInterval = (ACTIVE_STOP_IDS && ACTIVE_STOP_IDS.size > 0)
+    ? QUEUE_INTERVAL_MS : TRANSIT_HEARTBEAT_MS;
+  if (SESSION && ROLE === 'passenger' && now - _lastQueuedAt >= _persistInterval) {
     _lastQueuedAt = now;
     queueLocation({
       lng: state.youLng,
@@ -9029,13 +9110,13 @@ function onGpsError(err) {
   //   3 = TIMEOUT
   if (err.code === 1) {
     state.gpsMode = 'denied';
-    showGpsBanner("Location permission was denied. Open your browser's site settings to allow it, or skip and use simulated mode.");
+    showGpsBanner("Location permission was denied. Open your browser's site settings to allow it, then tap here to retry.");
   } else if (err.code === 2) {
     state.gpsMode = 'unavailable';
-    showGpsBanner("Couldn't get a GPS fix. If you're indoors, step outside. Otherwise, this can take up to a minute.");
+    showGpsBanner("Couldn't get a GPS fix. If you're indoors, step outside — then tap here to retry.");
   } else if (err.code === 3) {
     state.gpsMode = 'unavailable';
-    showGpsBanner("GPS timed out. Make sure location services are enabled.");
+    showGpsBanner("GPS timed out. Make sure location services are on, then tap here to retry.");
   }
   updateSignal();
 }
@@ -9046,6 +9127,23 @@ function showGpsBanner(msg) {
 }
 function hideGpsBanner() {
   gpsBanner.classList.remove('show');
+}
+
+// Transient confirmation toast (bottom-center, auto-dismiss). Lightweight, no
+// markup dependency — used e.g. to confirm the "I'm at the bus" tap (R2-F).
+function showToast(msg) {
+  if (!msg) return;
+  const el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText =
+    'position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));' +
+    'transform:translateX(-50%);z-index:99998;max-width:82%;' +
+    'background:var(--ink);color:var(--paper);padding:12px 18px;border-radius:22px;' +
+    "font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.4;text-align:center;" +
+    'box-shadow:0 6px 24px rgba(0,0,0,0.3);opacity:0;transition:opacity 200ms ease;';
+  document.body.appendChild(el);
+  requestAnimationFrame(() => { el.style.opacity = '1'; });
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => { try { el.remove(); } catch (_e) {} }, 260); }, 2600);
 }
 
 // ── 7. SIGNAL INDICATOR (top-right) ──
@@ -9108,24 +9206,50 @@ function renderAll() {
 // banner. "Next" = the first stop, by order, not yet activated. The ETA is
 // guide-computed and stored on the tour (drive_secs_from_prev), so this reads
 // it with no Mapbox call. First stop has no leg → name only.
+// Highest stop ordinal that has been active this session (live-observed). Lets
+// the NEXT banner pick the genuinely-next stop during transit instead of
+// trusting a possibly-stale sessions.next_stop_id. Reset per page load.
+let _maxActivatedOrdinal = -Infinity;
+
 function updateNextStopBanner() {
   const el = document.getElementById('next-stop-banner');
   if (!el) return;
   const stops = (TOUR && TOUR.stops) || [];
-  // Only show once the GUIDE has declared the next stop (deactivate prompt) and
-  // it hasn't been activated yet — not always-on.
-  const declared = SESSION && SESSION.next_stop_id;
-  const next = (declared && !ACTIVE_STOP_IDS.has(declared)) ? stops.find(s => s.id === declared) : null;
+  // R2-D fault 1: the NEXT banner is in-transit UI. While ANY stop is active,
+  // the stop view owns the screen — hide the banner entirely.
+  if (ACTIVE_STOP_IDS && ACTIVE_STOP_IDS.size > 0) { el.hidden = true; return; }
+  // R2-D fault 2: choose the genuinely-next stop. If we've seen stops activate
+  // this session, next = the lowest-ordinal stop AFTER the last-activated one
+  // (never a previous/visited stop, and its ETA is that stop's inbound leg).
+  // Otherwise (fresh join mid-transit, no observed history) fall back to the
+  // guide-declared next_stop_id.
+  let next = null;
+  if (_maxActivatedOrdinal > -Infinity) {
+    next = stops
+      .filter(s => Number.isFinite(s.ordinal) && s.ordinal > _maxActivatedOrdinal)
+      .sort((a, b) => a.ordinal - b.ordinal)[0] || null;
+  } else {
+    const declared = SESSION && SESSION.next_stop_id;
+    next = declared ? (stops.find(s => s.id === declared) || null) : null;
+  }
   if (!next) { el.hidden = true; return; }
   el.innerHTML = '';
   const label = document.createElement('span'); label.className = 'nsb-label'; label.textContent = t('nsb_next');
   const nm = document.createElement('span'); nm.className = 'nsb-name'; nm.textContent = i18nText(next.nameI18n, next.name) || 'Stop';
   el.appendChild(label); el.appendChild(nm);
   if (next.driveSecs != null && isFinite(next.driveSecs)) {
-    const t = document.createElement('span'); t.className = 'nsb-eta'; t.textContent = '🚗 ~' + tbFmtDur(next.driveSecs);
-    el.appendChild(t);
+    const span = document.createElement('span'); span.className = 'nsb-eta'; span.textContent = '🚗 ~' + tbFmtDur(next.driveSecs);
+    el.appendChild(span);
   }
   el.hidden = false;
+}
+
+// Record an activated stop's ordinal as "visited/current" so the NEXT banner
+// can advance past it. Safe to call repeatedly.
+function noteActivatedOrdinal(stopId) {
+  const stops = (TOUR && TOUR.stops) || [];
+  const s = stops.find(x => x.id === stopId);
+  if (s && Number.isFinite(s.ordinal)) _maxActivatedOrdinal = Math.max(_maxActivatedOrdinal, s.ordinal);
 }
 
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -9269,6 +9393,29 @@ function renderPins() {
       showPopup(pin);
     });
     pinsLayer.appendChild(g);
+  });
+
+  // R2-H: give each title label a dark rounded plate behind it so it's legible
+  // on any map background. Post-pass because we need the rendered text's
+  // bounding box to size the plate.
+  if (_showTitles) addTitlePlates();
+}
+
+function addTitlePlates() {
+  const labels = pinsLayer.querySelectorAll('text.pin-title-label');
+  labels.forEach((lbl) => {
+    let bb;
+    try { bb = lbl.getBBox(); } catch (_e) { return; }
+    if (!bb || !bb.width) return;
+    const padX = 5, padY = 3;
+    const rect = document.createElementNS(SVGNS, 'rect');
+    rect.setAttribute('class', 'pin-title-plate');
+    rect.setAttribute('x', bb.x - padX);
+    rect.setAttribute('y', bb.y - padY);
+    rect.setAttribute('width', bb.width + padX * 2);
+    rect.setAttribute('height', bb.height + padY * 2);
+    rect.setAttribute('rx', 5);
+    lbl.parentNode.insertBefore(rect, lbl);   // behind the text
   });
 }
 
@@ -9644,6 +9791,13 @@ document.getElementById('burger-btn').addEventListener('click', () => {
     const labelEl = document.getElementById('menu-edit-name-label');
     if (labelEl) labelEl.textContent = MY_NAME ? `${t('menu_your_name')} · ${MY_NAME}` : t('menu_your_name');
   }
+  // "I'm at the bus" — passenger-only, in-session (R2-F). Hidden once declared.
+  const atBusItem = document.getElementById('menu-at-bus');
+  if (atBusItem) {
+    atBusItem.style.display = (SESSION && ROLE === 'passenger' && !_inBusDeclared) ? '' : 'none';
+    const lbl = document.getElementById('menu-at-bus-label');
+    if (lbl) lbl.textContent = t('menu_at_bus');
+  }
   // Populate guide name, active stop, and current warnings at the top of
   // the menu from whatever state we have right now.
   renderMenuSessionInfo();
@@ -9665,6 +9819,13 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
       closePopup();
       renderPins();
       while (screenStack.length) closeScreen();
+    } else if (action === 'at-bus') {
+      // R2-F: manual "I'm at the bus" — the GPS-free, screen-lock-proof
+      // headcount signal. Sets the sticky in_bus state for this passenger.
+      _inBusDeclared = true;
+      markPassengerInBus();
+      while (screenStack.length) closeScreen();
+      try { showToast(t('at_bus_done')); } catch (_e) {}
     } else if (action === 'language') {
       while (screenStack.length) closeScreen();
       showLanguageGate();
@@ -9829,6 +9990,7 @@ async function catchUpStopActivations() {
   }
   for (const row of (data || [])) {
     ACTIVE_STOP_IDS.add(row.stop_id);
+    noteActivatedOrdinal(row.stop_id);   // seed NEXT-banner pointer on catch-up (R2-D)
     ACTIVATION_META.set(row.stop_id, {
       activated_at: row.activated_at,
       duration_minutes: row.duration_minutes ?? 20,
@@ -10093,10 +10255,14 @@ async function deactivateStop(stop) {
     return { error: error.message || 'Could not deactivate stop.' };
   }
   ACTIVE_STOP_IDS.delete(stop.id);
-  // A bus pin placed via this stop's departure flow belongs to the stop —
-  // clear it (and retract from passengers) now that the stop is off. A pin
-  // placed via the legacy bottom-sheet pill is left untouched.
-  if (_busPinFromDeparture) {
+  // R2-G: a bus pin marks where the bus is parked for the CURRENT stop, so once
+  // the stop is finished it's stale. Clear it (and retract from passengers via
+  // the is_off sentinel) on deactivation regardless of how it was placed — the
+  // departure flow OR the bottom-sheet pill. Previously a pill-placed pin was
+  // "left untouched", so it lingered across every stop for the rest of the day
+  // (set 15:25, still showing 18:16 in the trial). The pill is still the manual
+  // on/off; this just guarantees a finished stop never leaves a stale bus pin.
+  if (BUS_PIN_ON || BUS_PIN) {
     await clearBusPin({ retract: true });
   }
   renderPins();
@@ -10416,6 +10582,7 @@ function onStopActivated(row) {
     _alarmFiredFor.delete(otherId);
   }
   ACTIVE_STOP_IDS.add(row.stop_id);
+  noteActivatedOrdinal(row.stop_id);   // advance the NEXT-banner pointer (R2-D)
 
   const stop = TOUR ? TOUR.stops.find(s => s.id === row.stop_id) : null;
   renderPins();
