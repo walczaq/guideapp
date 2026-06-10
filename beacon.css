@@ -7,7 +7,7 @@
    dark, frosted "command console" GUIDE view; automatic passenger
    night mode; toned map that keeps every detail of outdoors-v12.
 
-   INSTALL — 2 required edits to v0.5.html
+   INSTALL — 3 edits to v0.5.html
    1. Load this file AFTER the existing <style> block:
         </style>
         <link rel="stylesheet" href="/beacon.css">   ← add this line
@@ -15,6 +15,15 @@
    2. Tell CSS which role is active. After the ROLE if/else chain
       (just below `ROLE = 'passenger';` around line 4382) add:
         document.documentElement.classList.toggle('role-guide', ROLE === 'guide');
+   3. Load beacon-theme.js (manual appearance toggle: auto/light/dark,
+      persisted in localStorage) before the app script, and add the
+      "Appearance" row to the burger menu — snippet in the install doc.
+
+   THEME MODEL
+   · Passenger: warm cream. Defaults to AUTO (follows the phone),
+     manual override via .theme-light / .theme-dark on <html>.
+   · Guide: cool console. Defaults to DARK; .theme-light flips it to
+     the cool-daylight console for bright field days.
 
    OPTIONAL
    · The map is tinted with a CSS filter (zero-JS, keeps ALL detail).
@@ -71,8 +80,9 @@
   --map-filter: saturate(0.80) sepia(0.16) brightness(1.02) contrast(0.97);
 }
 
-/* guide · command console (html gets .role-guide from the boot hook) */
-html.role-guide {
+/* guide · command console, DARK (guide default; html gets .role-guide
+   from the boot hook, .theme-light flips to the light console below) */
+html.role-guide:not(.theme-light) {
   --bg-page: #15181a;
   --paper:   #202527;
   --paper-2: #2a3033;
@@ -107,9 +117,46 @@ html.role-guide {
   --map-filter: invert(0.92) hue-rotate(185deg) saturate(0.50) brightness(0.92) contrast(1.06);
 }
 
-/* passenger · night (follows the phone's dark mode automatically) */
+/* guide · command console, LIGHT (manual toggle) — cool sage-neutral
+   counterpart: passenger stays warm cream, guide stays cool, in both
+   appearances. Map gets a cool desaturate, no sepia. */
+html.role-guide.theme-light {
+  --bg-page: #edefe9;
+  --paper:   #f8f9f5;
+  --paper-2: #e2e5dd;
+  --paper-3: #d4d8cd;
+  --ink:     #1d211f;
+  --muted:   #6c746e;
+  --rule:    #6c746e;
+  --rule-soft: rgba(29, 33, 31, 0.10);
+  --line:        rgba(29, 33, 31, 0.10);
+  --line-strong: rgba(29, 33, 31, 0.26);
+
+  --mark:  #c2462c;
+  --pin-ring: rgba(194, 70, 44, 0.16);
+  --armed: #b58f23;
+  --you:   #1d211f;
+  --good:  #3f8a5f;
+  --signal-good: #3f8a5f;
+  --signal-weak: #b58f23;
+  --signal-bad:  #c2462c;
+
+  --accent: #2f66d0;
+  --accent-soft: rgba(47, 102, 208, 0.10);
+  --on-accent: #f8f9f5;
+  --route: #6b4f2e;
+
+  --shadow-1: 0 2px 6px rgba(22, 26, 20, 0.07), 0 12px 32px rgba(22, 26, 20, 0.13);
+  --shadow-2: 0 4px 10px rgba(22, 26, 20, 0.10), 0 24px 56px rgba(22, 26, 20, 0.20);
+  --chip-blur: blur(12px);
+
+  --map-filter: saturate(0.85) brightness(1.02) contrast(0.98);
+}
+
+/* passenger · night — applied two ways with identical tokens:
+   AUTO (follows the phone) and the MANUAL .theme-dark override. */
 @media (prefers-color-scheme: dark) {
-  html:not(.role-guide) {
+  html:not(.role-guide):not(.theme-light) {
     --bg-page: #1a1814;
     --paper:   #24211c;
     --paper-2: #2e2a24;
@@ -140,6 +187,40 @@ html.role-guide {
 
     --map-filter: invert(0.90) hue-rotate(175deg) saturate(0.50) brightness(0.86) contrast(1.05) sepia(0.10);
   }
+}
+
+/* passenger · night, manual (.theme-dark) — keep in sync with the
+   media block above */
+html.theme-dark:not(.role-guide) {
+  --bg-page: #1a1814;
+  --paper:   #24211c;
+  --paper-2: #2e2a24;
+  --paper-3: #383329;
+  --ink:     #efe9da;
+  --muted:   #9d978a;
+  --rule:    #9d978a;
+  --rule-soft: rgba(239, 233, 218, 0.10);
+  --line:        rgba(239, 233, 218, 0.10);
+  --line-strong: rgba(239, 233, 218, 0.28);
+
+  --mark:  #e06a4d;
+  --pin-ring: rgba(224, 106, 77, 0.20);
+  --armed: #d9ad4b;
+  --you:   #efe9da;
+  --good:  #7cba93;
+  --signal-good: #7cba93;
+  --signal-weak: #d9ad4b;
+  --signal-bad:  #e06a4d;
+
+  --accent: #84a4ee;
+  --accent-soft: rgba(132, 164, 238, 0.14);
+  --on-accent: #16140f;
+  --route: #a98a5e;
+
+  --shadow-1: 0 2px 6px rgba(0,0,0,0.4), 0 12px 32px rgba(0,0,0,0.5);
+  --shadow-2: 0 4px 10px rgba(0,0,0,0.45), 0 24px 56px rgba(0,0,0,0.6);
+
+  --map-filter: invert(0.90) hue-rotate(175deg) saturate(0.50) brightness(0.86) contrast(1.05) sepia(0.10);
 }
 
 

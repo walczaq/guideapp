@@ -3,7 +3,8 @@
    Load AFTER beacon.css. Adds identification semantics only:
    passenger identity palette, missing-at-departure state, stale guide
    position, hazard pin (future feature). No restyling of anything
-   beacon.css already covers.
+   beacon.css already covers. Token-driven throughout, so it works
+   unchanged in all four themes (passenger day/night, guide dark/light).
 
    Selectors follow the same caveat as beacon.css: if a class name has
    drifted in v0.5.html, adapt the selector, keep the intent.
@@ -12,8 +13,8 @@
 /* ── passenger identity palette ──────────────────────────────────────
    8 hues for the per-passenger deterministic color (set in JS).
    Verified ≥3.5:1 against white initials (AA, bold 14px+) and clear of
-   the token jobs in all three themes: no collision with --accent
-   (blues differ in both hue and lightness), --mark, --armed, --good.
+   the token jobs in every theme: no collision with --accent (blues
+   differ in both hue and lightness), --mark, --armed, --good.
    Assign by hash(passenger_id) % 8 — keeps the app's existing
    cross-device stability. Do not lighten these. */
 :root {
@@ -60,7 +61,7 @@
 /* ── hazard pin (future feature, claims the triangle) ────────────────
    Stops own the rect, people own the circle; hazards get the triangle
    so they can never be misread as either. Same paper stroke as every
-   other overlay element so it survives both map tints. */
+   other overlay element so it survives every map tint. */
 .hazard-group .hazard-marker {
   fill: var(--mark);
   stroke: var(--paper);
