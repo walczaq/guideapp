@@ -1,0 +1,78 @@
+/* ════════════════════════════════════════════════════════════════════
+   FIELDNOTE · IDENTIFICATION LAYER                          v2 · 2026-06
+   Load AFTER beacon.css. Adds identification semantics only:
+   passenger identity palette, missing-at-departure state, stale guide
+   position, hazard pin (future feature). No restyling of anything
+   beacon.css already covers.
+
+   Selectors follow the same caveat as beacon.css: if a class name has
+   drifted in v0.5.html, adapt the selector, keep the intent.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── passenger identity palette ──────────────────────────────────────
+   8 hues for the per-passenger deterministic color (set in JS).
+   Verified ≥3.5:1 against white initials (AA, bold 14px+) and clear of
+   the token jobs in all three themes: no collision with --accent
+   (blues differ in both hue and lightness), --mark, --armed, --good.
+   Assign by hash(passenger_id) % 8 — keeps the app's existing
+   cross-device stability. Do not lighten these. */
+:root {
+  --pax-1: #3E7D5C;
+  --pax-2: #7A5CA8;
+  --pax-3: #C2762B;
+  --pax-4: #2E7A8C;
+  --pax-5: #A84E6E;
+  --pax-6: #6B7F2E;
+  --pax-7: #8C5A3B;
+  --pax-8: #4E5FA8;
+}
+
+/* ── missing at departure ────────────────────────────────────────────
+   The dot inverts: paper fill, --mark ring. Size, position, and the
+   identity color of the trail stay untouched, so the guide still knows
+   WHO while the ring says WHAT IS WRONG. Pair with the existing
+   .passenger-halo.pulse for the on-map version.
+   (This is chunk E's "red" state, given a shape so it reads even for
+   color-blind guides and on the dark map tint.) */
+.passenger-dot.missing {
+  fill: var(--paper);
+  stroke: var(--mark);
+  stroke-width: 2.5;
+}
+.passenger-list-dot.missing {           /* bottom-sheet list variant */
+  background: var(--paper);
+  box-shadow: 0 0 0 2px var(--mark);
+  color: var(--muted);
+}
+
+/* ── stale guide position ────────────────────────────────────────────
+   When the last fix is older than 30s, JS adds .stale to the you-group.
+   Solid = live, dashed hollow = stale: fill carries state, shape stays. */
+.you-group.stale .you-dot.guide {
+  fill: var(--paper);
+  stroke: var(--accent);
+  stroke-dasharray: 5 4;
+}
+.you-group.stale polygon { fill: var(--muted); }   /* heading wedge dims */
+.you-group.stale .you-accuracy { opacity: 0; }
+.you-group.stale .you-halo { opacity: 0.25; }
+
+/* ── hazard pin (future feature, claims the triangle) ────────────────
+   Stops own the rect, people own the circle; hazards get the triangle
+   so they can never be misread as either. Same paper stroke as every
+   other overlay element so it survives both map tints. */
+.hazard-group .hazard-marker {
+  fill: var(--mark);
+  stroke: var(--paper);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  pointer-events: auto;
+}
+.hazard-group .hazard-glyph { fill: var(--paper); pointer-events: none; }
+.hazard-group .hazard-radius {
+  fill: color-mix(in srgb, var(--mark) 12%, transparent);
+  stroke: var(--mark);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}

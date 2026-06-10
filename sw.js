@@ -25,7 +25,7 @@
 // /sw.js itself is served no-cache (see /_headers), so SW updates propagate
 // on next app open; bumping SHELL_CACHE purges the old shell on activate.
 
-const SHELL_CACHE = 'fieldnote-shell-v5';   // bumped: libs moved CDN → same-origin /vendor (precached with shell)
+const SHELL_CACHE = 'fieldnote-shell-v6';   // bumped: beacon.css + identification.css join the shell (Beacon restyle)
 
 // Same-origin shell assets — these MUST cache for the app to boot offline.
 // Includes the /vendor libs: same origin as the HTML, so if the first page
@@ -33,6 +33,8 @@ const SHELL_CACHE = 'fieldnote-shell-v5';   // bumped: libs moved CDN → same-o
 // making first-open precache deterministic instead of best-effort.
 const SHELL_URLS = [
   '/v0.5',
+  '/beacon.css',
+  '/identification.css',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',

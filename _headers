@@ -18,6 +18,14 @@
 /manifest.json
   Cache-Control: public, max-age=300, must-revalidate
 
+# Restyle stylesheets (unversioned filenames, edited in place). Short cache +
+# revalidate so a CSS deploy reaches browsers fast; installed PWAs get them
+# via the SW shell cache, refreshed on every SHELL_CACHE bump.
+/beacon.css
+  Cache-Control: public, max-age=300, must-revalidate
+/identification.css
+  Cache-Control: public, max-age=300, must-revalidate
+
 # Self-hosted libraries. Filenames carry their version (mapbox-gl-v3.8.0.js
 # etc.), so the content of a given URL never changes — safe to cache
 # aggressively at the browser/edge. A lib upgrade ships under a NEW filename

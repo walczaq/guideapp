@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#1a1d1a">
+<meta name="theme-color" content="#f1ece0">
 <!-- iOS PWA chrome: capable=yes flips to standalone mode (no Safari URL
      bar) once the user adds-to-home-screen. status-bar-style controls the
      iOS clock/battery overlay; "default" gives a light translucent bar
@@ -2454,6 +2454,13 @@
     max-width: 280px;
   }
 </style>
+<!-- Beacon restyle + identification layer (handoff 2026-06). Loaded AFTER the
+     base <style> block so they win the cascade: beacon.css owns tokens +
+     component restyle (day / guide / night themes), identification.css adds
+     the passenger palette, missing/stale states, and the hazard pin. Both are
+     precached in sw.js SHELL_URLS — bump SHELL_CACHE when editing them. -->
+<link rel="stylesheet" href="/beacon.css">
+<link rel="stylesheet" href="/identification.css">
 </head>
 <body>
 
@@ -2524,10 +2531,10 @@
            dismissed it. Tapping Enable triggers the OS prompt + subscribe;
            Not now stores a localStorage flag and hides the banner. -->
       <div class="notif-prompt" id="notif-prompt">
-        <div class="notif-prompt-text">Get notified when your guide activates a new stop or sends a warning, even with the app closed.</div>
+        <div class="notif-prompt-text" data-i18n="notif_text">Get notified when your guide activates a new stop or sends a warning, even with the app closed.</div>
         <div class="notif-prompt-row">
-          <button type="button" class="notif-prompt-btn" id="notif-prompt-dismiss">Not now</button>
-          <button type="button" class="notif-prompt-btn primary" id="notif-prompt-enable">Enable</button>
+          <button type="button" class="notif-prompt-btn" id="notif-prompt-dismiss" data-i18n="prompt_not_now">Not now</button>
+          <button type="button" class="notif-prompt-btn primary" id="notif-prompt-enable" data-i18n="notif_enable">Enable</button>
         </div>
       </div>
 
@@ -2542,7 +2549,7 @@
       <div class="install-prompt" id="install-prompt">
         <div class="install-prompt-text" data-i18n="install_text">Install Fieldnote on your phone to keep notifications reliable even if you close the browser.</div>
         <div class="install-prompt-row">
-          <button type="button" class="install-prompt-btn" id="install-prompt-dismiss">Not now</button>
+          <button type="button" class="install-prompt-btn" id="install-prompt-dismiss" data-i18n="prompt_not_now">Not now</button>
           <button type="button" class="install-prompt-btn primary" id="install-prompt-install" data-i18n="install_btn">Install</button>
         </div>
       </div>
@@ -2689,7 +2696,7 @@
               <line x1="20" y1="20" x2="21" y2="20"/>
             </svg>
           </div>
-          <div class="menu-label">Share invite</div>
+          <div class="menu-label" data-i18n="share_title">Share invite</div>
           <span class="menu-chevron">›</span>
         </button>
         <button class="menu-item" data-action="group-chat" id="menu-group-chat" style="display:none;">
@@ -2913,7 +2920,7 @@
         <div class="stop-arrival-name" id="stop-arrival-name">…</div>
       </div>
       <div class="stop-arrival-warning" id="stop-arrival-warning"></div>
-      <div class="stop-arrival-joke" id="stop-arrival-joke">
+      <div class="stop-arrival-joke" id="stop-arrival-joke" data-i18n="arrival_joke">
         Watch out for the hidden people — they're somewhere around.
       </div>
       <div class="stop-arrival-info">
@@ -3228,7 +3235,7 @@ window.addEventListener('unhandledrejection', function () {
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · quiet console (debug-gated) + self-hosted libs (/vendor) + boot-retry net + reliable iOS Allow-location · build 2026-06-09-2253';
+const BUILD_VERSION = '0.6 · beacon restyle (day/guide/night themes) + identification layer (8-hue palette, missing + stale states) · build 2026-06-10-0420';
 
 // Verbose tracing — OFF in production so real warnings/errors aren't buried under
 // the per-render [maybeShow]/[catch-up]/[realtime] spam (~1800 lines a session).
@@ -3314,6 +3321,9 @@ const I18N = {
     intro_d_battery: 'If your phone aggressively closes apps, keep Fieldnote open during key moments to be safe.',
     intro_d_cta: 'Start the tour',
     install_text: 'Install Fieldnote on your phone to keep notifications reliable even if you close the browser.', install_btn: 'Install',
+    notif_text: 'Get notified when your guide activates a new stop or sends a warning, even with the app closed.', notif_enable: 'Enable', prompt_not_now: 'Not now',
+    arrival_joke: "Watch out for the hidden people — they're somewhere around.",
+    hud_head_back: 'Time to head back', hud_departure: 'Departure',
     loading_joining: 'Joining session…',
     reward_stamp: '🎉 On time!', reward_title: 'Nice — you made it back!', reward_body: "You're at the bus with time to spare. Sit back and enjoy the ride.",
     menu_group_chat: 'Group chat', menu_reset: 'Reset visited pins', menu_about: 'About this build',
@@ -3357,6 +3367,9 @@ const I18N = {
     intro_d_battery: 'Si tu teléfono cierra apps de forma agresiva, mantén Fieldnote abierto en los momentos clave por seguridad.',
     intro_d_cta: 'Empezar el tour',
     install_text: 'Instala Fieldnote en tu teléfono para mantener las notificaciones fiables aunque cierres el navegador.', install_btn: 'Instalar',
+    notif_text: 'Recibe un aviso cuando tu guía active una nueva parada o envíe una advertencia, incluso con la app cerrada.', notif_enable: 'Activar', prompt_not_now: 'Ahora no',
+    arrival_joke: 'Cuidado con la gente oculta: andan por aquí, en alguna parte.',
+    hud_head_back: 'Hora de volver', hud_departure: 'Salida',
     loading_joining: 'Uniéndote a la sesión…',
     reward_stamp: '🎉 ¡A tiempo!', reward_title: '¡Bien, llegaste a tiempo!', reward_body: 'Estás en el autobús con tiempo de sobra. Relájate y disfruta del viaje.',
     menu_group_chat: 'Chat del grupo', menu_reset: 'Restablecer paradas vistas', menu_about: 'Acerca de esta versión',
@@ -3400,6 +3413,9 @@ const I18N = {
     intro_d_battery: '如果你的手机会主动关闭应用，请在关键时刻保持 Fieldnote 打开以防万一。',
     intro_d_cta: '开始导览',
     install_text: '在手机上安装 Fieldnote，即使关闭浏览器也能保持通知可靠。', install_btn: '安装',
+    notif_text: '当向导激活新的停靠点或发送警示时收到通知——即使应用已关闭。', notif_enable: '开启', prompt_not_now: '暂不',
+    arrival_joke: '小心“隐形人”——他们就在附近。',
+    hud_head_back: '该回去了', hud_departure: '出发',
     loading_joining: '正在加入…',
     reward_stamp: '🎉 准时！', reward_title: '太好了——你赶回来了！', reward_body: '你已到达大巴，还有充足时间。请坐好，享受旅程。',
     menu_group_chat: '群聊', menu_reset: '重置已访问的点', menu_about: '关于此版本',
@@ -4157,6 +4173,8 @@ const state = {
   youLat: null,
   accuracy: null,        // GPS accuracy radius in meters
   heading: null,         // degrees, may be null on phones not moving
+  lastFixAt: null,       // Date.now() of the last real GPS fix — drives the
+                         // stale-dot state (identification layer)
 
   // Tour-related
   armedPinId: null,      // pin currently inside its radius
@@ -4371,6 +4389,18 @@ async function boot() {
     ROLE = 'guide';
   } else {
     ROLE = 'passenger';
+  }
+
+  // Beacon restyle: the themes switch off this class (beacon.css §1) —
+  // passenger day/night by default, guide command console when set. Done
+  // here, right after ROLE locks in, so no screen renders in the wrong
+  // theme. The debug "view as" button reloads with ?role=, re-running this.
+  document.documentElement.classList.toggle('role-guide', ROLE === 'guide');
+  // Match the OS chrome (status bar / task switcher) to the active theme.
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeMeta) {
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    themeMeta.setAttribute('content', ROLE === 'guide' ? '#15181a' : (prefersDark ? '#1a1814' : '#f1ece0'));
   }
 
   if (sessionId) {
@@ -5785,8 +5815,8 @@ let _tbTranslatedCache = {};
 function tbApplyTrState(btn, done) {
   if (!btn) return;
   btn.textContent = done ? '✓ Translated (ES/ZH)' : '🌐 Translate';
-  btn.style.color = done ? '#15803d' : '';
-  btn.style.borderColor = done ? '#15803d' : '';
+  btn.style.color = done ? 'var(--good)' : '';
+  btn.style.borderColor = done ? 'var(--good)' : '';
 }
 async function showTourManager() {
   hideLoading();
@@ -7176,6 +7206,20 @@ function refreshGroupChatButton() {
   btn.style.display = url ? '' : 'none';   // '' → falls back to .zoom-btn's flex; shown for guide + passenger
 }
 
+// Dev-only tools (joystick simulator, force-arrival, clear-acks) must not be
+// offered to regular passengers — Developer info is a public menu link.
+// Shown only with ?dev=1 (persisted so it survives reloads; ?dev=0 clears it)
+// or for a logged-in guide.
+function isDevMode() {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('dev') === '1') { localStorage.setItem('fieldnote_dev', '1'); return true; }
+    if (p.get('dev') === '0') { localStorage.removeItem('fieldnote_dev'); }
+    else if (localStorage.getItem('fieldnote_dev') === '1') return true;
+  } catch (_e) {}
+  return !!GUIDE;
+}
+
 function applyTourMetadata() {
   // Replace the menu's static title with whatever the loaded tour says.
   const masthead = document.querySelector('.menu-masthead h1');
@@ -7203,6 +7247,14 @@ function applyTourMetadata() {
     const newSessionLine = (GUIDE && SESSION)
       ? `<button id="debug-new-session" style="font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">start new session</button>`
       : '';
+    // Simulator + diagnostics are dev/guide-only (see isDevMode) — a regular
+    // passenger should not be offered teleport/force-modal controls.
+    const simBlock = isDevMode() ? `
+      <span style="display:inline-block; margin-top:10px;">Simulator (joystick):</span>
+      <button id="joystick-toggle-btn" style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Enable</button>
+      <br>
+      <button id="debug-force-arrival" style="margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Force arrival modal</button>
+      <button id="debug-clear-acks" style="margin-top:6px; margin-left:4px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Clear acks</button>` : '';
     debug.innerHTML = `
       <div style="opacity:0.5; font-size:10px; margin-bottom:6px;">Build: <code>${BUILD_VERSION}</code></div>
       ${guideLine}<br>
@@ -7215,12 +7267,7 @@ function applyTourMetadata() {
       <button id="debug-force-sync" style="margin-left:4px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 8px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">sync now</button>
       <br>
       <span id="debug-sync-stats" style="opacity:0.7;">Sync: idle</span><br>
-      <span id="debug-passengers" style="opacity:0.7;">Passengers: idle</span><br>
-      <span style="display:inline-block; margin-top:10px;">Simulator (joystick):</span>
-      <button id="joystick-toggle-btn" style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Enable</button>
-      <br>
-      <button id="debug-force-arrival" style="margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Force arrival modal</button>
-      <button id="debug-clear-acks" style="margin-top:6px; margin-left:4px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Clear acks</button>
+      <span id="debug-passengers" style="opacity:0.7;">Passengers: idle</span>${simBlock ? '<br>' + simBlock : ''}
     `;
     if (GUIDE) {
       const logoutBtn = document.getElementById('debug-logout');
@@ -7967,13 +8014,34 @@ const GUIDE_BROADCAST_INTERVAL_MS = 5000;
 const STATE_DISCONNECTED_MS = 60 * 1000;        // no fix in 60s = disconnected
 
 const STATE_RING_COLORS = {
-  disconnected: '#888888',   // mid-grey, reads against paper and against passenger colors
+  disconnected: 'var(--muted)',  // theme-aware grey — reads against paper and against passenger colors
+  missing: 'var(--mark)',        // fallback; the .missing class (identification.css) owns the real look
 };
 const STATE_HALO_COLORS = STATE_RING_COLORS;
 
-// Evaluate one passenger's current state. Returns null (default) or
-// 'disconnected'. Pure function of passenger record + current time.
+// Identification layer: has the departure of any active stop passed while the
+// bus pin is down? Guide-side only (BUS_PIN/BUS_PIN_ON are guide state). The
+// bus-pin gate matters: without a pin, passengers have no way to self-mark
+// in_bus, and "missing" would misfire for the whole roster at every departure.
+function departureMissed(now) {
+  if (!BUS_PIN_ON || !BUS_PIN) return false;
+  for (const sid of ACTIVE_STOP_IDS) {
+    const dep = departureMsForStop(sid);
+    if (dep != null && now >= dep) return true;
+  }
+  return false;
+}
+
+// Evaluate one passenger's current state. Returns null (default), 'missing'
+// or 'disconnected'. Function of passenger record + current time (+ the
+// guide-side departure context for 'missing').
 function evaluatePassengerState(p, now) {
+  // Missing at departure (identification layer): departure time has passed
+  // and they haven't declared themselves in the bus. Outranks 'disconnected'
+  // — at departure, "who is not back" is the operative question, and a
+  // missing passenger with a dead phone is still missing. Identity (hue
+  // pair, trail, list position) stays untouched; the ring says what's wrong.
+  if (!p.inBus && departureMissed(now)) return 'missing';
   if (!p.lastUpdate) return null;
   const lastTs = Date.parse(p.lastUpdate);
   if (isNaN(lastTs)) return null;
@@ -7981,28 +8049,25 @@ function evaluatePassengerState(p, now) {
   return null;
 }
 
-// Curated color palette for passenger dots and trails.
-// Picked to be:
-//   - Vibrant — saturated enough to read clearly on small half-dots
-//   - Each measurably contrasts (≥3:1 WCAG) against the cream paper background
-//   - No blues (reserved for the guide's beacon-blue identity at #2563eb)
-//   - State colors (green/orange/red/grey for staleness in chunk E) override
-//     identity color when active, so brief overlap with those hues is fine
-// Twelve entries pair-combined gives 12 × 11 = 132 unique two-color combos —
-// enough for the extreme upper-bound case of 60 passengers in one session.
+// Curated color palette for passenger dots and trails — the verified 8-hue
+// identity set from the identification layer (mirrors --pax-1…--pax-8 in
+// identification.css). Picked to be:
+//   - ≥3.5:1 against white initials/labels (AA, bold 14px+)
+//   - Distinguishable by lightness, not just hue, so they survive deuteranopia
+//   - Clear of the token jobs in all three themes: none can be confused with
+//     --accent (guide), --mark (stops/alerts), --armed, or --good
+//   - State semantics (missing/disconnected, chunk E) are carried by ring +
+//     fill + motion, never by repainting the identity hue
+// Eight entries pair-combined gives 8 × 7 = 56 unique two-color combos.
 const PASSENGER_PALETTE = [
-  '#dc2626',  // vibrant red
-  '#be123c',  // crimson
-  '#e11d48',  // hot pink
-  '#db2777',  // vibrant pink
-  '#c026d3',  // magenta
-  '#86198f',  // plum vivid
-  '#7c3aed',  // royal purple
-  '#15803d',  // forest vibrant
-  '#4d7c0f',  // lime deep
-  '#854d0e',  // olive vibrant
-  '#b45309',  // rust
-  '#c2410c',  // burnt orange
+  '#3E7D5C',  // pine
+  '#7A5CA8',  // violet
+  '#C2762B',  // ochre
+  '#2E7A8C',  // teal
+  '#A84E6E',  // rose
+  '#6B7F2E',  // moss
+  '#8C5A3B',  // sienna
+  '#4E5FA8',  // indigo
 ];
 
 // Map passenger_id → [primaryColor, secondaryColor], deterministically.
@@ -8312,9 +8377,12 @@ function renderPassengers() {
     split.setAttribute('stroke-width', '1');
     g.appendChild(split);
 
-    // Outer ring — color reflects state (paper / orange / grey).
+    // Outer ring — color reflects state (paper / grey / mark). For 'missing'
+    // the .missing class (identification.css) inverts the whole dot: paper
+    // fill covers the identity halves, --mark ring on top. Shape carries the
+    // state so it reads on the dark map tint and for color-blind guides.
     const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    ring.setAttribute('class', 'passenger-dot');
+    ring.setAttribute('class', 'passenger-dot' + (state === 'missing' ? ' missing' : ''));
     ring.setAttribute('r', DOT_R);
     ring.setAttribute('fill', 'none');
     ring.setAttribute('stroke', ringColor);
@@ -8539,9 +8607,9 @@ function renderBusPinOnGuideMap() {
   wrap.appendChild(buildFloatingLabel('Bus'));
   const square = document.createElement('div');
   square.style.cssText =
-    'width:24px; height:24px; background:#2563eb; border:2px solid var(--paper);' +
+    'width:24px; height:24px; background:var(--accent); border:2px solid var(--paper);' +
     'border-radius:4px; box-shadow:0 2px 6px rgba(0,0,0,0.25);' +
-    'display:flex; align-items:center; justify-content:center; color:white;' +
+    'display:flex; align-items:center; justify-content:center; color:var(--on-accent);' +
     'font-family:JetBrains Mono,monospace; font-size:9px; font-weight:700;';
   square.textContent = 'BUS';
   square.className = 'bus-pin-pulse';
@@ -8861,7 +8929,9 @@ function renderPassengerList() {
   for (const [passengerId, p] of entries) {
     const [colorA, colorB] = colorsForPassenger(passengerId);
     const isSelected = SELECTED_PASSENGER === passengerId;
-    const state = p.lng != null ? evaluatePassengerState(p, now) : null;
+    // Evaluated even without a location: 'missing' applies to the whole
+    // roster — a passenger who never sent a fix is exactly the worry case.
+    const state = evaluatePassengerState(p, now);
     const hasLocation = p.lng != null;
 
     const row = document.createElement('div');
@@ -8874,13 +8944,17 @@ function renderPassengerList() {
 
     // Color dot — half-half split mirroring the on-map identity. Hard-stop
     // gradient at 50% gives a clean vertical seam between the two colors.
-    // Dimmed if no location yet; grey ring overlay if disconnected.
+    // Dimmed if no location yet; grey ring overlay if disconnected. When
+    // missing, the identity background is omitted so the .missing class
+    // (identification.css) can invert it: paper fill + --mark ring.
     const dot = document.createElement('div');
+    dot.className = 'passenger-list-dot' + (state === 'missing' ? ' missing' : '');
     dot.style.cssText =
-      `width:14px; height:14px; border-radius:50%;` +
-      `background:linear-gradient(to right, ${colorA} 50%, ${colorB} 50%);` +
-      `flex-shrink:0; ${hasLocation ? '' : 'opacity:0.35;'}` +
-      (state === 'disconnected' ? ' box-shadow:0 0 0 2px #888888;' : '');
+      `width:14px; height:14px; border-radius:50%; flex-shrink:0;` +
+      (state === 'missing' ? '' :
+        `background:linear-gradient(to right, ${colorA} 50%, ${colorB} 50%);` +
+        `${hasLocation ? '' : 'opacity:0.35;'}` +
+        (state === 'disconnected' ? ' box-shadow:0 0 0 2px var(--muted);' : ''));
     row.appendChild(dot);
 
     // Name.
@@ -8914,15 +8988,16 @@ function renderPassengerList() {
     // signal — especially for no-GPS passengers — so it ranks just under "at bus".
     const _since = activeStopSince();
     const freshArrival = p.lastArrival && _since != null && p.lastArrival.at >= _since;
-    if (p.inBus) { status.textContent = '✓ at bus'; status.style.color = '#15803d'; }
+    if (p.inBus) { status.textContent = '✓ at bus'; status.style.color = 'var(--good)'; }
+    else if (state === 'missing') { status.textContent = 'missing'; status.style.color = 'var(--mark)'; }
     else if (freshArrival) {
       const ttl = p.lastArrival.title || 'arrived';
       status.textContent = '✓ ' + (ttl.length > 16 ? ttl.slice(0, 15) + '…' : ttl);
-      status.style.color = '#15803d';
+      status.style.color = 'var(--good)';
     }
     else if (hasLocation && state === 'disconnected') status.textContent = 'no signal';
     else if (hasLocation) status.textContent = 'live';
-    else if (p.lastSeen && (now - p.lastSeen) < PRESENCE_FRESH_MS) { status.textContent = 'present'; status.style.color = '#15803d'; }
+    else if (p.lastSeen && (now - p.lastSeen) < PRESENCE_FRESH_MS) { status.textContent = 'present'; status.style.color = 'var(--good)'; }
     else if (p.lastSeen) status.textContent = 'away · ' + Math.max(1, Math.round((now - p.lastSeen) / 60000)) + 'm';
     else status.textContent = 'no location';
     row.appendChild(status);
@@ -9073,28 +9148,53 @@ function applyIncomingLocationRow(row) {
 const GUIDE_VIEW = { phone: null, bus: null };
 
 let _guideMarkerPhone = null;
+let _guideMarkerPhoneDot = null;   // the dot div inside the marker — restyled in place when staleness flips
 let _guideMarkerBus = null;
 let _guideChannel = null;
 let _guideSubscribeStarted = false;
 
+// Stale guide position, passenger side (identification layer). The guide
+// broadcasts a guide_locations row ~every 5s while their GPS is alive, so a
+// row older than 30s means the dot is frozen — show it honestly: hollow with
+// a dashed accent outline (same grammar as the guide's own stale you-dot).
+function applyGuideMarkerStaleness(now) {
+  const d = _guideMarkerPhoneDot;
+  if (!d || !GUIDE_VIEW.phone) return;
+  const ts = GUIDE_VIEW.phone.ts;
+  const stale = Number.isFinite(ts) && (now - ts > STALE_FIX_MS);
+  if (stale) {
+    d.style.background = 'var(--paper)';
+    d.style.border = '3px dashed var(--accent)';
+    d.style.boxShadow = '0 2px 6px rgba(0,0,0,0.25)';
+  } else {
+    d.style.background = 'var(--accent)';
+    d.style.border = '3px solid var(--paper)';
+    d.style.boxShadow = '0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent), 0 2px 6px rgba(0,0,0,0.25)';
+  }
+}
+
 async function catchUpGuideLocations() {
   if (!SESSION) return;
-  const { data, error } = await supabaseClient
-    .from('guide_locations')
-    .select('source, lng, lat, set_at, is_off')
-    .eq('session_id', SESSION.id)
-    .order('set_at', { ascending: false })
-    .limit(200);
-  if (error) {
-    console.warn('guide_locations catch-up failed', error);
-    return;
-  }
-  if (!data) return;
-  const seen = new Set();
-  for (const row of data) {
-    if (seen.has(row.source)) continue;
-    seen.add(row.source);
-    applyGuideRowToState(row);
+  // Latest row PER SOURCE, not a flat recency window: the guide's phone
+  // inserts ~1 row/5s on a long session, so a bus_pin or off-sentinel row
+  // could fall outside any fixed-size window and a stale bus marker would
+  // persist (or fail to clear) after a visibility catch-up.
+  const SOURCES = ['phone', 'bus_pin'];
+  const results = await Promise.all(SOURCES.map((source) =>
+    supabaseClient
+      .from('guide_locations')
+      .select('source, lng, lat, set_at, is_off')
+      .eq('session_id', SESSION.id)
+      .eq('source', source)
+      .order('set_at', { ascending: false })
+      .limit(1)
+  ));
+  for (const { data, error } of results) {
+    if (error) {
+      console.warn('guide_locations catch-up failed', error);
+      continue;
+    }
+    if (data && data[0]) applyGuideRowToState(data[0]);
   }
   renderGuideMarkers();
 }
@@ -9169,7 +9269,7 @@ function buildFloatingLabel(text) {
 }
 
 function renderGuideMarkers() {
-  if (_guideMarkerPhone) { _guideMarkerPhone.remove(); _guideMarkerPhone = null; }
+  if (_guideMarkerPhone) { _guideMarkerPhone.remove(); _guideMarkerPhone = null; _guideMarkerPhoneDot = null; }
   if (GUIDE_VIEW.phone) {
     // Label above + dot below. Marker anchor is 'bottom' so the dot sits
     // exactly on the lng/lat point; label floats above it.
@@ -9179,9 +9279,12 @@ function renderGuideMarkers() {
     wrap.appendChild(buildFloatingLabel(labelText));
     const dot = document.createElement('div');
     dot.style.cssText =
-      'width:22px; height:22px; background:#2563eb; border:3px solid var(--paper);' +
-      'border-radius:50%; box-shadow:0 0 0 4px rgba(37,99,235,0.18), 0 2px 6px rgba(0,0,0,0.25);';
+      'width:22px; height:22px; border-radius:50%;';
     wrap.appendChild(dot);
+    _guideMarkerPhoneDot = dot;
+    // Colors (incl. the stale dashed-hollow variant) applied here so the dot
+    // is correct from first paint, then kept live by tickIdentification.
+    applyGuideMarkerStaleness(Date.now());
     _guideMarkerPhone = new mapboxgl.Marker({ element: wrap, anchor: 'bottom' })
       .setLngLat([GUIDE_VIEW.phone.lng, GUIDE_VIEW.phone.lat])
       .addTo(map);
@@ -9194,9 +9297,9 @@ function renderGuideMarkers() {
     wrap.appendChild(buildFloatingLabel('Bus'));
     const square = document.createElement('div');
     square.style.cssText =
-      'width:24px; height:24px; background:#2563eb; border:2px solid var(--paper);' +
+      'width:24px; height:24px; background:var(--accent); border:2px solid var(--paper);' +
       'border-radius:4px; box-shadow:0 2px 6px rgba(0,0,0,0.25);' +
-      'display:flex; align-items:center; justify-content:center; color:white;' +
+      'display:flex; align-items:center; justify-content:center; color:var(--on-accent);' +
       'font-family:JetBrains Mono,monospace; font-size:9px; font-weight:700;';
     square.textContent = 'BUS';
     square.className = 'bus-pin-pulse';
@@ -9536,6 +9639,7 @@ function onGpsSuccess(pos) {
   // First fix? Hide any "searching" banner.
   hideGpsBanner();
   state.gpsMode = 'real';
+  state.lastFixAt = Date.now();
   state.youLng = pos.coords.longitude;
   state.youLat = pos.coords.latitude;
   state.accuracy = pos.coords.accuracy;
@@ -10007,7 +10111,10 @@ function renderYou() {
   const cls = (base) => isGuide ? `${base} guide` : base;
 
   const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-  g.setAttribute('class', 'you-group');
+  // Stale guide position (identification layer): dashed hollow instead of a
+  // lying solid dot when fixes stop arriving. tickIdentification keeps the
+  // class live between re-renders; this just seeds it correctly.
+  g.setAttribute('class', 'you-group' + (isGuide && guideFixIsStale() ? ' stale' : ''));
   g.setAttribute('transform', `translate(${x}, ${y})`);
 
   // accuracy halo — only when we have real GPS with known accuracy.
@@ -10029,7 +10136,7 @@ function renderYou() {
   if (state.heading != null && !isNaN(state.heading)) {
     const heading = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
     heading.setAttribute('points', '12,0 5,-4 5,4');
-    heading.setAttribute('fill', isGuide ? '#2563eb' : 'var(--ink)');
+    heading.setAttribute('fill', isGuide ? 'var(--accent)' : 'var(--you)');
     heading.setAttribute('transform', `rotate(${state.heading - 90})`);
     g.appendChild(heading);
   }
@@ -10143,7 +10250,7 @@ function showBusArrivalReward() {
 }
 function burstConfetti() {
   const host = document.getElementById('phone'); if (!host) return;
-  const colors = ['#f0b24b', '#74d99f', '#dc2626', '#2563eb', '#7c3aed', '#25d366'];
+  const colors = ['#f0b24b', '#74d99f', '#dc2626', 'var(--accent)', '#7c3aed', '#25d366'];
   const wrap = document.createElement('div'); wrap.className = 'confetti-wrap';
   for (let i = 0; i < 18; i++) {
     const c = document.createElement('div'); c.className = 'confetti-piece';
@@ -11618,7 +11725,7 @@ function populateArrivalModalContent(stop) {
 function svgForLevel(level) {
   if (level === 'info') {
     return '<svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true">'
-         + '<circle cx="9" cy="9" r="8" fill="#2563eb" />'
+         + '<circle cx="9" cy="9" r="8" fill="var(--accent)" />'
          + '<circle cx="9" cy="4.6" r="1.1" fill="#fff" />'
          + '<rect x="7.7" y="7.2" width="2.6" height="7.0" rx="0.6" fill="#fff" />'
          + '</svg>';
@@ -11770,8 +11877,49 @@ function startCountdownTicker() {
   tickCountdown();   // immediate first run
 }
 
+// ── Identification-layer ticker ─────────────────────────────────────────
+// Stale and missing are states of TIME PASSING, not of events arriving — a
+// frozen GPS or an overdue passenger generates no fix, no realtime row,
+// nothing that would trigger a re-render. So they're re-evaluated on the
+// countdown tick (1 Hz, already running for both roles).
+
+const STALE_FIX_MS = 30 * 1000;   // no fix in 30s = the dot is lying
+
+// The guide's own dot: stale only on real GPS — the dev joystick simulator
+// "fixes" arrive per-frame through a different path and should read as live.
+function guideFixIsStale() {
+  return state.gpsMode === 'real' && state.lastFixAt != null &&
+         (Date.now() - state.lastFixAt > STALE_FIX_MS);
+}
+
+let _lastPaxStateSig = '';
+function tickIdentification() {
+  const now = Date.now();
+  // Guide's own you-dot → dashed hollow after 30s without a fix. Toggled on
+  // the live element; renderYou seeds the class on full re-renders.
+  if (ROLE === 'guide' && youLayer) {
+    const g = youLayer.querySelector('.you-group');
+    if (g) g.classList.toggle('stale', guideFixIsStale());
+  }
+  // Passenger's view of the guide dot — same grammar, driven by the age of
+  // the last broadcast row.
+  applyGuideMarkerStaleness(now);
+  // Missing/disconnected flips (guide side): re-render dots + list only when
+  // some passenger's evaluated state actually changed.
+  if (ROLE === 'guide' && PASSENGERS.size > 0) {
+    let sig = '';
+    for (const [id, p] of PASSENGERS) sig += id + ':' + (evaluatePassengerState(p, now) || '-') + ';';
+    if (sig !== _lastPaxStateSig) {
+      _lastPaxStateSig = sig;
+      renderPassengers();
+      renderPassengerList();
+    }
+  }
+}
+
 function tickCountdown() {
   renderHudTimer();
+  tickIdentification();
   if (_arrivalStop) {
     const dep = departureMsForStop(_arrivalStop.id);
     if (dep) {
@@ -11861,7 +12009,7 @@ function renderHudTimer() {
   // Label: "Departure" by default, "Time to head back" once a stop is
   // armed so it reads as a call-to-action rather than a passive readout.
   if (labelEl) {
-    labelEl.textContent = hasActiveStop ? 'Time to head back' : 'Departure';
+    labelEl.textContent = hasActiveStop ? t('hud_head_back') : t('hud_departure');
   }
   if (!hasActiveStop) {
     if (timeEl) timeEl.textContent = '—:—';

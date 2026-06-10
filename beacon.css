@@ -1,0 +1,502 @@
+/* ════════════════════════════════════════════════════════════════════
+   FIELDNOTE · BEACON PATCH                                   v1 · 2026-06
+   Patch-ready stylesheet for v0.5.html (running as v0.6)
+
+   WHAT THIS IS
+   A drop-in restyle: warm, soft, nearly borderless PASSENGER view;
+   dark, frosted "command console" GUIDE view; automatic passenger
+   night mode; toned map that keeps every detail of outdoors-v12.
+
+   INSTALL — 2 required edits to v0.5.html
+   1. Load this file AFTER the existing <style> block:
+        </style>
+        <link rel="stylesheet" href="/beacon.css">   ← add this line
+        </head>
+   2. Tell CSS which role is active. After the ROLE if/else chain
+      (just below `ROLE = 'passenger';` around line 4382) add:
+        document.documentElement.classList.toggle('role-guide', ROLE === 'guide');
+
+   OPTIONAL
+   · The map is tinted with a CSS filter (zero-JS, keeps ALL detail).
+     If you ever prefer a native dark style for guides, swap
+     'outdoors-v12' → 'dark-v11' in initMap when ROLE === 'guide'
+     and delete the html.role-guide --map-filter line below.
+   · theme-color meta: set #f1ece0 (passenger) / #15181a 
+     (guide) from the same role hook for matching OS chrome.
+
+   STRUCTURE
+   §1 tokens (the tweak zone)  §2 base + map  §3 HUD chrome
+   §4 map overlay (pins/dots)  §5 banners & prompts  §6 popups & modals
+   §7 guide control center     §8 screens, menu, boarding
+   §9 builder / sessions / chat accent sweep   §10 fixes
+   ════════════════════════════════════════════════════════════════════ */
+
+
+/* ── §1 · TOKENS ──────────────────────────────────────────────────────
+   The only section you should need to touch when tuning. */
+
+:root {
+  /* passenger · daylight (default) */
+  --bg-page: #f1ece0;            /* page / screens behind cards          */
+  --paper:   #faf7ef;            /* card + chip surface (was #ebe5d7)    */
+  --paper-2: #ece5d4;
+  --paper-3: #e0d8c4;
+  --ink:     #221f1d;
+  --muted:   #76705f;            /* was referenced but UNDEFINED — fixed */
+  --rule:    #76705f;            /* legacy: used as muted text color     */
+  --rule-soft: rgba(34, 31, 29, 0.10);
+  --line:        rgba(34, 31, 29, 0.10);   /* hairline borders           */
+  --line-strong: rgba(34, 31, 29, 0.26);   /* emphasized borders         */
+
+  --mark:  #c2462c;
+  --pin-ring: rgba(194, 70, 44, 0.16);
+  --armed: #c79428;
+  --you:   #221f1d;
+  --good:  #3f8a5f;
+  --signal-good: #3f8a5f;
+  --signal-weak: #c79428;
+  --signal-bad:  #c2462c;
+
+  --accent: #3a6fd8;             /* replaces every hardcoded #2563eb     */
+  --accent-soft: rgba(58, 111, 216, 0.10);
+  --on-accent: #faf7ef;
+  --route: #6b4f2e;
+
+  --r-s: 12px;  --r-m: 16px;  --r-l: 24px;
+  --shadow-1: 0 2px 6px rgba(31, 26, 16, 0.07), 0 12px 32px rgba(31, 26, 16, 0.13);
+  --shadow-2: 0 4px 10px rgba(31, 26, 16, 0.10), 0 24px 56px rgba(31, 26, 16, 0.20);
+  --chip-blur: blur(10px);
+
+  /* warms outdoors-v12 toward the paper palette — tint only, no detail loss */
+  --map-filter: saturate(0.80) sepia(0.16) brightness(1.02) contrast(0.97);
+}
+
+/* guide · command console (html gets .role-guide from the boot hook) */
+html.role-guide {
+  --bg-page: #15181a;
+  --paper:   #202527;
+  --paper-2: #2a3033;
+  --paper-3: #343b3e;
+  --ink:     #e9ecea;
+  --muted:   #8e978f;
+  --rule:    #8e978f;
+  --rule-soft: rgba(233, 236, 234, 0.10);
+  --line:        rgba(233, 236, 234, 0.10);
+  --line-strong: rgba(233, 236, 234, 0.28);
+
+  --mark:  #e0573f;
+  --pin-ring: rgba(224, 87, 63, 0.20);
+  --armed: #d9a83f;
+  --you:   #e9ecea;
+  --good:  #56b380;
+  --signal-good: #56b380;
+  --signal-weak: #d9a83f;
+  --signal-bad:  #e0573f;
+
+  --accent: #5b8def;
+  --accent-soft: rgba(91, 141, 239, 0.16);
+  --on-accent: #0e1112;
+  --route: #8d9b6a;
+
+  --shadow-1: 0 2px 6px rgba(0,0,0,0.45), 0 12px 32px rgba(0,0,0,0.5);
+  --shadow-2: 0 4px 10px rgba(0,0,0,0.5), 0 24px 56px rgba(0,0,0,0.6);
+  --chip-blur: blur(12px);
+
+  /* dark map from the same outdoors-v12 tiles — labels stay readable,
+     every road/contour/water feature survives */
+  --map-filter: invert(0.92) hue-rotate(185deg) saturate(0.50) brightness(0.92) contrast(1.06);
+}
+
+/* passenger · night (follows the phone's dark mode automatically) */
+@media (prefers-color-scheme: dark) {
+  html:not(.role-guide) {
+    --bg-page: #1a1814;
+    --paper:   #24211c;
+    --paper-2: #2e2a24;
+    --paper-3: #383329;
+    --ink:     #efe9da;
+    --muted:   #9d978a;
+    --rule:    #9d978a;
+    --rule-soft: rgba(239, 233, 218, 0.10);
+    --line:        rgba(239, 233, 218, 0.10);
+    --line-strong: rgba(239, 233, 218, 0.28);
+
+    --mark:  #e06a4d;
+    --pin-ring: rgba(224, 106, 77, 0.20);
+    --armed: #d9ad4b;
+    --you:   #efe9da;
+    --good:  #7cba93;
+    --signal-good: #7cba93;
+    --signal-weak: #d9ad4b;
+    --signal-bad:  #e06a4d;
+
+    --accent: #84a4ee;
+    --accent-soft: rgba(132, 164, 238, 0.14);
+    --on-accent: #16140f;
+    --route: #a98a5e;
+
+    --shadow-1: 0 2px 6px rgba(0,0,0,0.4), 0 12px 32px rgba(0,0,0,0.5);
+    --shadow-2: 0 4px 10px rgba(0,0,0,0.45), 0 24px 56px rgba(0,0,0,0.6);
+
+    --map-filter: invert(0.90) hue-rotate(175deg) saturate(0.50) brightness(0.86) contrast(1.05) sepia(0.10);
+  }
+}
+
+
+/* ── §2 · BASE + MAP CANVAS ──────────────────────────────────────── */
+
+body { background: #101210; }
+.phone { background: var(--bg-page); }
+@media (max-width: 900px), (any-pointer: coarse), (display-mode: standalone), (display-mode: minimal-ui), (display-mode: fullscreen) {
+  body { background: var(--bg-page); }
+}
+.screen { background: var(--bg-page); }
+
+/* tone the tiles; never hide them */
+#mapbox-map .mapboxgl-canvas { filter: var(--map-filter); }
+.tb-map .mapboxgl-canvas     { filter: var(--map-filter); }
+
+.mapboxgl-ctrl-attrib {
+  background: color-mix(in srgb, var(--paper) 80%, transparent) !important;
+  color: var(--muted);
+}
+.map-load-err { border-color: var(--line-strong); border-radius: var(--r-m); }
+
+
+/* ── §3 · HUD CHROME ─────────────────────────────────────────────── */
+
+.icon-btn {
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  box-shadow: var(--shadow-1);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  -webkit-backdrop-filter: var(--chip-blur); backdrop-filter: var(--chip-blur);
+}
+.icon-btn:active { background: var(--paper-2); }
+
+.signal {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  height: 30px; padding: 0 11px; gap: 7px;
+  box-shadow: var(--shadow-1);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  -webkit-backdrop-filter: var(--chip-blur); backdrop-filter: var(--chip-blur);
+  font-size: 10px; color: var(--muted);
+}
+.signal-dot { width: 7px; height: 7px; }
+
+.zoom-btn {
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  box-shadow: var(--shadow-1);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  -webkit-backdrop-filter: var(--chip-blur); backdrop-filter: var(--chip-blur);
+  font-weight: 500;
+}
+.zoom-btn.active, .zoom-btn.preset.on {
+  background: var(--ink); color: var(--paper); border-color: var(--ink);
+}
+.map-zoom-readout { color: var(--muted); text-shadow: none; }
+
+.stop-timer {
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  padding: 8px 14px 10px;
+  box-shadow: var(--shadow-1);
+  background: color-mix(in srgb, var(--paper) 90%, transparent);
+  -webkit-backdrop-filter: var(--chip-blur); backdrop-filter: var(--chip-blur);
+}
+.stop-timer-label { font-size: 8.5px; letter-spacing: 0.16em; color: var(--muted); }
+.stop-timer-time  { font-size: 20px; margin-top: 3px; }
+.stop-timer-countdown { color: var(--muted); }
+.stop-timer-bus-hint { border-top-color: var(--line-strong); color: var(--muted); }
+.stop-timer.alarm {
+  border-color: var(--mark);
+  box-shadow: var(--shadow-1), 0 0 0 3px color-mix(in srgb, var(--mark) 18%, transparent);
+}
+
+
+/* ── §4 · MAP OVERLAY — pins, dots, trails ───────────────────────── */
+
+.pin-marker { stroke: var(--paper); stroke-width: 2; }
+.pin-group.visited .pin-marker { fill: var(--paper-2); stroke: var(--muted); stroke-width: 1.5; }
+.pin-label { fill: var(--paper); }
+.pin-group.visited .pin-label { fill: var(--muted); }
+.pin-title-plate { fill: var(--ink); fill-opacity: 0.88; rx: 6; }
+.pin-title-label { fill: var(--paper); }
+
+.you-dot  { stroke: var(--paper); }
+.you-halo { fill: var(--ink); }
+.you-accuracy { fill: color-mix(in srgb, var(--good) 14%, transparent); stroke: color-mix(in srgb, var(--good) 40%, transparent); }
+.you-group polygon { fill: var(--you); }                 /* heading wedge  */
+html.role-guide .you-group polygon { fill: var(--accent); }
+
+.you-dot.guide  { fill: var(--accent); stroke: var(--paper); }
+.you-halo.guide { fill: var(--accent); }
+.you-accuracy.guide { fill: color-mix(in srgb, var(--accent) 12%, transparent); stroke: color-mix(in srgb, var(--accent) 40%, transparent); }
+.you-trail.guide { stroke: var(--accent); }
+
+.passenger-dot { stroke: var(--paper); }
+.route-line { stroke: var(--route); stroke-width: 2.5; }
+
+.zone-circle { stroke-dasharray: 5 4; }
+.tb-stop-marker, .tb-pin-marker { border-color: var(--paper); }
+.tb-stop-marker.hi, .tb-pin-marker.hi { box-shadow: 0 0 0 3px var(--accent), 0 2px 10px rgba(0,0,0,0.45); }
+
+
+/* ── §5 · BANNERS + PROMPTS ──────────────────────────────────────── */
+
+.next-stop-banner {
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-1);
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  -webkit-backdrop-filter: var(--chip-blur); backdrop-filter: var(--chip-blur);
+}
+.nsb-label { color: var(--muted); }
+.nsb-eta { color: var(--accent); }
+
+.broadcast-banner, .broadcast-banner.bus {
+  background: var(--accent); color: var(--on-accent);
+  border-radius: 999px;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.gps-banner { border-radius: var(--r-m); box-shadow: var(--shadow-2); }
+
+.notif-prompt, .install-prompt {
+  border: none; border-radius: var(--r-m);
+  box-shadow: var(--shadow-2);
+}
+.notif-prompt-btn, .install-prompt-btn {
+  border-radius: 999px; border-color: var(--line-strong);
+}
+.notif-prompt-btn.primary, .install-prompt-btn.primary {
+  border-color: var(--ink);
+}
+
+.departure-place-banner { border-radius: var(--r-m); box-shadow: var(--shadow-2); }
+.tb-place-banner { border-radius: var(--r-m); }
+
+.top-warning {
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  box-shadow: var(--shadow-1);
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  -webkit-backdrop-filter: var(--chip-blur); backdrop-filter: var(--chip-blur);
+}
+.top-warning[data-level="info"] {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-1), 0 0 0 3px var(--accent-soft);
+}
+.top-warning[data-level="caution"] {
+  border-color: var(--armed);
+  box-shadow: var(--shadow-1), 0 0 0 3px color-mix(in srgb, var(--armed) 15%, transparent);
+}
+.top-warning[data-level="danger"] {
+  border-color: var(--mark);
+  box-shadow: var(--shadow-1), 0 0 0 3px color-mix(in srgb, var(--mark) 15%, transparent);
+}
+.top-warning-row { border-bottom-color: var(--line); }
+.top-warning-row[data-level="info"] {
+  background: var(--accent-soft);
+  color: color-mix(in srgb, var(--accent) 70%, var(--ink));
+}
+
+
+/* ── §6 · POPUPS + MODALS ────────────────────────────────────────── */
+
+.pin-popup {
+  border: none; border-radius: var(--r-l);
+  box-shadow: var(--shadow-2);
+}
+.popup-header { border-bottom-color: var(--line); }
+.popup-stamp { font-weight: 700; }
+.popup-body p { color: color-mix(in srgb, var(--ink) 82%, var(--muted)); }
+.popup-ok, .popup-arrived { border-radius: var(--r-s); }
+.popup-arrived { background: var(--good); border-color: var(--good); color: var(--paper); }
+.pin-popup.warn   { border: 1px solid var(--mark); box-shadow: var(--shadow-2), 0 0 0 4px color-mix(in srgb, var(--mark) 14%, transparent); }
+.pin-popup.reward { border: 1px solid var(--good); box-shadow: var(--shadow-2), 0 0 0 4px color-mix(in srgb, var(--good) 16%, transparent); }
+.pin-popup.reward .popup-stamp { color: var(--good); }
+
+.stop-modal {
+  border: none; border-radius: var(--r-l);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}
+.stop-modal-header { border-bottom-color: var(--line); }
+.stop-modal-body p { color: color-mix(in srgb, var(--ink) 82%, var(--muted)); }
+.stop-modal-btn { border-radius: var(--r-s); }
+.stop-modal-duration-input, .stop-modal-notes textarea, .notes-row input.notes-input {
+  border-color: var(--line-strong); border-radius: var(--r-s);
+  background: var(--paper);
+}
+.stop-modal-warning-pill.active[data-level="info"] {
+  background: var(--accent); border-color: var(--accent); color: var(--on-accent);
+}
+.stop-modal-warning-pill.active[data-level="caution"] {
+  background: var(--armed); border-color: var(--armed); color: #1d1a12;
+}
+
+.stop-arrival-warning-row { border-radius: var(--r-s); }
+.stop-arrival-warning-row[data-level="info"],
+.menu-session-warning-row[data-level="info"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: color-mix(in srgb, var(--accent) 70%, var(--ink));
+}
+.stop-arrival-warning-row[data-level="caution"],
+.menu-session-warning-row[data-level="caution"] {
+  background: color-mix(in srgb, var(--armed) 13%, transparent);
+  border-color: var(--armed);
+  color: color-mix(in srgb, var(--armed) 60%, var(--ink));
+}
+.stop-arrival-warning-row[data-level="danger"],
+.menu-session-warning-row[data-level="danger"] {
+  background: color-mix(in srgb, var(--mark) 10%, transparent);
+}
+
+.nsp-card { border: none; border-radius: var(--r-l); box-shadow: var(--shadow-2); }
+.nsp-stop { border-color: var(--line-strong); border-radius: var(--r-m); }
+.nsp-stop.suggested { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.nsp-stop .nsp-eta { color: var(--accent); }
+.nsp-sub { color: var(--muted); }
+.nsp-skip { border-radius: 999px; border-color: var(--line-strong); color: var(--muted); }
+
+.tb-form { border: none; border-radius: var(--r-l); box-shadow: var(--shadow-2); }
+.tb-form input, .tb-form textarea { border-color: var(--line-strong); border-radius: var(--r-s); }
+.tb-choice { border-radius: var(--r-s); }
+
+
+/* ── §7 · GUIDE CONTROL CENTER ───────────────────────────────────── */
+
+.guide-sheet {
+  border-top: 1px solid var(--line);
+  border-radius: var(--r-l) var(--r-l) 0 0;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.30);
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  -webkit-backdrop-filter: var(--chip-blur); backdrop-filter: var(--chip-blur);
+}
+.guide-sheet-handle { background: transparent; border-bottom-color: var(--line); }
+.guide-sheet-grip { background: var(--line-strong); width: 38px; }
+.guide-sheet-title { color: var(--ink); font-weight: 700; }
+.guide-sheet-title-count, .passengers-count-badge { border-radius: 999px; }
+
+.stops-section, .visibility-section { border-bottom-color: var(--line); }
+.stops-section-label, .visibility-section-label, .passengers-section-label {
+  font-size: 9px; letter-spacing: 0.18em; color: var(--muted);
+}
+.stop-row { border-bottom-color: var(--line); }
+.stop-row-num { color: var(--muted); }
+.stop-row-action { border-radius: 999px; }
+.stop-row-active-pill {
+  color: var(--good); border-color: var(--good);
+  background: color-mix(in srgb, var(--good) 8%, transparent);
+}
+.stop-row-active-pill:hover, .stop-row-active-pill:active { background: var(--good); color: var(--paper); }
+.stop-row-note-btn { background: transparent; border-color: var(--line); color: var(--muted); }
+
+.vis-btn { background: transparent; border-color: var(--line-strong); }
+.vis-btn.active {
+  background: var(--accent); border-color: var(--accent); color: var(--on-accent);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.visibility-bus-hint {
+  background: var(--accent-soft);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--r-s) var(--r-s) 0;
+}
+#names-toggle-row { border-bottom-color: var(--line) !important; }
+
+#guide-share-link { border-radius: var(--r-s) !important; border-color: var(--line) !important; }
+.end-session-row { border-top-color: var(--line); }
+.end-session-btn { border-radius: 999px; }
+
+
+/* ── §8 · SCREENS, MENU, BOARDING ────────────────────────────────── */
+
+.screen-header { border-bottom-color: var(--line); background: var(--bg-page); }
+.menu-masthead, .menu-session-info, .menu-item { border-bottom-color: var(--line); }
+.menu-masthead .sub { color: var(--muted); }
+.menu-icon { border-radius: var(--r-s); background: var(--paper-2); }
+.menu-sub, .menu-chevron { color: var(--muted); }
+.menu-session-stop { background: var(--paper-2); border-color: var(--line); border-radius: var(--r-s); }
+.menu-guidecard-btn { border-color: var(--line-strong); border-radius: 999px; }
+.menu-notif-hint {
+  background: color-mix(in srgb, var(--armed) 10%, transparent);
+  border-radius: var(--r-s);
+  color: color-mix(in srgb, var(--armed) 55%, var(--ink));
+}
+.install-row { border-top-color: var(--line); }
+.install-btn {
+  background: var(--good); border-color: var(--good);
+  border-radius: 999px;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--good) 25%, transparent);
+}
+.install-btn:hover { background: color-mix(in srgb, var(--good) 85%, var(--ink)); }
+.install-hint { color: var(--muted); }
+.menu-guidelogin-link { color: var(--muted); }
+
+.about-block { color: color-mix(in srgb, var(--ink) 82%, var(--muted)); }
+.about-block.muted { color: var(--muted); }
+
+.boarding-sub, .boarding-stamp { color: var(--muted); }
+.boarding-count-label { color: var(--muted); }
+.boarding-row { border-bottom-color: var(--line); }
+.boarding-row::before { color: var(--good); }
+.boarding-share { border-radius: var(--r-m); border-color: var(--line-strong); }
+.boarding-start { border-radius: var(--r-m); }
+
+.session-ended-sub { color: var(--muted); }
+.session-ended-stamp { color: var(--muted); }
+
+
+/* ── §9 · BUILDER / SESSIONS / GUIDE CHAT — accent + line sweep ──── */
+
+.sm-row, .tb-row, .tb-stop-row { border-color: var(--line-strong); border-radius: var(--r-m); }
+.sm-row.active { border-color: var(--ink); }
+.sm-status, .tb-row-meta, .tb-stamp, .tb-hint, .tb-ro-hint, .tb-saved { color: var(--muted); }
+.tb-row-sub, .tb-rowbody { color: color-mix(in srgb, var(--ink) 75%, var(--muted)); }
+.sm-btn, .tb-ro-done, .tb-donebtn, .sm-newbtn, .tb-add-btn { border-radius: var(--r-s); }
+.sm-rename-input { border-radius: var(--r-s); }
+.sm-footer, .tb-footer, .tb-edfoot { border-top-color: var(--line); }
+.tb-pin-row { border-color: var(--line); }
+.tb-stop-row.hi, .tb-pin-row.hi { box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent); }
+.tb-ro-tile { border-color: var(--line-strong); border-radius: var(--r-m); }
+.tb-ro-tile.dragging { border-color: var(--accent); }
+.tb-panel-toggle { border-top-color: var(--line); border-bottom-color: var(--line); color: var(--muted); }
+.tb-float-back {
+  background: color-mix(in srgb, var(--paper) 90%, transparent);
+  border-color: var(--line); border-radius: 999px;
+  -webkit-backdrop-filter: var(--chip-blur); backdrop-filter: var(--chip-blur);
+  color: var(--ink);
+}
+.tb-zoom { background: color-mix(in srgb, var(--paper) 90%, transparent); border-color: var(--line); color: var(--muted); }
+.tb-add-menu { border-color: var(--line); border-radius: var(--r-m); }
+.tb-tag { color: var(--muted); border-color: var(--line-strong); }
+
+.gc-bubble { background: var(--paper-2); border-color: var(--line); border-radius: var(--r-m); }
+.gc-msg.mine .gc-bubble { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.gc-meta { color: var(--muted); }
+.gc-input { border-color: var(--line-strong); border-radius: var(--r-m); }
+.gc-send { border-radius: var(--r-m); }
+.gc-back, .gc-tool, .gc-anon { border-color: var(--line-strong); border-radius: 999px; color: var(--muted); }
+.gc-anon.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.gc-rules { background: var(--paper-2); border-bottom-color: var(--line); color: var(--muted); }
+.gc-header, .gc-composer { border-color: var(--line); }
+.gc-sub { color: var(--muted); }
+
+
+/* ── §10 · HARDCODED-COLOR FIXES (break on dark without this) ────── */
+
+/* grays from the light era → token-driven */
+.popup-body p { }
+.menu-session-guide { color: var(--ink); }
+.menu-session-guide-label, .menu-session-warnings-label, .menu-session-stop-stamp { color: var(--muted); }
+.menu-chat-note { color: var(--mark); }
+.gc-attach-status { color: var(--muted); }
+.sm-empty, .tb-empty, .gc-empty { color: var(--muted); }
+.boarding-count { color: var(--ink); }
+
+/* legacy #2563eb sweep — anything the sections above missed */
+.you-trail.guide { stroke: var(--accent); }
+.broadcast-banner::before { background: currentColor; }
