@@ -3252,7 +3252,7 @@ window.addEventListener('unhandledrejection', function () {
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · beacon v2: guide light console + appearance toggle (auto/light/dark) + AI-1 lite notes auto-translate (DeepL) · build 2026-06-10-1015';
+const BUILD_VERSION = '0.6 · iOS location recovery: re-arm GPS from Share-my-location tap + exact Safari recovery steps (localized) · build 2026-06-10-1100';
 
 // Verbose tracing — OFF in production so real warnings/errors aren't buried under
 // the per-render [maybeShow]/[catch-up]/[realtime] spam (~1800 lines a session).
@@ -3343,6 +3343,11 @@ const I18N = {
     arrival_joke: "Watch out for the hidden people — they're somewhere around.",
     hud_head_back: 'Time to head back', hud_departure: 'Departure',
     update_from_guide: 'Update from your guide',
+    gps_getting: 'Getting your location…',
+    gps_denied: "Location permission was denied. Open your browser's site settings to allow it, then tap here to retry.",
+    gps_denied_ios: 'Location is blocked. In Safari: tap “aA” in the address bar → Website Settings → Location → Allow. If it stays off, check Settings → Privacy → Location Services. Then tap here to retry.',
+    gps_nofix: "Couldn't get a GPS fix. If you're indoors, step outside — then tap here to retry.",
+    gps_timeout: 'GPS timed out. Make sure location services are on, then tap here to retry.',
     loading_joining: 'Joining session…',
     reward_stamp: '🎉 On time!', reward_title: 'Nice — you made it back!', reward_body: "You're at the bus with time to spare. Sit back and enjoy the ride.",
     menu_group_chat: 'Group chat', menu_reset: 'Reset visited pins', menu_about: 'About this build',
@@ -3391,6 +3396,11 @@ const I18N = {
     arrival_joke: 'Cuidado con la gente oculta: andan por aquí, en alguna parte.',
     hud_head_back: 'Hora de volver', hud_departure: 'Salida',
     update_from_guide: 'Actualización de tu guía',
+    gps_getting: 'Obteniendo tu ubicación…',
+    gps_denied: 'El permiso de ubicación fue denegado. Actívalo en los ajustes del sitio de tu navegador y luego toca aquí para reintentar.',
+    gps_denied_ios: 'La ubicación está bloqueada. En Safari: toca “aA” en la barra de direcciones → Ajustes del sitio web → Ubicación → Permitir. Si sigue sin funcionar, revisa Ajustes → Privacidad → Localización. Luego toca aquí para reintentar.',
+    gps_nofix: 'No se pudo obtener la señal GPS. Si estás en un interior, sal al exterior y toca aquí para reintentar.',
+    gps_timeout: 'El GPS tardó demasiado. Comprueba que la localización está activada y toca aquí para reintentar.',
     loading_joining: 'Uniéndote a la sesión…',
     reward_stamp: '🎉 ¡A tiempo!', reward_title: '¡Bien, llegaste a tiempo!', reward_body: 'Estás en el autobús con tiempo de sobra. Relájate y disfruta del viaje.',
     menu_group_chat: 'Chat del grupo', menu_reset: 'Restablecer paradas vistas', menu_about: 'Acerca de esta versión',
@@ -3439,6 +3449,11 @@ const I18N = {
     arrival_joke: '小心“隐形人”——他们就在附近。',
     hud_head_back: '该回去了', hud_departure: '出发',
     update_from_guide: '来自向导的更新',
+    gps_getting: '正在获取你的位置…',
+    gps_denied: '位置权限被拒绝。请在浏览器的网站设置中允许定位，然后点按此处重试。',
+    gps_denied_ios: '定位被屏蔽。在 Safari 中：点按地址栏的“aA”→ 网站设置 → 位置 → 允许。如仍不行，请检查 设置 → 隐私 → 定位服务。然后点按此处重试。',
+    gps_nofix: '无法获取 GPS 信号。如果你在室内，请到室外，然后点按此处重试。',
+    gps_timeout: 'GPS 超时。请确认定位服务已开启，然后点按此处重试。',
     loading_joining: '正在加入…',
     reward_stamp: '🎉 准时！', reward_title: '太好了——你赶回来了！', reward_body: '你已到达大巴，还有充足时间。请坐好，享受旅程。',
     menu_group_chat: '群聊', menu_reset: '重置已访问的点', menu_about: '关于此版本',
@@ -9631,7 +9646,7 @@ function startGeolocation() {
 function requestLocationOnTap() {
   if (!('geolocation' in navigator)) { startGeolocation(); return; }
   state.gpsMode = 'searching'; updateSignal();
-  showGpsBanner('Getting your location…');
+  showGpsBanner(t('gps_getting'));
   try {
     navigator.geolocation.getCurrentPosition(
       (pos) => { onGpsSuccess(pos); startGeolocation(); },
@@ -9745,6 +9760,13 @@ function onGpsSuccess(pos) {
   renderYou();
 }
 
+// iPhone/iPad detection (iPadOS 13+ masquerades as MacIntel but has touch).
+function isIOSDevice() {
+  const ua = navigator.userAgent || '';
+  if (/iPad|iPhone|iPod/.test(ua) && !/Android/.test(ua)) return true;
+  return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+}
+
 function onGpsError(err) {
   // The error codes:
   //   1 = PERMISSION_DENIED
@@ -9752,13 +9774,16 @@ function onGpsError(err) {
   //   3 = TIMEOUT
   if (err.code === 1) {
     state.gpsMode = 'denied';
-    showGpsBanner("Location permission was denied. Open your browser's site settings to allow it, then tap here to retry.");
+    // iOS can't re-prompt from the page once denied — the recovery path runs
+    // through Safari's aA menu (or Location Services being off system-wide),
+    // so spell out the exact route instead of generic "site settings".
+    showGpsBanner(isIOSDevice() ? t('gps_denied_ios') : t('gps_denied'));
   } else if (err.code === 2) {
     state.gpsMode = 'unavailable';
-    showGpsBanner("Couldn't get a GPS fix. If you're indoors, step outside — then tap here to retry.");
+    showGpsBanner(t('gps_nofix'));
   } else if (err.code === 3) {
     state.gpsMode = 'unavailable';
-    showGpsBanner("GPS timed out. Make sure location services are on, then tap here to retry.");
+    showGpsBanner(t('gps_timeout'));
   }
   updateSignal();
 }
@@ -10592,6 +10617,13 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
       const lbl = document.getElementById('menu-share-loc-label');
       if (lbl) lbl.textContent = _locationSharingOff ? t('menu_loc_share') : t('menu_loc_stop');
       try { showToast(_locationSharingOff ? t('loc_stopped') : t('loc_resumed')); } catch (_e) {}
+      // Resuming sharing IS a user tap — the one moment iOS lets us (re)arm
+      // geolocation. If there's no live fix (permission denied earlier, or the
+      // watch never started), re-request now so "Share my location" actually
+      // produces a dot instead of silently flipping a flag.
+      if (!_locationSharingOff && state.gpsMode !== 'real' && state.gpsMode !== 'simulated') {
+        try { requestLocationOnTap(); } catch (_e) {}
+      }
     } else if (action === 'theme') {
       // Appearance: cycle auto → light → dark in place. The menu stays open
       // so the theme change + new label are immediately visible (same
