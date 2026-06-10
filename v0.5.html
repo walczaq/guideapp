@@ -2461,6 +2461,9 @@
      precached in sw.js SHELL_URLS — bump SHELL_CACHE when editing them. -->
 <link rel="stylesheet" href="/beacon.css">
 <link rel="stylesheet" href="/identification.css">
+<!-- Manual appearance toggle (auto/light/dark, persisted). Must run in <head>
+     so a stored override applies before first paint — no theme flash. -->
+<script src="/beacon-theme.js"></script>
 </head>
 <body>
 
@@ -2818,6 +2821,20 @@
           </div>
           <div class="menu-label" id="menu-language-label">Language</div>
           <span class="menu-chevron">›</span>
+        </button>
+        <!-- Appearance: cycles auto/light/dark in place (beacon-theme.js).
+             No chevron — the value chip shows the current setting and the
+             row mutates rather than navigating, so it must NOT close the
+             menu (handled by its data-action branch). -->
+        <button class="menu-item" data-action="theme" id="menu-theme">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 2 a10 10 0 0 1 0 20 z" fill="currentColor" stroke="none"/>
+            </svg>
+          </div>
+          <div class="menu-label" id="menu-theme-label">Appearance</div>
+          <span class="menu-sub" id="menu-theme-value">Auto</span>
         </button>
       </div>
       <!-- Install website CTA — always-visible escape hatch for when the
@@ -3235,7 +3252,7 @@ window.addEventListener('unhandledrejection', function () {
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · beacon restyle (day/guide/night themes) + identification layer (8-hue palette, missing + stale states) · build 2026-06-10-0420';
+const BUILD_VERSION = '0.6 · beacon v2: guide light console + appearance toggle (auto/light/dark) + AI-1 lite notes auto-translate (DeepL) · build 2026-06-10-1015';
 
 // Verbose tracing — OFF in production so real warnings/errors aren't buried under
 // the per-render [maybeShow]/[catch-up]/[realtime] spam (~1800 lines a session).
@@ -3299,6 +3316,7 @@ const I18N = {
   en: {
     gate_title: 'Choose your language', gate_sub: 'You can change this later in the menu.',
     menu_language: 'Language',
+    menu_theme: 'Appearance', theme_auto: 'Auto', theme_light: 'Light', theme_dark: 'Dark',
     join_stamp: 'Joining tour', join_q: "What's your name?", join_sub: 'So {guide} can recognize you on the map.',
     join_ph: 'your name', join_btn: 'Join tour', join_joining: 'Joining…',
     join_err_empty: 'Enter a name to continue.', join_err_long: 'Name is too long.',
@@ -3324,6 +3342,7 @@ const I18N = {
     notif_text: 'Get notified when your guide activates a new stop or sends a warning, even with the app closed.', notif_enable: 'Enable', prompt_not_now: 'Not now',
     arrival_joke: "Watch out for the hidden people — they're somewhere around.",
     hud_head_back: 'Time to head back', hud_departure: 'Departure',
+    update_from_guide: 'Update from your guide',
     loading_joining: 'Joining session…',
     reward_stamp: '🎉 On time!', reward_title: 'Nice — you made it back!', reward_body: "You're at the bus with time to spare. Sit back and enjoy the ride.",
     menu_group_chat: 'Group chat', menu_reset: 'Reset visited pins', menu_about: 'About this build',
@@ -3345,6 +3364,7 @@ const I18N = {
   es: {
     gate_title: 'Elige tu idioma', gate_sub: 'Puedes cambiarlo luego en el menú.',
     menu_language: 'Idioma',
+    menu_theme: 'Apariencia', theme_auto: 'Automático', theme_light: 'Claro', theme_dark: 'Oscuro',
     join_stamp: 'Uniéndote al tour', join_q: '¿Cómo te llamas?', join_sub: 'Para que {guide} pueda reconocerte en el mapa.',
     join_ph: 'tu nombre', join_btn: 'Unirse al tour', join_joining: 'Uniéndote…',
     join_err_empty: 'Escribe un nombre para continuar.', join_err_long: 'El nombre es demasiado largo.',
@@ -3370,6 +3390,7 @@ const I18N = {
     notif_text: 'Recibe un aviso cuando tu guía active una nueva parada o envíe una advertencia, incluso con la app cerrada.', notif_enable: 'Activar', prompt_not_now: 'Ahora no',
     arrival_joke: 'Cuidado con la gente oculta: andan por aquí, en alguna parte.',
     hud_head_back: 'Hora de volver', hud_departure: 'Salida',
+    update_from_guide: 'Actualización de tu guía',
     loading_joining: 'Uniéndote a la sesión…',
     reward_stamp: '🎉 ¡A tiempo!', reward_title: '¡Bien, llegaste a tiempo!', reward_body: 'Estás en el autobús con tiempo de sobra. Relájate y disfruta del viaje.',
     menu_group_chat: 'Chat del grupo', menu_reset: 'Restablecer paradas vistas', menu_about: 'Acerca de esta versión',
@@ -3391,6 +3412,7 @@ const I18N = {
   zh: {
     gate_title: '选择语言', gate_sub: '稍后可在菜单中更改。',
     menu_language: '语言',
+    menu_theme: '外观', theme_auto: '自动', theme_light: '浅色', theme_dark: '深色',
     join_stamp: '加入行程', join_q: '你叫什么名字？', join_sub: '让 {guide} 能在地图上认出你。',
     join_ph: '你的名字', join_btn: '加入行程', join_joining: '加入中…',
     join_err_empty: '请输入名字以继续。', join_err_long: '名字太长了。',
@@ -3416,6 +3438,7 @@ const I18N = {
     notif_text: '当向导激活新的停靠点或发送警示时收到通知——即使应用已关闭。', notif_enable: '开启', prompt_not_now: '暂不',
     arrival_joke: '小心“隐形人”——他们就在附近。',
     hud_head_back: '该回去了', hud_departure: '出发',
+    update_from_guide: '来自向导的更新',
     loading_joining: '正在加入…',
     reward_stamp: '🎉 准时！', reward_title: '太好了——你赶回来了！', reward_body: '你已到达大巴，还有充足时间。请坐好，享受旅程。',
     menu_group_chat: '群聊', menu_reset: '重置已访问的点', menu_about: '关于此版本',
@@ -4396,12 +4419,10 @@ async function boot() {
   // here, right after ROLE locks in, so no screen renders in the wrong
   // theme. The debug "view as" button reloads with ?role=, re-running this.
   document.documentElement.classList.toggle('role-guide', ROLE === 'guide');
-  // Match the OS chrome (status bar / task switcher) to the active theme.
-  const themeMeta = document.querySelector('meta[name="theme-color"]');
-  if (themeMeta) {
-    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    themeMeta.setAttribute('content', ROLE === 'guide' ? '#15181a' : (prefersDark ? '#1a1814' : '#f1ece0'));
-  }
+  // beacon-theme.js owns the manual appearance override AND the theme-color
+  // meta. Its parse-time run happened before the role class existed —
+  // re-apply now that the role is known so the meta resolves per role.
+  if (window.fieldnoteTheme) window.fieldnoteTheme.apply();
 
   if (sessionId) {
     // Path 1: join an existing session.
@@ -10533,8 +10554,19 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   // Install website).
   refreshMenuInstallBtn();
   const llbl = document.getElementById('menu-language-label'); if (llbl) llbl.textContent = t('menu_language');
+  syncThemeMenuRow();
   openScreen('screen-menu');
 });
+
+// Appearance row: translated label + current value (Auto/Light/Dark).
+// Called on menu open (covers reload with a stored preference + language
+// switches) and after every cycle tap.
+function syncThemeMenuRow() {
+  const lbl = document.getElementById('menu-theme-label');
+  if (lbl) lbl.textContent = t('menu_theme');
+  const val = document.getElementById('menu-theme-value');
+  if (val && window.fieldnoteTheme) val.textContent = t('theme_' + window.fieldnoteTheme.get());
+}
 
 document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
   item.addEventListener('click', async () => {
@@ -10560,6 +10592,14 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
       const lbl = document.getElementById('menu-share-loc-label');
       if (lbl) lbl.textContent = _locationSharingOff ? t('menu_loc_share') : t('menu_loc_stop');
       try { showToast(_locationSharingOff ? t('loc_stopped') : t('loc_resumed')); } catch (_e) {}
+    } else if (action === 'theme') {
+      // Appearance: cycle auto → light → dark in place. The menu stays open
+      // so the theme change + new label are immediately visible (same
+      // flip-in-place pattern as the share-loc row).
+      if (window.fieldnoteTheme) {
+        window.fieldnoteTheme.cycle();
+        syncThemeMenuRow();
+      }
     } else if (action === 'language') {
       while (screenStack.length) closeScreen();
       showLanguageGate();
@@ -10716,7 +10756,7 @@ async function catchUpStopActivations() {
   if (!SESSION) return;
   const { data, error } = await supabaseClient
     .from('stop_activations')
-    .select('stop_id, activated_at, duration_minutes, notes, warning_level')
+    .select('stop_id, activated_at, duration_minutes, notes, warning_level, notes_i18n')
     .eq('session_id', SESSION.id);
   if (error) {
     console.warn('[chunk B] stop_activations catch-up failed', error);
@@ -10730,6 +10770,7 @@ async function catchUpStopActivations() {
       duration_minutes: row.duration_minutes ?? 20,
       notes: row.notes || null,
       warning_level: row.warning_level || 'none',
+      notes_i18n: row.notes_i18n || null,
     });
   }
   dlog('[catch-up] stop_activations rows:', (data || []).length,
@@ -10906,6 +10947,8 @@ async function activateStop(stop, opts) {
     return { error: error.message || 'Could not activate stop.' };
   }
   ACTIVE_STOP_IDS.add(stop.id);
+  // Notes attached at activation get translated too (fire-and-forget).
+  if (notes && notes.trim()) requestNotesTranslation(stop.id);
   // The activating guide already saw the activate-confirm modal — no need to
   // recap with the arrival modal on refresh. Mark as locally acked so
   // maybeShowPendingStopAnnouncement() skips it for this device.
@@ -11299,6 +11342,7 @@ function onStopActivated(row) {
     duration_minutes: row.duration_minutes ?? 20,
     notes: row.notes || null,
     warning_level: row.warning_level || 'none',
+    notes_i18n: row.notes_i18n || null,
   });
   // Idempotency: the activator's own device added the stop_id locally before
   // the realtime event came back. Any other client (passenger, second guide
@@ -11396,7 +11440,7 @@ function showUpdatePopup(stop, opts) {
 
   // Per-line warnings, reusing the arrival modal's warning-row look.
   const labelByLevel = { info: t('warn_info'), caution: t('warn_caution'), danger: t('warn_danger') };
-  const entries = parseNotesText(meta.notes || '').map(e => ({
+  const entries = parseNotesText(notesForDisplay(meta)).map(e => ({
     level: e.level === 'none' ? overallLevel : e.level,
     text: e.level === 'bus' ? busLineDisplayText(e.text) : e.text,
   })).filter(e => e.text);
@@ -11420,10 +11464,10 @@ function showUpdatePopup(stop, opts) {
     bodyEl.appendChild(row);
   }
 
-  if (stampEl) stampEl.textContent = 'Update from your guide';
+  if (stampEl) stampEl.textContent = t('update_from_guide');
   titleEl.textContent = stop.name || 'Update';
   backdrop.classList.add('show');
-  playChime();
+  if (!(opts && opts.silent)) playChime();
 }
 
 // UPDATE handler — fires when a guide edits notes via update_stop_activation_notes.
@@ -11448,11 +11492,16 @@ function onStopActivationUpdated(row) {
   // re-pop the full passenger modal on a genuine notes change so harmless
   // updates (e.g. duration tweaks) don't keep yanking the modal back up.
   const notesChanged = (prev ? (prev.notes || '') : '') !== (row.notes || '');
+  // The translation write (notes_i18n only, ~1-2s after a notes edit) arrives
+  // as its own UPDATE — detect it so open popups can re-render localized.
+  const i18nChanged = JSON.stringify((prev && prev.notes_i18n) || null)
+    !== JSON.stringify(row.notes_i18n || null);
   ACTIVATION_META.set(row.stop_id, {
     activated_at: row.activated_at,
     duration_minutes: row.duration_minutes ?? 20,
     notes: row.notes || null,
     warning_level: row.warning_level || 'none',
+    notes_i18n: row.notes_i18n || null,
   });
   if (ROLE === 'guide') renderStopList();
 
@@ -11472,6 +11521,12 @@ function onStopActivationUpdated(row) {
     // stays up until the passenger taps Got it. The full stop window stays
     // reserved for initial activation.
     showUpdatePopup(stop, { durationChanged });
+  } else if (ROLE === 'passenger' && stop && i18nChanged) {
+    // Only the translation landed. If the update popup is still showing for
+    // this stop, re-render it in the passenger's language — silently (no
+    // chime; the content is the same message, now localized).
+    const pb = document.getElementById('update-popup-backdrop');
+    if (pb && pb.classList.contains('show')) showUpdatePopup(stop, { silent: true });
   }
   // A departure-time change updates the HUD timer's HH:MM live.
   if (durationChanged) renderHudTimer();
@@ -11713,7 +11768,7 @@ function populateArrivalModalContent(stop) {
   // Weather row defaults to the localized "checking…" until refreshArrivalWeather completes.
   setArrivalInfoRow(3, t('arr_checking'), true);
   // Each note line carries its own level — render one badge per line.
-  updateArrivalWarning(meta.warning_level || 'none', meta.notes || '');
+  updateArrivalWarning(meta.warning_level || 'none', notesForDisplay(meta));
 }
 
 // Render the warning badge in the arrival modal. Hidden when level === 'none';
@@ -12097,6 +12152,9 @@ async function sendDepartureSignal() {
     notes: newNotes,
     warning_level: newWarning,
   }));
+  // Translate the updated notes (the [bus] line itself stays verbatim — it's
+  // a sentinel the client localizes — but sibling note lines do translate).
+  requestNotesTranslation(stopId);
   _topBannerDismissedTexts.delete(stopId);
   refreshTopWarningBanner(stop);
   renderHudTimer();   // pick up the new .pulsing state immediately
@@ -12252,7 +12310,7 @@ function renderMenuWarnings() {
   }
   const meta = ACTIVATION_META.get(stopId) || {};
   const overallLevel = meta.warning_level || 'none';
-  const entries = parseNotesText(meta.notes || '').map(e => ({
+  const entries = parseNotesText(notesForDisplay(meta)).map(e => ({
     level: e.level === 'none' ? overallLevel : e.level,
     text: e.text,
   }));
@@ -13145,6 +13203,35 @@ function nextNoteLevel(level) {
   return NOTE_LEVELS[(i + 1) % NOTE_LEVELS.length];
 }
 
+// AI-1 lite: live notes are translated server-side (translate_stop_notes edge
+// function → stop_activations.notes_i18n = {_src, es, zh}). Return the notes
+// string to RENDER for the current language. The _src guard means a fresh edit
+// shows the guide's original until its translation lands — the i18n write
+// fires a second realtime UPDATE that re-renders translated.
+function notesForDisplay(meta) {
+  if (!meta) return '';
+  const src = meta.notes || '';
+  if (LANG === 'en' || !src) return src;
+  const i = meta.notes_i18n;
+  if (i && i._src === src && i[LANG]) return i[LANG];
+  return src;
+}
+
+// Fire-and-forget: ask the edge function to (re)translate this stop's current
+// notes. Progressive enhancement — any failure just means non-English
+// passengers see the guide's original text, same as before this feature.
+function requestNotesTranslation(stopId) {
+  try {
+    const token = getStoredGuideToken();
+    if (!SESSION || !token || stopId == null) return;
+    fetch(`${SUPABASE_URL}/functions/v1/translate_stop_notes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'apikey': SUPABASE_KEY, 'authorization': 'Bearer ' + SUPABASE_KEY },
+      body: JSON.stringify({ token, sessionId: SESSION.id, stopId }),
+    }).catch(() => {});
+  } catch (_e) { /* never block the publish path */ }
+}
+
 function showEditNoteModal(stop) {
   if (!stop) return;
   if (!ACTIVE_STOP_IDS.has(stop.id)) return;
@@ -13339,6 +13426,9 @@ async function saveEditedNote() {
     notes: newNotes,
     warning_level: newWarning,
   }, (newDuration != null ? { duration_minutes: newDuration } : {})));
+  // Kick off the ES/ZH translation of the new notes (fire-and-forget; also
+  // clears notes_i18n when the guide emptied the notes).
+  requestNotesTranslation(stop.id);
   // Every publish is treated as a fresh broadcast: previously-dismissed
   // warnings get to surface again. Refresh the banner immediately so the
   // publishing guide doesn't have to wait for the realtime echo to see it.
@@ -13420,7 +13510,7 @@ function refreshTopWarningBanner(stop) {
   // Parse each line into its own {level, text}. Lines without a "[level] "
   // prefix fall back to the stop's overall warning_level so legacy/single-
   // level data still surfaces with a color.
-  let entries = parseNotesText(meta.notes || '').map(e => ({
+  let entries = parseNotesText(notesForDisplay(meta)).map(e => ({
     level: e.level === 'none' ? overallLevel : e.level,
     text: e.text,
   }));
