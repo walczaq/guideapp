@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Fieldnote">
-  <rect width="512" height="512" fill="#F3EAD6"/>
-  <g transform="translate(76.8,55.8) scale(2.8)">
-    <rect x="36" y="45" width="20" height="80" fill="#2A1F15"/>
-    <rect x="36" y="45" width="56" height="20" fill="#2A1F15"/>
-    <rect x="36" y="78" width="44" height="17" fill="#2A1F15"/>
-    <circle cx="64" cy="28" r="10" fill="#CC2917"/>
+  <rect width="512" height="512" fill="#F3EAD6"></rect>
+  <g transform="translate(76.8,58) scale(2.8)">
+    <rect x="36" y="45" width="20" height="80" rx="2" fill="#2A1F15"></rect>
+    <rect x="36" y="45" width="56" height="20" rx="2" fill="#2A1F15"></rect>
+    <rect x="36" y="77" width="44" height="20" rx="2" fill="#2A1F15"></rect>
+    <circle cx="64" cy="25" r="12" fill="#CC2917"></circle>
   </g>
 </svg>

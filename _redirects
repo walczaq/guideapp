@@ -5,6 +5,10 @@
 # while the app is still moving.
 /        /v0.5   302
 
+# Guide-facing marketing/onboarding page (trial-2 obs 3). 302 for the same
+# reason as / — don't hard-pin while the page is young.
+/guides  /guides.html  302
+
 # Short invite links: fieldnote.guide/j/<sessionId> → the session.
 # (:splat is whatever follows /j/.) Lets invites read cleanly; the in-app
 # Share invite can be switched to emit these on request.

@@ -25,7 +25,7 @@
 // /sw.js itself is served no-cache (see /_headers), so SW updates propagate
 // on next app open; bumping SHELL_CACHE purges the old shell on activate.
 
-const SHELL_CACHE = 'fieldnote-shell-v7';   // bumped: Beacon v2 (guide light console) + beacon-theme.js toggle
+const SHELL_CACHE = 'fieldnote-shell-v8';   // bumped: icon set v2 (icon-192/512 changed under the same filenames)
 
 // Same-origin shell assets — these MUST cache for the app to boot offline.
 // Includes the /vendor libs: same origin as the HTML, so if the first page

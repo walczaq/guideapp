@@ -10,8 +10,8 @@
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
-  "background_color": "#f4ede0",
-  "theme_color": "#1a1d1a",
+  "background_color": "#F3EAD6",
+  "theme_color": "#f1ece0",
   "categories": ["travel", "navigation"],
   "icons": [
     {

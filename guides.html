@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fieldnote — for guides</title>
+<meta name="description" content="Fieldnote is a walking-tour companion for bus-tour guides. Passengers scan a QR code and get a live map: the stops you activate, the pins worth seeing, where the bus is parked, and when to be back.">
+<meta name="theme-color" content="#f1ece0">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* Tokens lifted from beacon.css §1 (passenger · daylight). This page is
+     public-facing, so it stays on the warm paper palette regardless of any
+     app-side role/theme classes. */
+  :root {
+    --bg-page: #f1ece0;
+    --paper:   #faf7ef;
+    --paper-2: #ece5d4;
+    --paper-3: #e0d8c4;
+    --ink:     #221f1d;
+    --rule:    #76705f;
+    --rule-soft: rgba(34, 31, 29, 0.10);
+    --line:        rgba(34, 31, 29, 0.10);
+    --line-strong: rgba(34, 31, 29, 0.26);
+    --mark:  #c2462c;
+    --armed: #c79428;
+    --good:  #3f8a5f;
+    --accent: #3a6fd8;
+    --accent-soft: rgba(58, 111, 216, 0.10);
+    --on-accent: #faf7ef;
+    --r-s: 12px;  --r-m: 16px;  --r-l: 24px;
+    --shadow-1: 0 2px 6px rgba(31, 26, 16, 0.07), 0 12px 32px rgba(31, 26, 16, 0.13);
+    --shadow-2: 0 4px 10px rgba(31, 26, 16, 0.10), 0 24px 56px rgba(31, 26, 16, 0.20);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg-page);
+    color: var(--ink);
+    font-family: 'Fraunces', Georgia, serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+  /* shared idiom: the mono uppercase eyebrow used all over the app */
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule);
+  }
+  .mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px; line-height: 1.65; color: var(--rule);
+  }
+
+  /* ── header ─────────────────────────────────────────────────────── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 0;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .brand img { width: 28px; height: 28px; }
+  .brand span {
+    font-family: 'Fraunces', serif; font-weight: 700; font-size: 18px;
+    letter-spacing: -0.01em;
+  }
+  .header-link {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    text-decoration: none; color: var(--ink);
+    border: 1px solid var(--line-strong); border-radius: 6px;
+    padding: 9px 16px; background: var(--paper);
+  }
+  .header-link:hover { background: var(--paper-2); }
+
+  /* ── hero ───────────────────────────────────────────────────────── */
+  .hero { padding: 72px 0 64px; max-width: 680px; }
+  .hero .eyebrow { margin-bottom: 18px; }
+  h1 {
+    font-size: clamp(34px, 6vw, 52px);
+    font-weight: 700; line-height: 1.12; letter-spacing: -0.015em;
+    margin-bottom: 22px;
+  }
+  h1 em { font-style: italic; font-weight: 500; }
+  .hero p.lede {
+    font-size: 18px; font-weight: 400; color: var(--ink);
+    max-width: 560px; margin-bottom: 14px;
+  }
+  .hero p.note { max-width: 520px; margin-bottom: 32px; }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 15px 28px; border-radius: 6px; text-decoration: none;
+    display: inline-block; cursor: pointer;
+  }
+  .btn-primary { background: var(--ink); color: var(--paper); border: 1px solid var(--ink); }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-ghost { background: transparent; color: var(--ink); border: 1px solid var(--line-strong); }
+  .btn-ghost:hover { background: var(--paper); }
+
+  /* ── sections ───────────────────────────────────────────────────── */
+  section { padding: 56px 0; border-top: 1px solid var(--rule-soft); }
+  .section-head { margin-bottom: 36px; max-width: 560px; }
+  .section-head .eyebrow { margin-bottom: 12px; }
+  h2 {
+    font-size: clamp(26px, 4vw, 34px); font-weight: 700;
+    letter-spacing: -0.01em; line-height: 1.18; margin-bottom: 12px;
+  }
+  h2 em { font-style: italic; font-weight: 500; }
+
+  /* feature cards */
+  .features {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+  .feature {
+    background: var(--paper); border-radius: var(--r-m);
+    border: 1px solid var(--rule-soft); box-shadow: var(--shadow-1);
+    padding: 24px 22px;
+  }
+  .feature .eyebrow { margin-bottom: 10px; }
+  .feature h3 {
+    font-family: 'Fraunces', serif; font-size: 19px; font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .feature .dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    margin-right: 7px; vertical-align: 1px;
+  }
+
+  /* screenshot slots */
+  .shots {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 24px;
+  }
+  .shot { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+  .shot-frame {
+    width: 100%; max-width: 240px;
+    /* Placeholder slot. To fill: drop the image in the repo and replace the
+       inner <span> with  <img src="/shots/<name>.png" alt="...">  — the
+       frame crops it automatically. */
+    aspect-ratio: 9 / 19;
+    background: var(--paper-2);
+    border: 1.5px dashed var(--line-strong);
+    border-radius: var(--r-l);
+    display: flex; align-items: center; justify-content: center;
+    text-align: center; overflow: hidden;
+  }
+  .shot-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .shot-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rule); opacity: 0.7; line-height: 2; padding: 0 16px;
+  }
+  .shot figcaption { text-align: center; max-width: 280px; }
+
+  /* access cards */
+  .access { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .access-card {
+    background: var(--paper); border-radius: var(--r-m);
+    border: 1px solid var(--rule-soft); box-shadow: var(--shadow-1);
+    padding: 28px 26px;
+  }
+  .access-card.primary { border: 1px solid var(--line-strong); }
+  .access-card h3 { font-size: 21px; font-weight: 700; margin: 10px 0 10px; }
+  .access-card .mono { margin-bottom: 18px; }
+  .access-card .mono a { color: var(--accent); text-decoration: underline; }
+  .badge {
+    display: inline-block; font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; padding: 4px 9px; border-radius: 999px;
+  }
+  .badge-default { background: var(--accent-soft); color: var(--accent); }
+  .badge-beta { background: var(--paper-3); color: var(--rule); }
+
+  /* tour-day steps */
+  .steps { list-style: none; max-width: 640px; }
+  .steps li {
+    display: flex; gap: 20px; padding: 22px 0;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .steps li:last-child { border-bottom: none; }
+  .step-no {
+    flex: none; width: 38px; height: 38px; border-radius: 50%;
+    background: var(--ink); color: var(--paper);
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 2px;
+  }
+  .steps h3 { font-size: 19px; font-weight: 700; margin-bottom: 5px; }
+
+  /* closing + footer */
+  .closing { text-align: center; padding: 72px 0; }
+  .closing h2 { margin-bottom: 24px; }
+  footer {
+    border-top: 1px solid var(--rule-soft); padding: 28px 0 40px;
+    display: flex; flex-wrap: wrap; gap: 12px;
+    align-items: center; justify-content: space-between;
+  }
+  footer .mono a { color: var(--rule); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <a class="brand" href="/guides">
+      <img src="/icon.svg" alt="" aria-hidden="true">
+      <span>Fieldnote</span>
+    </a>
+    <a class="header-link" href="/">Open the app</a>
+  </header>
+
+  <div class="hero">
+    <div class="eyebrow">Fieldnote · For guides</div>
+    <h1>Your tour, live on <em>every passenger's phone.</em></h1>
+    <p class="lede">
+      Fieldnote is a walking-tour companion for bus-tour guides. Passengers
+      scan a QR code on the bus and get a live map: the stop you've activated,
+      the pins worth seeing, where the bus is parked — and exactly when to be back.
+    </p>
+    <p class="note mono">
+      Passengers never sign up and never install anything — they scan and
+      follow along in the browser. It works on any phone.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="/?role=guide">Create a guide account</a>
+      <a class="btn btn-ghost" href="#tour-day">How a tour day works</a>
+    </div>
+  </div>
+
+  <section id="features">
+    <div class="section-head">
+      <div class="eyebrow">What it does</div>
+      <h2>One map. <em>You decide what's on it, and when.</em></h2>
+    </div>
+    <div class="features">
+      <div class="feature">
+        <div class="eyebrow"><span class="dot" style="background:var(--good)"></span>Live stops</div>
+        <h3>Activate a stop when you arrive</h3>
+        <p class="mono">Your tour is a sequence of stops. When the bus pulls in,
+        you activate one — and the map wakes up on every phone at the same moment.</p>
+      </div>
+      <div class="feature">
+        <div class="eyebrow"><span class="dot" style="background:var(--mark)"></span>Pins per stop</div>
+        <h3>Pins revealed only where you are</h3>
+        <p class="mono">Each stop carries its own pins — viewpoints, paths,
+        toilets, the café. Passengers see them only while that stop is live,
+        so the map never drowns in the rest of the day.</p>
+      </div>
+      <div class="feature">
+        <div class="eyebrow"><span class="dot" style="background:var(--accent)"></span>Bus pin</div>
+        <h3>Where's the bus? On the map.</h3>
+        <p class="mono">Drop a pin where the bus is parked. The single most-asked
+        question at any stop, answered on every phone before anyone asks it.</p>
+      </div>
+      <div class="feature">
+        <div class="eyebrow"><span class="dot" style="background:var(--armed)"></span>Departure timer</div>
+        <h3>"Back at the bus by…"</h3>
+        <p class="mono">Set the departure time when you open a stop. Every
+        passenger sees the countdown. Running ahead or behind? Change it once —
+        everyone's timer updates.</p>
+      </div>
+      <div class="feature">
+        <div class="eyebrow"><span class="dot" style="background:var(--ink)"></span>Passenger map</div>
+        <h3>See your group as dots</h3>
+        <p class="mono">Your guide view shows the group on the map — who's
+        drifting toward the far viewpoint, who's already heading back. Round
+        people up with your eyes, not a megaphone.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="screenshots">
+    <div class="section-head">
+      <div class="eyebrow">In the field</div>
+      <h2>What it looks like</h2>
+    </div>
+    <div class="shots">
+      <figure class="shot">
+        <div class="shot-frame">
+          <!-- screenshot slot · replace span with <img src="/shots/guide-view.png" alt="Guide console with active stop, passenger dots and departure timer"> -->
+          <span class="shot-label">screenshot<br>guide view<br>· active stop ·</span>
+        </div>
+        <figcaption class="mono">The guide console: active stop, your group as
+        dots, departure timer and bus pin under your thumb.</figcaption>
+      </figure>
+      <figure class="shot">
+        <div class="shot-frame">
+          <!-- screenshot slot · replace span with <img src="/shots/passenger-view.png" alt="Passenger map showing revealed pins, bus pin and countdown"> -->
+          <span class="shot-label">screenshot<br>passenger view<br>· stop live ·</span>
+        </div>
+        <figcaption class="mono">What passengers see: this stop's pins, the way
+        back to the bus, and the countdown.</figcaption>
+      </figure>
+      <figure class="shot">
+        <div class="shot-frame">
+          <!-- screenshot slot · replace span with <img src="/shots/boarding-qr.png" alt="Boarding screen with session QR code"> -->
+          <span class="shot-label">screenshot<br>boarding<br>· session QR ·</span>
+        </div>
+        <figcaption class="mono">Boarding: passengers scan the session QR —
+        no install, no account, no typing.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="access">
+    <div class="section-head">
+      <div class="eyebrow">Getting access</div>
+      <h2>Two ways in</h2>
+    </div>
+    <div class="access">
+      <div class="access-card primary">
+        <span class="badge badge-default">Default</span>
+        <h3>Create an account yourself</h3>
+        <p class="mono">Open
+        <a href="/?role=guide">fieldnote.guide?role=guide</a>
+        and choose <strong>Create your guide account</strong>. Pick a name,
+        your email, and a passkey — you sign in with name + passkey on any
+        device. You'll get a recovery code at the end: save it somewhere safe.</p>
+        <a class="btn btn-primary" href="/?role=guide">Sign up as a guide</a>
+      </div>
+      <div class="access-card">
+        <span class="badge badge-beta">Beta</span>
+        <h3>Have an invite code?</h3>
+        <p class="mono">Early guides got a one-time invite code. Redeem it on
+        the same screen — choose <strong>Have an invite code?</strong>, enter
+        the code and your name, and you're in. The code also recovers your
+        account on a new phone.</p>
+        <a class="btn btn-ghost" href="/?role=guide">Redeem an invite</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="tour-day">
+    <div class="section-head">
+      <div class="eyebrow">The routine</div>
+      <h2>How a tour day works</h2>
+    </div>
+    <ol class="steps">
+      <li>
+        <span class="step-no">1</span>
+        <div>
+          <h3>Create a session</h3>
+          <p class="mono">Morning of the tour: sign in, pick your tour, start a
+          session for the day. A session is one bus, one day, one group.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-no">2</span>
+        <div>
+          <h3>Share the QR on the bus</h3>
+          <p class="mono">Show the boarding QR from your phone (or a printout).
+          Passengers scan it and they're on the map — no app store, no sign-up.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-no">3</span>
+        <div>
+          <h3>Board</h3>
+          <p class="mono">Joined passengers appear in your session. Once the
+          group is aboard, drive — the map stays quiet between stops.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-no">4</span>
+        <div>
+          <h3>Activate stops as you go</h3>
+          <p class="mono">Pull in, activate the stop: its pins appear on every
+          phone, the departure timer starts, and you drop the bus pin where
+          you're parked. Watch the dots wander and come back. End the stop,
+          drive on, repeat.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-no">5</span>
+        <div>
+          <h3>End the day</h3>
+          <p class="mono">Back at base, end the session. Tomorrow's group gets
+          a fresh QR — yesterday's link goes nowhere.</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <div class="closing">
+    <div class="eyebrow" style="margin-bottom:14px">Fieldnote</div>
+    <h2>Fewer headcounts. <em>Fewer lost sheep.</em></h2>
+    <a class="btn btn-primary" href="/?role=guide">Create a guide account</a>
+  </div>
+
+  <footer>
+    <span class="mono">Fieldnote · a live map for bus tours</span>
+    <span class="mono"><a href="/">fieldnote.guide — open the app</a></span>
+  </footer>
+
+</div>
+
+</body>
+</html>
