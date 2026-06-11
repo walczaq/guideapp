@@ -954,6 +954,11 @@
     flex: 1;
     overflow-y: auto;
     padding: 18px 20px 24px;
+    /* Trial-2 obs 9: a map pan/pinch that strays onto the sheet was being
+       turned into list scroll (and chained onward). Vertical pan only, and
+       never chain the scroll out of the sheet. */
+    touch-action: pan-y;
+    overscroll-behavior: contain;
   }
   .guide-sheet-empty {
     text-align: center;
@@ -2031,6 +2036,7 @@
     text-align: right;
     min-width: 88px;
     pointer-events: auto;
+    touch-action: none;  /* obs 9: a pinch finger landing here must not scroll */
   }
   .stop-timer.show { display: block; }
   /* Guide-only tap target: when there's an active stop, tapping the timer
@@ -3252,7 +3258,7 @@ window.addEventListener('unhandledrejection', function () {
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · iOS location recovery: re-arm GPS from Share-my-location tap + exact Safari recovery steps (localized) · build 2026-06-10-1100';
+const BUILD_VERSION = '0.6 · beacon v2 (guide light console + appearance toggle) + icon set v2 + AI-1 lite auto-translate + iOS location recovery · build 2026-06-10-1110';
 
 // Verbose tracing — OFF in production so real warnings/errors aren't buried under
 // the per-render [maybeShow]/[catch-up]/[realtime] spam (~1800 lines a session).
@@ -4484,8 +4490,15 @@ function showLandingScreen() {
       Welcome.
     </div>
     <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:260px; line-height:1.6;">
-      Joining a tour? Open the link your guide sent you — it ends with <code>?session=…</code>.
+      Joining a tour? Open the link your guide sent you — or just type your guide's name:
     </div>
+    <input id="landing-guide-name" type="text" placeholder="guide's name" autocomplete="off" autocapitalize="words"
+      style="font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:6px; text-align:center;" />
+    <button
+      id="landing-find-btn"
+      style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:12px 24px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+    >Find my tour</button>
+    <div id="landing-find-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em; max-width:260px;"></div>
     <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--rule); width:240px;"></div>
     <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule);">
       Are you a guide?
@@ -4503,6 +4516,41 @@ function showLandingScreen() {
     el.remove();
     showInviteCodeForm();
   });
+
+  // Trial-2 obs 2: passengers often have the guide standing in front of them
+  // but no working link. Name → the guide's freshest live session (started
+  // within 18h, not ended). Sessions are world-readable by design (passengers
+  // already fetch them by id), so this is a plain filtered select.
+  const findBtn = document.getElementById('landing-find-btn');
+  const nameInput = document.getElementById('landing-guide-name');
+  const findErr = document.getElementById('landing-find-error');
+  async function findTourByGuideName() {
+    const name = (nameInput.value || '').trim();
+    if (!name) { findErr.textContent = 'Type your guide’s name first.'; return; }
+    findBtn.disabled = true;
+    findErr.textContent = '';
+    const sinceIso = new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabaseClient
+      .from('sessions')
+      .select('id, guide_name, started_at')
+      .ilike('guide_name', name)
+      .is('ended_at', null)
+      .gte('started_at', sinceIso)
+      .order('started_at', { ascending: false })
+      .limit(1);
+    findBtn.disabled = false;
+    if (error) {
+      findErr.textContent = 'Could not search right now — check your connection.';
+      return;
+    }
+    if (!data || !data.length) {
+      findErr.textContent = `No live tour found for “${name}”. Ask your guide for the link or QR code.`;
+      return;
+    }
+    window.location.href = `${window.location.pathname}?session=${encodeURIComponent(data[0].id)}`;
+  }
+  findBtn.addEventListener('click', findTourByGuideName);
+  nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') findTourByGuideName(); });
 }
 
 // Remember the last session a device joined, so launching the installed
@@ -5085,8 +5133,24 @@ function showInviteCodeForm() {
     <a id="invite-toggle-a" href="#" style="${linkStyle}"></a>
     <a id="invite-toggle-b" href="#" style="${linkStyle} opacity:0.85;"></a>
     <a id="invite-toggle-c" href="#" style="${linkStyle} opacity:0.85; display:none;"></a>
+    <button id="invite-back-btn" type="button" style="margin-top:18px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.1em; padding:10px 20px; background:transparent; color:var(--ink); border:1px solid var(--rule); border-radius:6px; cursor:pointer;">← I'm not a guide — go back</button>
   `;
   document.getElementById('phone').appendChild(el);
+
+  // Trial-2 obs 1: a passenger who wandered in here was trapped — the screen
+  // had no exit, and an installed PWA reopened straight into it. Always offer
+  // a way back to the passenger world: the live map if a session is loaded,
+  // else rejoin the remembered session, else the landing screen.
+  document.getElementById('invite-back-btn').addEventListener('click', () => {
+    el.remove();
+    if (typeof SESSION !== 'undefined' && SESSION) return;   // map is right below
+    const last = getLastSession();
+    if (last) {
+      window.location.href = `${window.location.pathname}?session=${encodeURIComponent(last)}&role=passenger`;
+    } else {
+      showLandingScreen();
+    }
+  });
 
   const codeInput = document.getElementById('invite-code-input');
   const nameInput = document.getElementById('invite-name-input');
@@ -7550,6 +7614,10 @@ async function startTour() {
   SESSION = Object.assign({}, SESSION, { tour_started_at: new Date().toISOString(), home_lng: hLng, home_lat: hLat });
   hideBoarding();
   try { renderAll(); } catch (_e) {}
+  // Trial-2 obs 5: the day's route rarely follows library order (stop 1 was
+  // skipped on both trials). Ask "where are we going first?" right at start —
+  // same picker as after a deactivation; it drives the passengers' NEXT banner.
+  try { showNextStopPrompt(null); } catch (_e) {}
 }
 (() => {
   const b = document.getElementById('boarding-start');
@@ -7683,7 +7751,7 @@ function initMap(token) {
         return;
       }
       try { map.resize(); } catch (_e) {}
-      try { map.fitBounds(guideFitBounds, { padding: 40, maxZoom: 16, animate: false }); } catch (_e) {}
+      try { map.fitBounds(guideFitBounds, { padding: fitPaddingWith(40), maxZoom: 16, animate: false }); } catch (_e) {}
     })(0);
     // Map-canvas rendering — wrapped so a render failure on a degraded map
     // can't throw before the role shell mounts (S1).
@@ -8263,7 +8331,11 @@ function drawDottedTrail(layer, points, opts) {
   }
   if (run.length) runs.push(run);
   const total = ordered.length;
-  const MIN_OP = 0.1, CHUNK = 3;
+  // Trial-2 field feedback: the pow(2) ramp with a 0.1 floor faded the tail
+  // out almost immediately — guides lost the "where did they walk" read.
+  // Gentler ramp + higher floor keeps the whole trail legible while the
+  // newest end still reads brightest.
+  const MIN_OP = 0.35, CHUNK = 3;
   let globalIdx = 0;
   for (const rpts of runs) {
     for (let s = 0; s < rpts.length - 1; s += CHUNK) {
@@ -8273,7 +8345,7 @@ function drawDottedTrail(layer, points, opts) {
       if (!d) continue;
       const mid = globalIdx + s + seg.length / 2;
       const tNorm = total <= 1 ? 1 : Math.min(1, mid / (total - 1));
-      const op = selMul * (MIN_OP + (1 - MIN_OP) * Math.pow(tNorm, 2));   // steep ramp
+      const op = selMul * (MIN_OP + (1 - MIN_OP) * Math.pow(tNorm, 1.3));
       const path = document.createElementNS(SVGNS_T, 'path');
       path.setAttribute('class', cls);
       if (opts.dataId) path.setAttribute('data-passenger-id', opts.dataId);
@@ -8854,6 +8926,23 @@ function applyArrivalRow(row, opts) {
   if (!p) { p = { _seenTimestamps: new Set(), trail: [] }; PASSENGERS.set(row.passenger_id, p); }
   const at = row.arrived_at ? Date.parse(row.arrived_at) : Date.now();
   if (!p.lastArrival || at >= p.lastArrival.at) p.lastArrival = { title: row.pin_title || '', at };
+  // Trial-2 obs 4: a check-in IS a position report. If this passenger's GPS
+  // has been quiet (no fix within 90s of the check-in — the no-GPS passenger
+  // the feature exists for), move their dot to the spot so the guide sees
+  // them where they said they are. A live GPS stream still wins.
+  const pin = (row.pin_id != null) ? allPins().find(x => x.id === row.pin_id) : null;
+  if (pin && Number.isFinite(pin.lng) && Number.isFinite(pin.lat)) {
+    const lastFixMs = p.lastUpdate
+      ? (typeof p.lastUpdate === 'number' ? p.lastUpdate : Date.parse(p.lastUpdate))
+      : null;
+    const gpsQuiet = !Number.isFinite(lastFixMs) || (at - lastFixMs) > 90 * 1000;
+    if (gpsQuiet) {
+      p.lng = pin.lng;
+      p.lat = pin.lat;
+      p.posFromArrival = true;   // staleness ring stays honest about the source
+      renderPassengers();
+    }
+  }
   if (opts && opts.live) {
     const nm = p.name || 'A passenger';
     try { showToast(t('guide_arrival', { name: nm, spot: row.pin_title || '' })); } catch (_e) {}
@@ -9305,6 +9394,16 @@ function buildFloatingLabel(text) {
 }
 
 function renderGuideMarkers() {
+  // Trial-2 obs 12: these markers are the PASSENGER's view of the guide/bus.
+  // On the guide's own map the bus is _busPinMarker (renderBusPinOnGuideMap);
+  // rendering GUIDE_VIEW here too (via the visibilitychange catch-up) created
+  // a second, tap-dead "BUS" square that survived Remove — the "won't delete /
+  // duplicated on move" ghost. Guide view never renders these.
+  if (ROLE === 'guide') {
+    if (_guideMarkerPhone) { _guideMarkerPhone.remove(); _guideMarkerPhone = null; _guideMarkerPhoneDot = null; }
+    if (_guideMarkerBus) { _guideMarkerBus.remove(); _guideMarkerBus = null; }
+    return;
+  }
   if (_guideMarkerPhone) { _guideMarkerPhone.remove(); _guideMarkerPhone = null; _guideMarkerPhoneDot = null; }
   if (GUIDE_VIEW.phone) {
     // Label above + dot below. Marker anchor is 'bottom' so the dot sits
@@ -9373,7 +9472,9 @@ function bindVisibilityCatchUp() {
     if (ROLE === 'guide' && typeof catchUpPassengers === 'function') {
       catchUpPassengers({ merge: true }).catch(err => console.warn('visibility-catchup passengers failed', err));
     }
-    if (typeof catchUpGuideLocations === 'function') {
+    // guide_locations feeds the passenger's guide/bus markers only — the
+    // guide's own map renders local state (see renderGuideMarkers note).
+    if (ROLE !== 'guide' && typeof catchUpGuideLocations === 'function') {
       catchUpGuideLocations().catch(err => console.warn('visibility-catchup guide failed', err));
     }
   });
@@ -10426,18 +10527,84 @@ document.getElementById('recenter').addEventListener('click', () => {
   });
 })();
 
-// ── Zoom presets: Overview (wide survey) ↔ Detail (street, when walking) ──
+// Merge the map's persistent padding (the bottom-sheet reservation set by
+// applySheetState) with an extra margin. Mapbox GL v3's fitBounds REPLACES
+// the global padding whenever an explicit padding is passed — it does not
+// add to it — so every fit call must merge by hand or content centers as if
+// the sheet weren't there (the off-framing seen on trial 2, obs 10/11).
+function fitPaddingWith(extra) {
+  let gp = { top: 0, right: 0, bottom: 0, left: 0 };
+  try { gp = map.getPadding() || gp; } catch (_e) {}
+  return {
+    top: (gp.top || 0) + extra,
+    right: (gp.right || 0) + extra,
+    bottom: (gp.bottom || 0) + extra,
+    left: (gp.left || 0) + extra,
+  };
+}
+
+// Fit the camera to what currently matters: own dot, bus pin, guide/bus
+// markers, passenger dots (guide view), and the active stop's pins — falling
+// back to the whole tour's stops when nothing else is on the board.
+function fitMapToContent() {
+  if (!map) return false;
+  const pts = [];
+  if (Number.isFinite(state.youLng) && Number.isFinite(state.youLat)) {
+    pts.push({ lng: state.youLng, lat: state.youLat });
+  }
+  if (ROLE === 'guide') {
+    if (BUS_PIN) pts.push(BUS_PIN);
+    for (const [, p] of PASSENGERS) {
+      if (Number.isFinite(p.lng) && Number.isFinite(p.lat)) pts.push({ lng: p.lng, lat: p.lat });
+    }
+  } else {
+    if (GUIDE_VIEW.phone) pts.push(GUIDE_VIEW.phone);
+    if (GUIDE_VIEW.bus) pts.push(GUIDE_VIEW.bus);
+  }
+  const stops = (TOUR && TOUR.stops) || [];
+  const activeStops = stops.filter(s => ACTIVE_STOP_IDS.has(s.id));
+  for (const s of activeStops) {
+    pts.push(s);
+    for (const pin of (s.pins || [])) pts.push(pin);
+  }
+  if (!pts.length) for (const s of stops) pts.push(s);
+  const good = pts.filter(p => p && Number.isFinite(p.lng) && Number.isFinite(p.lat));
+  if (!good.length) return false;
+  // A fit is an explicit "show me everything" — it ends follow mode so the
+  // next GPS tick doesn't immediately re-center and undo it.
+  state.following = false;
+  const rc = document.getElementById('recenter');
+  if (rc) rc.classList.remove('active');
+  try {
+    if (good.length === 1) {
+      map.easeTo({ center: [good[0].lng, good[0].lat], zoom: ZOOM_OVERVIEW, duration: 500 });
+    } else {
+      const lngs = good.map(p => p.lng), lats = good.map(p => p.lat);
+      map.fitBounds(
+        [[Math.min.apply(null, lngs), Math.min.apply(null, lats)],
+         [Math.max.apply(null, lngs), Math.max.apply(null, lats)]],
+        { padding: fitPaddingWith(56), maxZoom: 16, duration: 500 });
+    }
+  } catch (_e) { return false; }
+  return true;
+}
+
+// ── Zoom presets: Overview (fit what matters) ↔ Detail (street, walking) ──
 function applyZoomPreset(preset) {
   if (!map) return;
   state.zoomPreset = preset;
   state.autoDetailDone = true;   // any explicit/auto change ends auto-switching
-  const zoom = preset === 'detail' ? ZOOM_DETAIL : ZOOM_OVERVIEW;
-  // ZOOM ONLY — keep the current centre and leave follow mode alone.
-  // Centering is the recenter button's job; mixing the two tested poorly.
-  // Still guard the animation so a follow-mode setCenter on the next GPS
-  // tick doesn't interrupt the easeTo and leave the zoom stuck partway.
   state.presetAnimating = true;
-  map.easeTo({ zoom, duration: 500 });
+  // Trial-2 obs 10/11: Overview used to be a bare zoom-out around whatever
+  // the current centre happened to be, which guides read as broken framing.
+  // Overview now FITS the live content (sheet-aware padding); Detail stays a
+  // zoom-only preset for walking.
+  if (preset === 'overview' && fitMapToContent()) {
+    // camera handled by the fit
+  } else {
+    const zoom = preset === 'detail' ? ZOOM_DETAIL : ZOOM_OVERVIEW;
+    map.easeTo({ zoom, duration: 500 });
+  }
   map.once('moveend', () => { state.presetAnimating = false; });
   setTimeout(() => { state.presetAnimating = false; }, 800);  // fallback if no movement
   updateZoomPresetButtons();
@@ -10994,6 +11161,17 @@ async function activateStop(stop, opts) {
     if (!otherStop) { ACTIVE_STOP_IDS.delete(otherId); continue; }
     deactivateStop(otherStop).catch(err => console.warn('[one-active] supersede deactivate failed', err));
   }
+  // Trial-2 obs 13: a fresh stop = a fresh headcount. in_bus stays sticky
+  // WITHIN a stop (boarded + phone-quiet still counts) but must not carry
+  // "3/8 in bus" over from the previous stop. Server clears the flags
+  // (realtime UPDATEs fan out); zero the local copies right away so the
+  // timer card doesn't show the stale count until those arrive.
+  supabaseClient.rpc('reset_bus_headcount', { p_session_id: SESSION.id, p_guide_token: token })
+    .then(({ error: e }) => { if (e) console.warn('[headcount] reset failed', e); })
+    .catch(err => console.warn('[headcount] reset failed', err));
+  for (const [, p] of PASSENGERS) p.inBus = false;
+  updateBusHeadcount();
+  renderPassengerList();
   renderPins();
   renderStopList();
   updateNextStopBanner();
@@ -11030,7 +11208,7 @@ function showNextStopPrompt(fromStop) {
   el.id = 'next-stop-prompt'; el.className = 'nsp-backdrop';
   el.innerHTML = `
     <div class="nsp-card">
-      <div class="nsp-title">Heading to the next stop?</div>
+      <div class="nsp-title">${fromStop ? 'Heading to the next stop?' : 'Where are we going first?'}</div>
       <div class="nsp-sub">Pick what passengers see as “Next”.</div>
       <div class="nsp-list" id="nsp-list"></div>
       <button class="nsp-skip" id="nsp-skip" type="button">Not yet</button>
@@ -11064,6 +11242,13 @@ async function deactivateStop(stop) {
     return { error: error.message || 'Could not deactivate stop.' };
   }
   ACTIVE_STOP_IDS.delete(stop.id);
+  // Trial-2 obs 7: the guide is usually still INSIDE the radius of the stop
+  // they just ended, so the geofence would immediately re-prompt "start this
+  // stop?". Borrow the "not yet" memo — it self-clears once the guide walks
+  // out of the radius, so a genuine later re-visit still prompts.
+  _stopPromptDismissedFor = stop.id;
+  _stopInRadius = null;
+  _stopInRadiusSince = null;
   // R2-G: a bus pin marks where the bus is parked for the CURRENT stop, so once
   // the stop is finished it's stale. Clear it (and retract from passengers via
   // the is_off sentinel) on deactivation regardless of how it was placed — the
@@ -11163,8 +11348,10 @@ function renderStopList() {
       // Tap the pill to deactivate (with confirmation).
       const pill = document.createElement('button');
       pill.className = 'stop-row-active-pill';
-      pill.textContent = 'Active';
-      pill.title = 'Tap to deactivate';
+      // Trial-2 obs 8: "Active" read as a status, not a button — guides
+      // couldn't find how to finish a stop. Say the action outright.
+      pill.textContent = '◉ End stop';
+      pill.title = 'Stop is live — tap to end it';
       pill.addEventListener('click', () => showDeactivateStopModal(stop));
       row.appendChild(pill);
     } else {
@@ -11403,6 +11590,11 @@ function onStopActivated(row) {
   // the resume backstop (visibilitychange / poll / fresh page load) will
   // re-show the same modal.
   if (stop && ROLE === 'passenger') {
+    // Trial-2 obs 13: a new stop restarts the headcount (the guide's reset
+    // RPC cleared in_bus server-side). Re-arm the local declare flag so the
+    // "I'm at the bus" menu item returns and the auto check-in can fire
+    // again when this passenger reaches the next bus pin.
+    _inBusDeclared = false;
     playChime();
     showStopArrivalModal(stop);
   }
@@ -11738,7 +11930,7 @@ function frameStopOverview(stop) {
       map.fitBounds(
         [[Math.min.apply(null, lngs), Math.min.apply(null, lats)],
          [Math.max.apply(null, lngs), Math.max.apply(null, lats)]],
-        { padding: 64, maxZoom: 16.5, duration: 700 });
+        { padding: fitPaddingWith(64), maxZoom: 16.5, duration: 700 });
     }
   } catch (_e) { /* invalid camera — leave the view as-is */ }
 }
@@ -11783,7 +11975,10 @@ function populateArrivalModalContent(stop) {
   const nameEl = document.getElementById('stop-arrival-name');
   if (!stamp || !nameEl) return;
   console.log('[arrival populate]', stop.name, 'meta:', ACTIVATION_META.get(stop.id));
-  stamp.textContent = `${t('arr_stop')} № ${String(stop.ordinal).padStart(2, '0')} · ${t('arr_now')}`;
+  // Trial-2 obs 6: the № came from the tour-library order, not the day's
+  // actual route — skipping a stop made the first stop of the day read as
+  // "Stop № 02". The number carried no passenger value; drop it.
+  stamp.textContent = `${t('arr_stop')} · ${t('arr_now')}`;
   nameEl.textContent = i18nText(stop.nameI18n, stop.name) || '';
 
   const meta = ACTIVATION_META.get(stop.id) || {};
