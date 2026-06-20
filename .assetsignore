@@ -1,0 +1,15 @@
+# Files in the project root that must NOT be served as public static assets.
+# Workers Static Assets reads THIS file (not .wranglerignore) to decide what
+# to upload. The Worker entry, its config, and dev/build files don't belong
+# on the public origin.
+worker.js
+wrangler.toml
+.wranglerignore
+.assetsignore
+.gitignore
+.claude
+node_modules
+.github
+.git
+tools
+*.md
