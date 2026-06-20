@@ -4452,6 +4452,10 @@ async function boot() {
     // we need a way to find the active session, and localStorage is it.
     rememberLastSession(sessionId);
     await loadSessionAndTour(sessionId);
+    // iOS deep-link install: point the manifest at a per-session start_url so
+    // an installed PWA opens straight into THIS session (iOS can't recover it
+    // from storage). Fire-and-forget; no-ops safely if the Worker isn't live.
+    enhanceManifestForSession();
   } else if (tourSlug) {
     // Path 2: legacy direct-tour mode (v0.2 behavior). Useful for testing
     // a tour without going through the session flow.
@@ -12870,6 +12874,33 @@ function wireNotifPromptHandlers() {
 // app whose push channel survives. This banner surfaces the
 // beforeinstallprompt event the browser fires when install criteria
 // are met.
+
+// iOS deep-link install (progressive enhancement). Background: an installed
+// iOS PWA launches at the manifest's start_url and — unlike Android's Chrome
+// WebAPK, which shares storage with the browser — gets its own partitioned
+// storage, so getLastSession() is empty on first launch and the app can't
+// recover which session to open. The fix is to make start_url carry the
+// session; iOS bakes start_url at "Add to Home Screen" time. So for a
+// passenger in a session we repoint the manifest <link> at the Worker-built
+// /manifest.webmanifest?session=<id>.
+//
+// Strictly additive: we only swap AFTER a reachability check, so if the
+// Worker isn't deployed (or errors) the static /manifest.json stays linked
+// and install behaves exactly as before. Passenger-only — a guide install
+// would otherwise deep-link into the session as a passenger.
+async function enhanceManifestForSession() {
+  try {
+    if (ROLE !== 'passenger' || !SESSION || !SESSION.id) return;
+    const link = document.querySelector('link[rel="manifest"]');
+    if (!link) return;
+    const dyn = '/manifest.webmanifest?session=' + encodeURIComponent(SESSION.id);
+    const res = await fetch(dyn, { method: 'GET', cache: 'no-store' });
+    if (!res.ok) return;                       // Worker absent → keep static manifest
+    const ct = res.headers.get('content-type') || '';
+    if (!/manifest|json/i.test(ct)) return;    // not the Worker's JSON → don't trust it
+    link.setAttribute('href', dyn);            // iOS reads this href at A2HS time
+  } catch (_e) { /* offline / blocked — keep the static manifest */ }
+}
 
 // True when we're already running as an installed PWA — no point
 // prompting the user to install something they already have.

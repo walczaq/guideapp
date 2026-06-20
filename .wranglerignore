@@ -1,5 +1,10 @@
 node_modules
 .github
 .git
+.claude
 *.md
 fieldnote-briefing-v1.md
+worker.js
+wrangler.toml
+.wranglerignore
+.gitignore
