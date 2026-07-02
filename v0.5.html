@@ -13077,6 +13077,10 @@ async function enhanceManifestForSession() {
 // prompting the user to install something they already have.
 function runningAsInstalledPWA() {
   try {
+    // Native Capacitor shell counts as "installed" everywhere this is
+    // checked — hides install prompts/rows inside the real app.
+    if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function'
+        && window.Capacitor.isNativePlatform()) return true;
     if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
     // iOS Safari uses navigator.standalone instead of the media query.
     if (typeof navigator !== 'undefined' && navigator.standalone === true) return true;

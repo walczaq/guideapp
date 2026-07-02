@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID_HERE.guide.fieldnote.app",
+        "paths": ["/j/*", "/v0.5?session=*"]
+      }
+    ]
+  }
+}

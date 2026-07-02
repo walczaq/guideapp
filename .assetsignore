@@ -4,6 +4,8 @@
 # on the public origin.
 worker.js
 wrangler.toml
+app
+codemagic.yaml
 .wranglerignore
 .assetsignore
 .gitignore

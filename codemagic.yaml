@@ -1,0 +1,58 @@
+# Cloud builds for the Fieldnote native shell (app/) — no local Mac needed.
+# Two workflows:
+#   android-debug   — free-tier friendly; produces a sideloadable APK for
+#                     testing on real phones TODAY (no store accounts needed).
+#   ios-testflight  — builds + ships to TestFlight. Needs the one-time setup
+#                     in app/store-setup/SETUP.md (Apple Developer Program,
+#                     App Store Connect API key added to Codemagic).
+# Both are MANUAL-trigger only — web deploys stay on the GitHub Action;
+# native builds run when you press the button in Codemagic.
+
+workflows:
+  android-debug:
+    name: Android debug APK
+    instance_type: linux_x2
+    max_build_duration: 30
+    environment:
+      java: 17
+      node: 22.14.0
+    scripts:
+      - name: Install web deps
+        script: cd app && npm ci
+      - name: Capacitor sync
+        script: cd app && npx cap sync android
+      - name: Build debug APK
+        script: cd app/android && chmod +x gradlew && ./gradlew assembleDebug
+    artifacts:
+      - app/android/app/build/outputs/apk/debug/app-debug.apk
+
+  ios-testflight:
+    name: iOS TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    integrations:
+      # Created in Codemagic UI: Teams → Integrations → App Store Connect.
+      app_store_connect: fieldnote-asc-key
+    environment:
+      node: 22.14.0
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: guide.fieldnote.app
+    scripts:
+      - name: Install web deps
+        script: cd app && npm ci
+      - name: Capacitor sync (runs pod install)
+        script: cd app && npx cap sync ios
+      - name: Build signed IPA
+        script: |
+          cd app/ios/App
+          xcode-project use-profiles
+          xcode-project build-ipa --workspace App.xcworkspace --scheme App
+    artifacts:
+      - app/ios/App/build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true

@@ -1,0 +1,22 @@
+{
+  "appId": "guide.fieldnote.app",
+  "appName": "Fieldnote",
+  "webDir": "www",
+  "server": {
+    "url": "https://fieldnote.guide/v0.5",
+    "allowNavigation": ["fieldnote.guide", "*.fieldnote.guide"]
+  },
+  "ios": {
+    "contentInset": "always"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 800,
+      "backgroundColor": "#f1ece0",
+      "launchAutoHide": true
+    },
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

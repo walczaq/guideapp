@@ -1,0 +1,22 @@
+{
+  "name": "fieldnote-app",
+  "version": "0.1.0",
+  "description": "Fieldnote native shell (Capacitor) — wraps the live web app with native push, geolocation, and deep links.",
+  "private": true,
+  "scripts": {
+    "sync": "cap sync",
+    "open:android": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/app": "^6.0.0",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/geolocation": "^6.0.0",
+    "@capacitor/ios": "^6.2.0",
+    "@capacitor/push-notifications": "^6.0.0",
+    "@capacitor/splash-screen": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0"
+  }
+}

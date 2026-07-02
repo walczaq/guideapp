@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Fieldnote</string>
+    <string name="title_activity_main">Fieldnote</string>
+    <string name="package_name">guide.fieldnote.app</string>
+    <string name="custom_url_scheme">guide.fieldnote.app</string>
+</resources>
