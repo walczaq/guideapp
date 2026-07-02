@@ -118,6 +118,25 @@
     .proto-label { display: none; }
   }
 
+  /* Landscape guard (trial 5: "landscape screen getting lost"). The layout is
+     designed portrait-only — the manifest locks installed PWAs to portrait,
+     but a browser tab rotates freely and the bottom sheet + HUD eat the whole
+     ~400px height. Rather than half-support landscape, ask for portrait.
+     touch-only (any-pointer: coarse) so desktop windows are never blocked. */
+  .rotate-overlay { display: none; }
+  @media (orientation: landscape) and (max-height: 520px) and (any-pointer: coarse) {
+    .rotate-overlay {
+      display: flex;
+      position: fixed; inset: 0;
+      z-index: 9999;
+      background: var(--paper);
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; text-align: center; padding: 24px;
+    }
+  }
+  .rotate-overlay .rotate-icon { font-size: 40px; animation: rotateHint 2s ease-in-out infinite; }
+  @keyframes rotateHint { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-90deg); } }
+
   /* screens stack */
   .screen {
     position: absolute; inset: 0;
@@ -1102,16 +1121,55 @@
     color: var(--paper);
   }
   .stop-row-active-pill[disabled] { opacity: 0.5; cursor: progress; }
-  /* Small ✎ Note button that sits next to the Active pill in the stops list.
-     Tap → notes modal where the guide edits the note for this activation. */
+  /* Small ✎ button next to the End-stop pill: edits departure time / pushes
+     a note. Trial-3 obs 11: on the dark guide skin the old --rule border +
+     --paper-2 fill nearly vanished — border and text now use full-strength
+     ink and a heavier weight so it survives both themes. */
   .stop-row-note-btn {
     flex: 0 0 auto;
     font-family: 'JetBrains Mono', monospace;
     font-size: 10px; letter-spacing: 0.08em;
+    font-weight: 600;
     padding: 6px 10px;
     background: var(--paper-2); color: var(--ink);
-    border: 1px solid var(--rule); border-radius: 999px;
+    border: 1px solid var(--ink); border-radius: 999px;
     cursor: pointer;
+  }
+
+  /* Current-stop panel (trial-3 obs 10): replaces the stop list while a stop
+     is live — the sheet's context IS the stop. */
+  .current-stop-panel {
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    background: var(--paper-2);
+    border: 1px solid var(--signal-good);
+    border-radius: 10px;
+  }
+  .current-stop-stamp {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--signal-good);
+    margin-bottom: 4px;
+  }
+  .current-stop-name {
+    font-family: 'Fraunces', serif;
+    font-size: 18px; font-weight: 600; color: var(--ink);
+    margin-bottom: 10px;
+  }
+  .current-stop-actions {
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .stops-fold-toggle {
+    display: block;
+    width: 100%;
+    padding: 8px 0;
+    background: transparent;
+    border: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--rule);
+    cursor: pointer;
+    text-align: left;
   }
   .stop-row-note-btn:hover,
   .stop-row-note-btn:active {
@@ -1543,6 +1601,22 @@
   .intro-card {
     width: 100%; max-width: 380px;
     display: flex; flex-direction: column;
+    /* margin:auto (not align-items:center on the parent alone) so a card
+       taller than a small screen scrolls from its TOP instead of clipping —
+       part of the recurring fit-to-screen class from trials 2-4. */
+    margin: auto;
+  }
+  /* Boarding v2 — one-page setup rows (button + live status + one-line why). */
+  .setup-row {
+    padding: 14px 0;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .setup-row .setup-btn { width: 100%; }
+  .setup-why {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; line-height: 1.5;
+    color: var(--rule);
+    margin: 6px 0 0;
   }
   .intro-progress {
     display: flex; gap: 6px; margin-bottom: 22px;
@@ -2044,6 +2118,23 @@
      affordance (cursor + active-state press). */
   .stop-timer.clickable { cursor: pointer; }
   .stop-timer.clickable:active { transform: scale(0.97); }
+  /* "End stop" under the tour time (trial-4 guide ask). Distinct from the
+     card's own tap action (departure signal), so it reads as its own button. */
+  .stop-timer-end {
+    display: block;
+    width: 100%;
+    margin-top: 6px;
+    padding: 6px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    background: transparent;
+    color: var(--mark);
+    border: 1px solid var(--mark);
+    border-radius: 8px;
+    cursor: pointer;
+    touch-action: none;
+  }
+  .stop-timer-end:active { transform: scale(0.96); }
   .stop-timer-bus-hint {
     margin-top: 4px;
     padding-top: 4px;
@@ -2511,6 +2602,10 @@
             <div class="stop-timer-time" id="stop-timer-time">—:—</div>
             <div class="stop-timer-countdown" id="stop-timer-countdown">—:—</div>
             <div class="stop-timer-headcount" id="stop-timer-headcount" style="display:none;"></div>
+            <!-- Trial 4 (guide ask): "end stop should be placed below the tour
+                 time". Guide-only; visible while a stop is active. Lives inside
+                 the clickable timer card, so the handler stops propagation. -->
+            <button type="button" class="stop-timer-end" id="stop-timer-end" style="display:none;">■ End stop</button>
             <div class="stop-timer-bus-hint" id="stop-timer-bus-hint" aria-hidden="true">
               <span>tap to send</span>
               <svg viewBox="0 0 24 18" width="22" height="18" aria-hidden="true">
@@ -2851,8 +2946,6 @@
         <button class="install-btn" id="menu-install-btn" type="button">Install website</button>
         <div class="install-hint" id="menu-install-hint"></div>
       </div>
-      <!-- Discreet guide-login link (shown only when not signed in as a guide). -->
-      <button type="button" class="menu-guidelogin-link" id="menu-guide-login" style="display:none;">Guide login</button>
       <!-- Discreet developer-info link (same text-link style; replaces the old "About" row). -->
       <button type="button" class="menu-guidelogin-link" id="menu-dev-info" style="margin-top:2px;">Developer info</button>
     </div>
@@ -2927,6 +3020,11 @@
       <div class="about-block muted" id="about-debug">
         <!-- populated at runtime with session + passenger info -->
       </div>
+      <!-- Guide login lives HERE, two screens deep (menu → Developer info),
+           NOT in the burger menu. Trial 3 (06-12): tap-happy passengers found
+           it in the menu during boarding and created guide accounts. A real
+           guide finds it via /guides or this page; a lost passenger won't. -->
+      <button type="button" class="menu-guidelogin-link" id="menu-guide-login" style="display:none; margin-top:18px;">Guide login</button>
     </div>
   </div>
 
@@ -2992,100 +3090,50 @@
        first session open. Explains why location is needed and that installing
        is safe, then walks through notifications / location / install, and
        closes with a "when it works" note. Step panels toggled by JS. -->
+  <!-- Landscape guard — pure CSS show/hide via the media query above. -->
+  <div class="rotate-overlay" aria-hidden="true">
+    <div class="rotate-icon">📱</div>
+    <div style="font-family:'Fraunces',serif; font-style:italic; font-size:20px; color:var(--ink);">
+      Please rotate your phone
+    </div>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule);">
+      Fieldnote works in portrait.
+    </div>
+  </div>
+
   <div class="intro-overlay" id="intro-overlay">
     <div class="intro-card">
-      <div class="intro-progress" id="intro-progress"></div>
+      <!-- Boarding v2 (trial-4 field ask): ONE page instead of the 5-step
+           wizard. Guides reported boarding took too long and passengers
+           skipped through it blind. Everything on one screen: location +
+           notifications with live status, an optional install row, one
+           Start button. The old step machinery (INTRO_STEPS/introNext) is
+           gone with it. -->
+      <div class="intro-step" data-step="setup">
+        <div class="intro-stamp" data-i18n="intro_s_stamp">Welcome aboard</div>
+        <h2 class="intro-title" data-i18n="intro_s_title">Two taps and you&rsquo;re set</h2>
+        <div class="intro-body" id="intro-guide-line" style="display:none; font-style:italic;"></div>
 
-      <!-- Step 1 — welcome + why -->
-      <div class="intro-step" data-step="welcome">
-        <div class="intro-stamp" data-i18n="intro_w_stamp">Welcome to Fieldnote</div>
-        <h2 class="intro-title" data-i18n="intro_w_title">Your live tour companion</h2>
-        <p class="intro-body" data-i18n="intro_w_body">Fieldnote shows you on the tour map and reveals each stop as your guide activates it — plus warnings and "time to head back to the bus" alerts.</p>
-        <div class="intro-point">
-          <span class="intro-point-icon">📍</span>
-          <span data-i18n-html="intro_w_p1"><b>Why location?</b> So you appear on the map and stops light up near you. It's only shared during this tour — never in the background.</span>
+        <div class="setup-row">
+          <button class="intro-btn primary setup-btn" id="intro-allow-location" data-i18n="intro_l_cta">Allow location</button>
+          <div class="intro-status" id="intro-location-status"></div>
+          <p class="setup-why" data-i18n="intro_s_loc_why">So you appear on the map and stops light up near you. Shared only during this tour.</p>
         </div>
-        <div class="intro-point">
-          <span class="intro-point-icon">📲</span>
-          <span data-i18n-html="intro_w_p2"><b>Adding to your home screen is safe.</b> It only runs while you're using it or during the tour — it can't track you in the background — and you can delete it in one tap, like any app.</span>
+
+        <div class="setup-row">
+          <button class="intro-btn primary setup-btn" id="intro-enable-notify" data-i18n="intro_n_cta">Enable notifications</button>
+          <div class="intro-status" id="intro-notify-status"></div>
+          <p class="setup-why" data-i18n="intro_s_ntf_why">A buzz when a stop starts, a warning is posted, or it&rsquo;s time to head back to the bus.</p>
         </div>
+
+        <div class="setup-row" id="intro-install-row">
+          <button class="intro-btn ghost setup-btn" id="intro-install" data-i18n="intro_i_cta2">Add to home screen</button>
+          <div class="intro-status" id="intro-install-status"></div>
+          <p class="setup-why" data-i18n="intro_s_inst_why">Optional &mdash; lets you come back with one tap and keeps notifications working when closed.</p>
+        </div>
+
         <div class="intro-actions">
           <button class="intro-btn ghost" id="intro-skip-all" data-i18n="intro_skip">Skip</button>
-          <button class="intro-btn primary" data-intro-next data-i18n="intro_w_cta">Get started</button>
-        </div>
-      </div>
-
-      <!-- Step 2 — notifications -->
-      <div class="intro-step" data-step="notify" hidden>
-        <div class="intro-stamp" data-i18n="intro_step1">Step 1 of 3</div>
-        <h2 class="intro-title" data-i18n="intro_n_title">Stay notified</h2>
-        <p class="intro-body" data-i18n="intro_n_body">Get a buzz when your guide starts a stop, sends a warning, calls everyone back to the bus, or changes the departure time — even with your phone locked.</p>
-        <div class="intro-status" id="intro-notify-status"></div>
-        <div class="intro-actions">
-          <button class="intro-btn ghost" data-intro-next data-i18n="intro_skip">Skip</button>
-          <button class="intro-btn primary" id="intro-enable-notify" data-i18n="intro_n_cta">Enable notifications</button>
-        </div>
-      </div>
-
-      <!-- Step 3 — location -->
-      <div class="intro-step" data-step="location" hidden>
-        <div class="intro-stamp" data-i18n="intro_step2">Step 2 of 3</div>
-        <h2 class="intro-title" data-i18n="intro_l_title">Share your location</h2>
-        <p class="intro-body" data-i18n="intro_l_body">Allow location so you show up on the map and stops reveal as you reach them. Only shared with your guide during this tour.</p>
-        <div class="intro-status" id="intro-location-status"></div>
-        <div class="intro-actions">
-          <button class="intro-btn ghost" data-intro-next data-i18n="intro_skip">Skip</button>
-          <button class="intro-btn primary" id="intro-allow-location" data-i18n="intro_l_cta">Allow location</button>
-        </div>
-      </div>
-
-      <!-- Step 4 — install -->
-      <div class="intro-step" data-step="install" hidden>
-        <div class="intro-stamp" data-i18n="intro_step3">Step 3 of 3</div>
-        <h2 class="intro-title" data-i18n="intro_i_title">Add to home screen</h2>
-        <p class="intro-body" data-i18n="intro_i_body">Install Fieldnote for reliable notifications even when the app is closed. Safe to add, easy to remove.</p>
-        <div class="intro-status" id="intro-install-status"></div>
-        <div class="intro-actions">
-          <button class="intro-btn ghost" data-intro-next data-i18n="intro_skip">Skip</button>
-          <button class="intro-btn primary" id="intro-install" data-i18n="intro_i_cta">Install</button>
-        </div>
-      </div>
-
-      <!-- Step 5 — when it works + done -->
-      <div class="intro-step" data-step="done" hidden>
-        <div class="intro-stamp" data-i18n="intro_d_stamp">You're set</div>
-        <h2 class="intro-title" data-i18n="intro_d_title">When notifications reach you</h2>
-        <div class="intro-point">
-          <span class="intro-point-icon" aria-label="Android">
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-              <g fill="#3ddc84">
-                <path d="M16.55 5.86l1.07-1.86a.32.32 0 0 0-.12-.43.32.32 0 0 0-.43.12l-1.09 1.88a6.77 6.77 0 0 0-5.96 0L8.93 3.69a.32.32 0 0 0-.43-.12.32.32 0 0 0-.12.43l1.07 1.86A6.2 6.2 0 0 0 6 10.93h12a6.2 6.2 0 0 0-3.45-5.07zM9.6 8.86a.78.78 0 1 1 0-1.56.78.78 0 0 1 0 1.56zm4.8 0a.78.78 0 1 1 0-1.56.78.78 0 0 1 0 1.56z"/>
-                <rect x="6" y="11.6" width="12" height="7.6" rx="1.4"/>
-              </g>
-            </svg>
-          </span>
-          <span data-i18n-html="intro_d_android"><b>Android:</b> work even with the app closed once notifications are on.</span>
-        </div>
-        <div class="intro-point">
-          <span class="intro-point-icon" aria-label="iPhone">
-            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="#1a1d1a">
-              <path d="M17.05 12.55c-.03-2.6 2.12-3.84 2.22-3.9-1.21-1.77-3.1-2.02-3.77-2.05-1.6-.16-3.13.94-3.94.94-.81 0-2.07-.92-3.4-.9-1.75.03-3.36 1.02-4.26 2.58-1.82 3.16-.47 7.84 1.3 10.4.86 1.26 1.89 2.66 3.24 2.61 1.3-.05 1.79-.84 3.36-.84s2.01.84 3.39.82c1.4-.03 2.29-1.28 3.14-2.54.99-1.45 1.4-2.85 1.42-2.92-.03-.02-2.72-1.05-2.75-4.13z"/>
-              <path d="M14.6 4.86c.72-.87 1.2-2.08 1.07-3.29-1.03.05-2.28.69-3.02 1.56-.66.77-1.24 2.01-1.08 3.18 1.15.09 2.32-.59 3.03-1.45z"/>
-            </svg>
-          </span>
-          <span data-i18n-html="intro_d_iphone"><b>iPhone:</b> work when you've added Fieldnote to your home screen. In a plain Safari tab, keep it open during the tour.</span>
-        </div>
-        <div class="intro-point">
-          <span class="intro-point-icon" aria-label="Battery">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#5a3a00" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="2.5" y="8" width="16" height="9" rx="2"/>
-              <line x1="21" y1="11" x2="21" y2="14"/>
-              <line x1="6" y1="12.5" x2="11" y2="12.5"/>
-            </svg>
-          </span>
-          <span data-i18n="intro_d_battery">If your phone aggressively closes apps, keep Fieldnote open during key moments to be safe.</span>
-        </div>
-        <div class="intro-actions">
           <button class="intro-btn primary" id="intro-done" data-i18n="intro_d_cta">Start the tour</button>
         </div>
       </div>
@@ -3330,6 +3378,20 @@ const I18N = {
     ended_sub: 'Your guide has ended this tour. Thanks for walking with us.',
     nsb_next: 'Next',
     intro_skip: 'Skip',
+    // Boarding v2 — single setup page (trial-4 field ask).
+    intro_s_stamp: 'Welcome aboard', intro_s_title: 'Two taps and you’re set',
+    intro_s_guide: 'You’re on {guide}’s tour.',
+    intro_s_loc_why: 'So you appear on the map and stops light up near you. Shared only during this tour.',
+    intro_s_ntf_why: 'A buzz when a stop starts, a warning is posted, or it’s time to head back to the bus.',
+    intro_s_inst_why: 'Optional — lets you come back with one tap and keeps notifications working when closed.',
+    intro_i_cta2: 'Add to home screen',
+    intro_st_asking: 'Asking…',
+    intro_st_ntf_ok: 'Notifications are on ✓',
+    intro_st_ntf_unsupported: 'Notifications aren’t supported on this browser — the app still works, just check the map for updates.',
+    intro_st_ntf_blocked: 'Blocked in your browser settings ({where}). No problem — everything still works, your guide’s updates appear on the map.',
+    intro_st_loc_prompt: 'Check your screen for the location prompt…',
+    intro_st_loc_ok: 'You’re on the map ✓',
+    intro_st_loc_pending: 'No location yet — if a prompt appeared, tap Allow, then try again.',
     intro_w_stamp: 'Welcome to Fieldnote', intro_w_title: 'Your live tour companion',
     intro_w_body: 'Fieldnote shows you on the tour map and reveals each stop as your guide activates it — plus warnings and "time to head back to the bus" alerts.',
     intro_w_p1: "<b>Why location?</b> So you appear on the map and stops light up near you. It's only shared during this tour — never in the background.",
@@ -3383,6 +3445,19 @@ const I18N = {
     ended_sub: 'Tu guía ha finalizado este tour. Gracias por acompañarnos.',
     nsb_next: 'Siguiente',
     intro_skip: 'Omitir',
+    intro_s_stamp: 'Bienvenido a bordo', intro_s_title: 'Dos toques y listo',
+    intro_s_guide: 'Estás en el tour de {guide}.',
+    intro_s_loc_why: 'Para que aparezcas en el mapa y las paradas se iluminen cerca de ti. Solo se comparte durante este tour.',
+    intro_s_ntf_why: 'Un aviso cuando empieza una parada, se publica una advertencia o es hora de volver al autobús.',
+    intro_s_inst_why: 'Opcional: vuelve con un toque y las notificaciones siguen funcionando con la app cerrada.',
+    intro_i_cta2: 'Añadir a pantalla de inicio',
+    intro_st_asking: 'Solicitando…',
+    intro_st_ntf_ok: 'Notificaciones activadas ✓',
+    intro_st_ntf_unsupported: 'Este navegador no admite notificaciones — la app funciona igual, revisa el mapa para ver novedades.',
+    intro_st_ntf_blocked: 'Bloqueadas en los ajustes del navegador ({where}). No pasa nada: todo sigue funcionando, los avisos de tu guía aparecen en el mapa.',
+    intro_st_loc_prompt: 'Mira la pantalla: aparecerá el permiso de ubicación…',
+    intro_st_loc_ok: 'Ya estás en el mapa ✓',
+    intro_st_loc_pending: 'Sin ubicación todavía — si apareció un aviso, toca Permitir y vuelve a intentarlo.',
     intro_w_stamp: 'Bienvenido a Fieldnote', intro_w_title: 'Tu compañero de tour en vivo',
     intro_w_body: 'Fieldnote te muestra en el mapa del tour y revela cada parada cuando tu guía la activa, además de avisos y alertas de "hora de volver al autobús".',
     intro_w_p1: '<b>¿Por qué la ubicación?</b> Para que aparezcas en el mapa y las paradas se iluminen cerca de ti. Solo se comparte durante este tour, nunca en segundo plano.',
@@ -3436,6 +3511,19 @@ const I18N = {
     ended_sub: '你的向导已结束本次行程。感谢你的同行。',
     nsb_next: '下一站',
     intro_skip: '跳过',
+    intro_s_stamp: '欢迎上车', intro_s_title: '两次点击即可就绪',
+    intro_s_guide: '你正在参加 {guide} 的导览。',
+    intro_s_loc_why: '让你出现在地图上，附近的停靠点会亮起。仅在本次导览期间共享。',
+    intro_s_ntf_why: '停靠点开始、发布警示或该回大巴时，你会收到提醒。',
+    intro_s_inst_why: '可选——一键回到应用，关闭后通知也能送达。',
+    intro_i_cta2: '添加到主屏幕',
+    intro_st_asking: '请求中…',
+    intro_st_ntf_ok: '通知已开启 ✓',
+    intro_st_ntf_unsupported: '此浏览器不支持通知——应用仍可正常使用，请留意地图上的更新。',
+    intro_st_ntf_blocked: '已在浏览器设置中被屏蔽（{where}）。没关系——一切照常，向导的消息会显示在地图上。',
+    intro_st_loc_prompt: '请留意屏幕上的定位授权提示…',
+    intro_st_loc_ok: '你已出现在地图上 ✓',
+    intro_st_loc_pending: '还没有定位——如果出现了提示，请点“允许”后重试。',
     intro_w_stamp: '欢迎使用 Fieldnote', intro_w_title: '你的实时导览伙伴',
     intro_w_body: 'Fieldnote 会在导览地图上显示你的位置，并在向导激活每个停靠点时为你揭示它，还有警示和“该回到大巴了”的提醒。',
     intro_w_p1: '<b>为什么需要定位？</b> 让你出现在地图上，附近的停靠点会亮起。仅在本次导览期间共享，绝不在后台共享。',
@@ -5170,7 +5258,11 @@ function showInviteCodeForm() {
   const toggleB   = document.getElementById('invite-toggle-b');
   const toggleC   = document.getElementById('invite-toggle-c');
 
-  let mode = 'signup';   // signup | login | invite | recover | reset
+  // Default to LOG IN, not signup: trial 3 showed lost passengers reaching
+  // this screen and creating accounts in seconds because signup was the
+  // zero-tap default. A returning guide logs straight in; a new guide is one
+  // deliberate toggle away.
+  let mode = 'login';   // signup | login | invite | recover | reset
   const focusFor = () => ((mode === 'invite' || mode === 'recover') ? codeInput : nameInput).focus();
 
   function applyMode() {
@@ -10369,12 +10461,25 @@ function checkDangerZones() {
 // boarded passenger who pockets/loses their phone stays counted on the guide
 // side. The guide reads the flag — it does NOT compute distances.
 let _inBusDeclared = false;
+// Trial-3 obs 7: passengers were counted "at the bus" before they'd taken a
+// step — at boarding (no stop active) and at stop arrival (pin dropped while
+// everyone still stands next to the bus). A RETURN only means something if
+// they actually left: require an active stop AND that we've seen this
+// passenger clearly away from the pin first. Reset per stop activation.
+let _awayFromBusSeen = false;
+const AWAY_FROM_BUS_M = 40;   // comfortably outside GPS noise + the 10m radius
 function checkBusArrival() {
   if (ROLE !== 'passenger' || _inBusDeclared || !SESSION) return;
   if (state.youLng == null) return;
   const bus = GUIDE_VIEW && GUIDE_VIEW.bus;
   if (!bus || bus.lng == null) return;
-  if (metersBetween(bus.lng, bus.lat, state.youLng, state.youLat) <= HEADCOUNT_RADIUS_M) {
+  if (!ACTIVE_STOP_IDS || ACTIVE_STOP_IDS.size === 0) return;   // boarding/transit — headcount meaningless
+  const d = metersBetween(bus.lng, bus.lat, state.youLng, state.youLat);
+  if (!_awayFromBusSeen) {
+    if (d > AWAY_FROM_BUS_M) _awayFromBusSeen = true;
+    return;   // haven't left the bus yet — a "return" can't have happened
+  }
+  if (d <= HEADCOUNT_RADIUS_M) {
     _inBusDeclared = true;        // optimistic — only push once
     markPassengerInBus();
     // Reward an on-time return — before the soonest active-stop departure.
@@ -11178,6 +11283,7 @@ async function activateStop(stop, opts) {
   for (const [, p] of PASSENGERS) p.inBus = false;
   updateBusHeadcount();
   renderPassengerList();
+  _stopsListExpanded = false;   // fresh stop → context switches to its panel
   renderPins();
   renderStopList();
   updateNextStopBanner();
@@ -11330,43 +11436,71 @@ function showEndSessionModal() {
 // Render the stops section in the guide bottom sheet. Re-rendered after
 // session load (initial), after every successful activation/deactivation,
 // and any time ACTIVE_STOP_IDS changes from below.
+// Trial-3 obs 10: starting a stop should SWITCH CONTEXT — while a stop is
+// live the sheet shows a current-stop panel (its actions, big and obvious),
+// with the full stop list folded away behind a toggle. With no active stop
+// the full list renders as before. _stopsListExpanded resets on activation.
+let _stopsListExpanded = false;
 function renderStopList() {
   const container = document.getElementById('stops-list');
   if (!container || !TOUR) return;
   container.innerHTML = '';
+
+  const activeStop = TOUR.stops.find(s => ACTIVE_STOP_IDS.has(s.id));
+
+  if (activeStop) {
+    // ── Current-stop panel ──
+    const panel = document.createElement('div');
+    panel.className = 'current-stop-panel';
+    panel.innerHTML = `
+      <div class="current-stop-stamp">Now at</div>
+      <div class="current-stop-name">${(activeStop.name || '').replace(/</g, '&lt;')}</div>
+    `;
+    const actions = document.createElement('div');
+    actions.className = 'current-stop-actions';
+    // Trial-4 guide ask: this button edits the departure time and pushes a
+    // note to every passenger phone — name it for what it does.
+    const noteBtn = document.createElement('button');
+    noteBtn.className = 'stop-row-note-btn';
+    noteBtn.textContent = '✎ Edit time / send notification';
+    noteBtn.title = 'Change the departure time or push a note to passengers';
+    noteBtn.addEventListener('click', () => showEditNoteModal(activeStop));
+    actions.appendChild(noteBtn);
+    const pill = document.createElement('button');
+    pill.className = 'stop-row-active-pill';
+    pill.textContent = '■ End stop';
+    pill.title = 'Finish this stop — its pins hide from passengers';
+    pill.addEventListener('click', () => showDeactivateStopModal(activeStop));
+    actions.appendChild(pill);
+    panel.appendChild(actions);
+    container.appendChild(panel);
+
+    // ── Folded stop list behind a toggle ──
+    const toggle = document.createElement('button');
+    toggle.className = 'stops-fold-toggle';
+    toggle.textContent = _stopsListExpanded ? '▾ Hide all stops' : '▸ All stops';
+    toggle.addEventListener('click', () => {
+      _stopsListExpanded = !_stopsListExpanded;
+      renderStopList();
+    });
+    container.appendChild(toggle);
+    if (!_stopsListExpanded) return;
+  }
+
   for (const stop of TOUR.stops) {
-    const row = document.createElement('div');
     const isActive = ACTIVE_STOP_IDS.has(stop.id);
+    if (isActive && activeStop && stop.id === activeStop.id) continue;  // panel already shows it
+    const row = document.createElement('div');
     row.className = 'stop-row' + (isActive ? ' active' : '');
     row.innerHTML = `
       <div class="stop-row-num">${String(stop.ordinal).padStart(2, '0')}</div>
       <div class="stop-row-name">${(stop.name || '').replace(/</g, '&lt;')}</div>
     `;
-    if (isActive) {
-      // ✎ Edit-or-add-note button. Static label regardless of current state.
-      const noteBtn = document.createElement('button');
-      noteBtn.className = 'stop-row-note-btn';
-      noteBtn.textContent = '✎ Edit or add note';
-      noteBtn.title = 'Edit or add a note for passengers';
-      noteBtn.addEventListener('click', () => showEditNoteModal(stop));
-      row.appendChild(noteBtn);
-
-      // Tap the pill to deactivate (with confirmation).
-      const pill = document.createElement('button');
-      pill.className = 'stop-row-active-pill';
-      // Trial-2 obs 8: "Active" read as a status, not a button — guides
-      // couldn't find how to finish a stop. Say the action outright.
-      pill.textContent = '◉ End stop';
-      pill.title = 'Stop is live — tap to end it';
-      pill.addEventListener('click', () => showDeactivateStopModal(stop));
-      row.appendChild(pill);
-    } else {
-      const btn = document.createElement('button');
-      btn.className = 'stop-row-action';
-      btn.textContent = 'Activate';
-      btn.addEventListener('click', () => showActivateStopModal(stop, 'manual'));
-      row.appendChild(btn);
-    }
+    const btn = document.createElement('button');
+    btn.className = 'stop-row-action';
+    btn.textContent = 'Activate';
+    btn.addEventListener('click', () => showActivateStopModal(stop, 'manual'));
+    row.appendChild(btn);
     container.appendChild(row);
   }
 }
@@ -11588,6 +11722,7 @@ function onStopActivated(row) {
   noteActivatedOrdinal(row.stop_id);   // advance the NEXT-banner pointer (R2-D)
 
   const stop = TOUR ? TOUR.stops.find(s => s.id === row.stop_id) : null;
+  _stopsListExpanded = false;   // context switch on the receiving device too
   renderPins();
   if (ROLE === 'guide') renderStopList();
 
@@ -11601,6 +11736,7 @@ function onStopActivated(row) {
     // "I'm at the bus" menu item returns and the auto check-in can fire
     // again when this passenger reaches the next bus pin.
     _inBusDeclared = false;
+    _awayFromBusSeen = false;   // trial-3 obs 7: must LEAVE before a return counts
     playChime();
     showStopArrivalModal(stop);
   }
@@ -12294,6 +12430,24 @@ function renderHudTimer() {
   // attaches the [bus] line to the active stop, so an idle card has
   // nothing to do.
   el.classList.toggle('clickable', ROLE === 'guide' && hasActiveStop);
+  // "End stop" under the time (trial-4 ask). Shown whenever the guide has ANY
+  // active stop — including one without a departure set (soonestMs Infinity),
+  // which is exactly when the list-pill was the only way out. Wired once;
+  // stopPropagation keeps it from also firing the card's departure action.
+  const endBtn = document.getElementById('stop-timer-end');
+  if (endBtn) {
+    const anyActive = ROLE === 'guide' && ACTIVE_STOP_IDS && ACTIVE_STOP_IDS.size > 0;
+    endBtn.style.display = anyActive ? '' : 'none';
+    if (!endBtn._wired) {
+      endBtn._wired = true;
+      endBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const sid = Array.from(ACTIVE_STOP_IDS)[0];
+        const stop = (TOUR && TOUR.stops || []).find(s => s.id === sid);
+        if (stop) showDeactivateStopModal(stop);
+      });
+    }
+  }
   // Label: "Departure" by default, "Time to head back" once a stop is
   // armed so it reads as a call-to-action rather than a passive readout.
   if (labelEl) {
@@ -12600,14 +12754,13 @@ function urlBase64ToUint8Array(base64String) {
   return out;
 }
 
-// ── First-run intro wizard ────────────────────────────────────────────
-// Passenger-only, once per browser. Explains why location is needed and
-// that installing is safe, then walks through notifications / location /
-// install, and closes with a "when it works" note. Shown from the map
-// load handler (which also defers GPS to the wizard's location step).
+// ── First-run setup (Boarding v2) ─────────────────────────────────────
+// Passenger-only, once per browser. Trial-4 field feedback killed the
+// 5-step wizard: boarding took too long and passengers skipped through it
+// blind. This is ONE page — location + notifications with live status
+// lines, an optional install row, one Start button. Shown from the map
+// load handler (which also defers GPS to the location button).
 const INTRO_SEEN_KEY = 'fn_intro_seen_v1';
-const INTRO_STEPS = ['welcome', 'notify', 'location', 'install', 'done'];
-let _introIdx = 0;
 let _introWired = false;
 
 function introSeen() {
@@ -12624,58 +12777,64 @@ function maybeShowIntro() {
   const overlay = document.getElementById('intro-overlay');
   if (!overlay || !introNeeded()) { startGeolocation(); return; }
   wireIntro();
-  _introIdx = 0;
-  renderIntroStep();
+  renderIntroSetup();
   overlay.classList.add('show');
 }
 
-function renderIntroStep() {
+// Populate the one-page setup's status lines from current permission state.
+// Called on show and after every button tap.
+function renderIntroSetup() {
   const overlay = document.getElementById('intro-overlay');
   if (!overlay) return;
-  // Skip the install step when already installed or unsupported.
-  let key = INTRO_STEPS[_introIdx];
-  if (key === 'install' && (runningAsInstalledPWA() || !('serviceWorker' in navigator))) {
-    _introIdx++; key = INTRO_STEPS[_introIdx];
-  }
-  overlay.querySelectorAll('.intro-step').forEach(el => {
-    el.hidden = el.getAttribute('data-step') !== key;
-  });
-  const prog = document.getElementById('intro-progress');
-  if (prog) {
-    prog.innerHTML = '';
-    for (let i = 0; i < INTRO_STEPS.length; i++) {
-      const s = document.createElement('span');
-      if (i <= _introIdx) s.className = 'on';
-      prog.appendChild(s);
-    }
-  }
-  if (key === 'notify') {
-    const st = document.getElementById('intro-notify-status');
-    const btn = document.getElementById('intro-enable-notify');
-    if (!pushSupported()) {
-      if (st) { st.textContent = 'Notifications aren’t supported on this browser.'; st.className = 'intro-status warn'; }
-      if (btn) btn.disabled = true;
-    } else if (Notification.permission === 'granted') {
-      if (st) { st.textContent = 'Notifications are on ✓'; st.className = 'intro-status ok'; }
-      if (btn) { btn.disabled = true; btn.textContent = 'Enabled'; }
-    } else if (Notification.permission === 'denied') {
-      if (st) {
-        const ua = navigator.userAgent || '';
-        const where = (/iPad|iPhone|iPod/.test(ua) && !/Android/.test(ua))
-          ? 'Settings → Notifications'
-          : 'the lock icon → Notifications → Allow';
-        st.textContent = 'Blocked in your browser. To turn on: ' + where + ', then tap Skip below.';
-        st.className = 'intro-status warn';
-      }
-      if (btn) btn.disabled = true;
-    }
-  }
-}
 
-function introNext() {
-  _introIdx++;
-  if (_introIdx >= INTRO_STEPS.length) { finishIntro(); return; }
-  renderIntroStep();
+  // Whose tour — a personal line beats a product pitch at boarding.
+  const gl = document.getElementById('intro-guide-line');
+  if (gl && SESSION && SESSION.guide_name) {
+    gl.textContent = t('intro_s_guide', { guide: SESSION.guide_name });
+    gl.style.display = '';
+  }
+
+  // Location: pre-check via the Permissions API where available, so a
+  // returning passenger sees the ✓ without tapping.
+  const locSt = document.getElementById('intro-location-status');
+  const locBtn = document.getElementById('intro-allow-location');
+  try {
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'geolocation' }).then(p => {
+        if (p.state === 'granted' && locSt) {
+          locSt.textContent = t('intro_st_loc_ok');
+          locSt.className = 'intro-status ok';
+          if (locBtn) locBtn.disabled = true;
+        }
+      }).catch(() => {});
+    }
+  } catch (_e) { /* Permissions API missing — status appears on tap */ }
+
+  // Notifications: same states as before, but the "blocked" copy now says
+  // the app still works without them (trial-3 obs 4: blocked-state panic).
+  const st = document.getElementById('intro-notify-status');
+  const btn = document.getElementById('intro-enable-notify');
+  if (!pushSupported()) {
+    if (st) { st.textContent = t('intro_st_ntf_unsupported'); st.className = 'intro-status warn'; }
+    if (btn) btn.disabled = true;
+  } else if (Notification.permission === 'granted') {
+    if (st) { st.textContent = t('intro_st_ntf_ok'); st.className = 'intro-status ok'; }
+    if (btn) btn.disabled = true;
+  } else if (Notification.permission === 'denied') {
+    if (st) {
+      const ua = navigator.userAgent || '';
+      const where = (/iPad|iPhone|iPod/.test(ua) && !/Android/.test(ua))
+        ? 'Settings → Notifications' : 'the lock icon → Notifications → Allow';
+      st.textContent = t('intro_st_ntf_blocked', { where });
+      st.className = 'intro-status warn';
+    }
+    if (btn) btn.disabled = true;
+  }
+
+  // Install row: hide when already installed or the browser can't.
+  const row = document.getElementById('intro-install-row');
+  if (row) row.style.display =
+    (runningAsInstalledPWA() || !('serviceWorker' in navigator)) ? 'none' : '';
 }
 
 function finishIntro() {
@@ -12695,7 +12854,8 @@ function wireIntro() {
   const overlay = document.getElementById('intro-overlay');
   if (!overlay) return;
   _introWired = true;
-  overlay.querySelectorAll('[data-intro-next]').forEach(b => b.addEventListener('click', introNext));
+  // One page, no steps: every button updates its own status line in place;
+  // Skip and Start both close the overlay.
   const skipAll = document.getElementById('intro-skip-all');
   if (skipAll) skipAll.addEventListener('click', finishIntro);
   const done = document.getElementById('intro-done');
@@ -12705,22 +12865,21 @@ function wireIntro() {
   if (notifyBtn) notifyBtn.addEventListener('click', async () => {
     const st = document.getElementById('intro-notify-status');
     notifyBtn.disabled = true;
-    if (st) { st.textContent = 'Asking…'; st.className = 'intro-status'; }
+    if (st) { st.textContent = t('intro_st_asking'); st.className = 'intro-status'; }
     const result = await subscribePushAndSave();
     if (result && result.error) {
       if (st) { st.textContent = result.error; st.className = 'intro-status warn'; }
       notifyBtn.disabled = false;
       return;
     }
-    if (st) { st.textContent = 'Notifications are on ✓'; st.className = 'intro-status ok'; }
-    setTimeout(introNext, 600);
+    if (st) { st.textContent = t('intro_st_ntf_ok'); st.className = 'intro-status ok'; }
   });
 
   const locBtn = document.getElementById('intro-allow-location');
   if (locBtn) locBtn.addEventListener('click', () => {
     const st = document.getElementById('intro-location-status');
     locBtn.disabled = true;
-    if (st) { st.textContent = 'Check your screen for the location prompt…'; st.className = 'intro-status'; }
+    if (st) { st.textContent = t('intro_st_loc_prompt'); st.className = 'intro-status'; }
     // R2-A: route the explicit "Allow location" tap through the gesture-bound
     // one-shot getCurrentPosition path. On iOS Safari a bare watchPosition (what
     // startGeolocation uses) can have its first fix silently dropped even when
@@ -12729,7 +12888,19 @@ function wireIntro() {
     // watch. This was the likely cause of trial passengers who tapped Allow but
     // still sent zero fixes.
     requestLocationOnTap();
-    setTimeout(introNext, 800);
+    // Confirm in place once the fix actually lands (or nudge if it didn't).
+    let checks = 0;
+    const tick = setInterval(() => {
+      checks++;
+      if (state.youLng != null) {
+        clearInterval(tick);
+        if (st) { st.textContent = t('intro_st_loc_ok'); st.className = 'intro-status ok'; }
+      } else if (checks >= 8) {   // ~12s — prompt likely dismissed or pending
+        clearInterval(tick);
+        if (st) { st.textContent = t('intro_st_loc_pending'); st.className = 'intro-status warn'; }
+        locBtn.disabled = false;
+      }
+    }, 1500);
   });
 
   const installBtn = document.getElementById('intro-install');
@@ -12739,11 +12910,12 @@ function wireIntro() {
     const isIOS = /iPad|iPhone|iPod/.test(ua) && !/Android/.test(ua);
     if (runningAsInstalledPWA()) {
       if (st) { st.textContent = 'Already installed ✓'; st.className = 'intro-status ok'; }
-      setTimeout(introNext, 600); return;
+      return;
     }
-    if (isIOS) {
-      if (st) { st.textContent = 'In Safari: tap Share, then “Add to Home Screen”.'; st.className = 'intro-status'; }
-      return;   // user does it manually, then taps Skip to continue
+    if (isIOS || /SamsungBrowser/i.test(ua)) {
+      // Neither fires beforeinstallprompt — show the exact manual steps.
+      if (st) { st.textContent = manualInstallHint(); st.className = 'intro-status'; }
+      return;   // user does it manually, then continues
     }
     if (_deferredInstallPromptEvent) {
       const evt = _deferredInstallPromptEvent; _deferredInstallPromptEvent = null;
@@ -12755,10 +12927,9 @@ function wireIntro() {
           else { st.textContent = 'You can install later from the menu.'; st.className = 'intro-status'; }
         }
       } catch (_e) { /* ignore */ }
-      setTimeout(introNext, 800);
       return;
     }
-    if (st) { st.textContent = 'Use your browser menu (⋮) → “Install app”.'; st.className = 'intro-status'; }
+    if (st) { st.textContent = manualInstallHint(); st.className = 'intro-status'; }
   });
 }
 
@@ -12970,6 +13141,25 @@ function renderInstallPrompt() {
 // beforeinstallprompt is gated by engagement heuristics; iOS Safari
 // never fires it; the deferred event can also be invalidated by a page
 // lifecycle change). Refreshed every time the burger menu opens.
+// Per-browser manual install steps, for every browser that never fires
+// beforeinstallprompt. Trial feedback: install "got blocked" on Samsung
+// Internet — it's Chromium but doesn't surface the prompt event, so the old
+// generic "(⋮) → Install app" text pointed at a menu item that doesn't exist
+// there. Say the exact path per browser.
+function manualInstallHint() {
+  const ua = navigator.userAgent || '';
+  if (/iPad|iPhone|iPod/.test(ua) && !/Android/.test(ua)) {
+    return 'In Safari: tap Share (the square with the up-arrow), then "Add to Home Screen".';
+  }
+  if (/SamsungBrowser/i.test(ua)) {
+    return 'In Samsung Internet: tap Menu (≡) at the bottom, then "Add page to" → "Home screen".';
+  }
+  if (/Firefox/i.test(ua)) {
+    return 'Firefox can\'t install web apps — open this link in Chrome to install.';
+  }
+  return 'Open your browser menu (⋮) and choose "Install app" or "Add to Home screen".';
+}
+
 function refreshMenuInstallBtn() {
   const btn = document.getElementById('menu-install-btn');
   const hint = document.getElementById('menu-install-hint');
@@ -12996,8 +13186,10 @@ function handleMenuInstallClick() {
   // rather than silently failing.
   const ua = navigator.userAgent || '';
   const isIOS = /iPad|iPhone|iPod/.test(ua) && !(/Android/.test(ua));
-  if (isIOS) {
-    if (hint) hint.textContent = 'On iPhone / iPad: tap the Share button (square with up-arrow) in Safari, then "Add to Home Screen".';
+  // iOS and Samsung Internet never fire beforeinstallprompt — go straight
+  // to the exact manual steps instead of waiting for an event that won't come.
+  if (isIOS || /SamsungBrowser/i.test(ua)) {
+    if (hint) hint.textContent = manualInstallHint();
     return;
   }
   // Chrome / Edge / Samsung Internet — fire the deferred event if we
@@ -13018,12 +13210,9 @@ function handleMenuInstallClick() {
     });
     return;
   }
-  // Fallback: browser hasn't deemed us installable yet (or it's a
-  // browser like Firefox that doesn't surface the prompt API at all).
-  // Direct the user to the browser's own install path.
-  if (hint) {
-    hint.textContent = 'Your browser hasn\'t offered an install option yet. Open the browser menu (⋮ on Android, … on desktop) and look for "Install app" or "Install Fieldnote". On Firefox, this isn\'t supported — use Chrome or Edge instead.';
-  }
+  // Fallback: browser hasn't deemed us installable yet (or never fires the
+  // prompt event at all). Give the exact per-browser manual path.
+  if (hint) hint.textContent = manualInstallHint();
 }
 
 let _menuInstallBtnWired = false;
