@@ -9871,6 +9871,18 @@ function onGpsSuccess(pos) {
   // Joystick simulator takes over when on — real GPS is ignored so the
   // simulated walker isn't overwritten by the device's actual position.
   if (JOYSTICK_MODE) return;
+  // Trial-2 data: one phone delivered a single fix time-stamped 2 HOURS
+  // before joining — some browsers (seen on Android) hand out a cached
+  // last-known position with its original timestamp despite maximumAge.
+  // Discard anything older than 2 minutes and wait for a real fix. Only
+  // when the timestamp is a plausible epoch value — a nonsense timestamp
+  // (some engines report oddities) shouldn't cost us live fixes.
+  const fixTs = pos && pos.timestamp;
+  if (Number.isFinite(fixTs) && fixTs > 1577836800000 /* 2020-01-01 */
+      && (Date.now() - fixTs) > 2 * 60 * 1000) {
+    dlog('[gps] discarded stale cached fix', new Date(fixTs).toISOString());
+    return;
+  }
   // First fix? Hide any "searching" banner.
   hideGpsBanner();
   state.gpsMode = 'real';
