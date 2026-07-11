@@ -12880,6 +12880,34 @@ function wireNativePushListeners() {
   });
 }
 
+// App Links (spec A3): scanning a session QR (fieldnote.guide/j/<id>)
+// opens the APP; the OS hands the URL to the shell via appUrlOpen (app
+// already running) or as the launch URL (cold start). Both funnel here.
+// Navigation is skipped when the session is already on screen.
+function handleNativeAppUrl(url) {
+  try {
+    const m = /\/j\/([^/?#]+)/.exec(new URL(url).pathname);
+    if (!m || !m[1]) return;
+    const id = decodeURIComponent(m[1]);
+    if (!SESSION || SESSION.id !== id) {
+      window.location.href = '/v0.5?session=' + encodeURIComponent(id);
+    }
+  } catch (_e) { /* malformed URL — ignore */ }
+}
+if (isNativeApp()) {
+  try {
+    const A = window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+    if (A) {
+      A.addListener('appUrlOpen', (ev) => { if (ev && ev.url) handleNativeAppUrl(ev.url); });
+      // Cold start via a link: the event fired before this script ran, so
+      // also ask for the launch URL explicitly.
+      if (typeof A.getLaunchUrl === 'function') {
+        A.getLaunchUrl().then((r) => { if (r && r.url) handleNativeAppUrl(r.url); }).catch(() => {});
+      }
+    }
+  } catch (_e) { /* App plugin missing — links open the browser instead */ }
+}
+
 // ── First-run setup (Boarding v2) ─────────────────────────────────────
 // Passenger-only, once per browser. Trial-4 field feedback killed the
 // 5-step wizard: boarding took too long and passengers skipped through it
