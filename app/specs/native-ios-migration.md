@@ -134,8 +134,14 @@ gate — they predate the native app):**
 has the identical section; check `migrations/` for `*native_push*` and
 `send_stop_push` for FCM code):**
 
-1. Firebase project "Fieldnote" (free) — yes, for iOS too: FCM fronts APNs
-   so BOTH platforms share one send pipeline in the edge functions.
+> 📎 **Exact code for this phase lives in `appendix-push-reference.md`**
+> (same folder): the migration SQL verbatim, verified Deno crypto for the
+> FCM OAuth + APNs JWT flows, and the `nativePushRegister()` bridge shape.
+> Use it — do not re-derive the crypto.
+
+1. Firebase project "Fieldnote" (free) — needed for the Android half of the
+   shared pipeline; iOS delivery itself goes DIRECT to APNs (I2.1 Option A),
+   so Firebase's role for iOS is nil unless Option B is chosen.
 2. Migration `migrations/042_v0.7_native_push_tokens.sql`:
    `native_push_tokens` table + `save_native_push_token` RPC
    (full definition in the Android spec §A2.0.2 — identical).

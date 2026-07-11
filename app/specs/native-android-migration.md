@@ -109,6 +109,11 @@ Goal: the native shell runs the live app on Filip's Samsung.
 **A2.0 Shared plumbing (SKIP each item if it already exists — check first;
 the iOS spec contains the identical section):**
 
+> 📎 **Exact code for this phase lives in `appendix-push-reference.md`**
+> (same folder): the migration SQL verbatim, verified Deno crypto for the
+> FCM OAuth + APNs JWT flows, and the `nativePushRegister()` bridge shape.
+> Use it — do not re-derive the crypto.
+
 1. **Firebase project** (console.firebase.google.com, free): create project
    "Fieldnote", add Android app with package `guide.fieldnote.app`, download
    `google-services.json`.
