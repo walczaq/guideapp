@@ -3410,6 +3410,7 @@ const I18N = {
     intro_st_ntf_ok: 'Notifications are on ✓',
     intro_st_ntf_unsupported: 'Notifications aren’t supported on this browser — the app still works, just check the map for updates.',
     intro_st_ntf_blocked: 'Blocked in your browser settings ({where}). No problem — everything still works, your guide’s updates appear on the map.',
+    intro_st_ntf_blocked_native: 'Notifications are off for the app — allow them in Settings → Apps → Fieldnote → Notifications. Everything still works, your guide’s updates appear on the map.',
     intro_st_loc_prompt: 'Check your screen for the location prompt…',
     intro_st_loc_ok: 'You’re on the map ✓',
     intro_st_loc_pending: 'No location yet — if a prompt appeared, tap Allow, then try again.',
@@ -3477,6 +3478,7 @@ const I18N = {
     intro_st_ntf_ok: 'Notificaciones activadas ✓',
     intro_st_ntf_unsupported: 'Este navegador no admite notificaciones — la app funciona igual, revisa el mapa para ver novedades.',
     intro_st_ntf_blocked: 'Bloqueadas en los ajustes del navegador ({where}). No pasa nada: todo sigue funcionando, los avisos de tu guía aparecen en el mapa.',
+    intro_st_ntf_blocked_native: 'Las notificaciones están desactivadas para la app — actívalas en Ajustes → Aplicaciones → Fieldnote → Notificaciones. Todo sigue funcionando, los avisos de tu guía aparecen en el mapa.',
     intro_st_loc_prompt: 'Mira la pantalla: aparecerá el permiso de ubicación…',
     intro_st_loc_ok: 'Ya estás en el mapa ✓',
     intro_st_loc_pending: 'Sin ubicación todavía — si apareció un aviso, toca Permitir y vuelve a intentarlo.',
@@ -3544,6 +3546,7 @@ const I18N = {
     intro_st_ntf_ok: '通知已开启 ✓',
     intro_st_ntf_unsupported: '此浏览器不支持通知——应用仍可正常使用，请留意地图上的更新。',
     intro_st_ntf_blocked: '已在浏览器设置中被屏蔽（{where}）。没关系——一切照常，向导的消息会显示在地图上。',
+    intro_st_ntf_blocked_native: '应用通知已关闭——请在 设置 → 应用 → Fieldnote → 通知 中开启。一切照常，向导的消息会显示在地图上。',
     intro_st_loc_prompt: '请留意屏幕上的定位授权提示…',
     intro_st_loc_ok: '你已出现在地图上 ✓',
     intro_st_loc_pending: '还没有定位——如果出现了提示，请点“允许”后重试。',
@@ -10979,6 +10982,17 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
       while (screenStack.length) closeScreen();
       showEditNameForm();
     } else if (action === 'enable-notifications') {
+      // Native shell: no Notification/PushManager in the WebView — go
+      // through the Capacitor bridge. Re-tapping when already granted just
+      // re-registers (the RPC upserts), which is harmless.
+      if (isNativeApp()) {
+        const result = await nativePushRegister();
+        if (result && result.error) {
+          console.warn('[push] native enable from menu failed:', result.error);
+        }
+        refreshNotificationsMenuItem();
+        return;
+      }
       // If notifications are blocked (denied), the page can't re-request —
       // reveal recovery steps instead of silently failing.
       if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
@@ -12798,6 +12812,74 @@ function urlBase64ToUint8Array(base64String) {
   return out;
 }
 
+// ── Native (Capacitor) push bridge ────────────────────────────────────
+// Replaces the web-push path when running inside the app: the WebView has
+// no Push/Notification APIs, so pushSupported() is false there and the
+// web-push branches must never be reached. Shape from
+// app/specs/appendix-push-reference.md §4; tokens land in
+// native_push_tokens via the save_native_push_token RPC and the edge
+// functions deliver them over FCM (Android) / APNs (iOS).
+
+function isNativeApp() {
+  try {
+    return !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function'
+      && window.Capacitor.isNativePlatform());
+  } catch (_e) { return false; }
+}
+
+function nativePushPlugin() {
+  return (window.Capacitor && window.Capacitor.Plugins
+    && window.Capacitor.Plugins.PushNotifications) || null;
+}
+
+async function nativePushRegister() {
+  const P = nativePushPlugin();
+  if (!P || !SESSION) return { error: 'Not available.' };
+  wireNativePushListeners();
+  const perm = await P.requestPermissions();
+  if (perm.receive !== 'granted') return { error: t('intro_st_ntf_blocked_native') };
+  return new Promise((resolve) => {
+    P.addListener('registration', async ({ value: token }) => {
+      const { error } = await supabaseClient.rpc('save_native_push_token', {
+        p_session_id: SESSION.id,
+        p_passenger_id: (typeof PASSENGER_ID !== 'undefined') ? PASSENGER_ID : null,
+        p_platform: window.Capacitor.getPlatform(),   // 'android' | 'ios'
+        p_token: token,
+        p_lang: (typeof LANG !== 'undefined') ? LANG : null,
+      });
+      resolve(error ? { error: error.message } : { ok: true });
+    });
+    P.addListener('registrationError', (e) =>
+      resolve({ error: (e && e.error) || 'Registration failed.' }));
+    P.register();
+  });
+}
+
+// Foreground/tap listeners — registered once (idempotent flag), same
+// pattern as wireStopModalHandlers.
+let _nativePushListenersWired = false;
+function wireNativePushListeners() {
+  if (_nativePushListenersWired) return;
+  const P = nativePushPlugin();
+  if (!P) return;
+  _nativePushListenersWired = true;
+  // Foreground pushes: intentionally NO-OP — the realtime channels already
+  // render in-app banners for every event that pushes; showing both would
+  // double-notify.
+  P.addListener('pushNotificationReceived', () => {});
+  // Tap on a system notification: navigate only when it targets a
+  // DIFFERENT session than the one on screen.
+  P.addListener('pushNotificationActionPerformed', (action) => {
+    try {
+      const data = (action && action.notification && action.notification.data) || {};
+      const target = data.sessionId;
+      if (target && (!SESSION || SESSION.id !== target)) {
+        window.location.href = '/v0.5?session=' + encodeURIComponent(target);
+      }
+    } catch (_e) { /* ignore */ }
+  });
+}
+
 // ── First-run setup (Boarding v2) ─────────────────────────────────────
 // Passenger-only, once per browser. Trial-4 field feedback killed the
 // 5-step wizard: boarding took too long and passengers skipped through it
@@ -12858,7 +12940,23 @@ function renderIntroSetup() {
   // the app still works without them (trial-3 obs 4: blocked-state panic).
   const st = document.getElementById('intro-notify-status');
   const btn = document.getElementById('intro-enable-notify');
-  if (!pushSupported()) {
+  if (isNativeApp()) {
+    // Native shell: web-push APIs don't exist in the WebView, so this
+    // branch must come BEFORE pushSupported() — the "unsupported on this
+    // browser" copy must never show inside the app. Pre-check the OS
+    // permission so a returning passenger sees the ✓ without tapping.
+    const P = nativePushPlugin();
+    if (P) {
+      P.checkPermissions().then((p) => {
+        if (p.receive === 'granted') {
+          if (st) { st.textContent = t('intro_st_ntf_ok'); st.className = 'intro-status ok'; }
+          if (btn) btn.disabled = true;
+        } else if (p.receive === 'denied') {
+          if (st) { st.textContent = t('intro_st_ntf_blocked_native'); st.className = 'intro-status warn'; }
+        }
+      }).catch(() => {});
+    }
+  } else if (!pushSupported()) {
     if (st) { st.textContent = t('intro_st_ntf_unsupported'); st.className = 'intro-status warn'; }
     if (btn) btn.disabled = true;
   } else if (Notification.permission === 'granted') {
@@ -12910,7 +13008,9 @@ function wireIntro() {
     const st = document.getElementById('intro-notify-status');
     notifyBtn.disabled = true;
     if (st) { st.textContent = t('intro_st_asking'); st.className = 'intro-status'; }
-    const result = await subscribePushAndSave();
+    // Native shell registers through Capacitor (FCM/APNs); browsers use
+    // the web-push path.
+    const result = await (isNativeApp() ? nativePushRegister() : subscribePushAndSave());
     if (result && result.error) {
       if (st) { st.textContent = result.error; st.className = 'intro-status warn'; }
       notifyBtn.disabled = false;
@@ -12980,6 +13080,21 @@ function wireIntro() {
 // Register the SW, then re-subscribe silently if permission was already
 // granted in a previous visit. Idempotent and safe to call on every boot.
 async function initPushSubscription() {
+  if (isNativeApp()) {
+    // Native shell: FCM/APNs tokens can rotate, so re-register on every
+    // boot where the OS permission is already granted (the RPC upserts).
+    // Respects the menu opt-out; never prompts here.
+    try {
+      const P = nativePushPlugin();
+      if (P && SESSION && !notifOptedOut()) {
+        const p = await P.checkPermissions();
+        if (p.receive === 'granted') await nativePushRegister();
+      }
+    } catch (err) {
+      console.warn('[push] native init failed', err);
+    }
+    return;
+  }
   if (!pushSupported()) return;
   try {
     _swRegistration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
@@ -13407,8 +13522,26 @@ function refreshNotificationsMenuItem() {
   const item = document.getElementById('menu-enable-notifications');
   const label = document.getElementById('menu-enable-notifications-label');
   if (!item || !label) return;
-  if (ROLE !== 'passenger' || !SESSION || !pushSupported()) {
+  if (ROLE !== 'passenger' || !SESSION || (!pushSupported() && !isNativeApp())) {
     item.style.display = 'none';
+    return;
+  }
+  if (isNativeApp()) {
+    // Native: the WebView has no Notification API, so reflect the OS
+    // permission asynchronously; default label is the enable CTA.
+    item.style.display = '';
+    item.disabled = false;
+    item.style.opacity = '';
+    label.textContent = t('menu_enable_notif');
+    const P = nativePushPlugin();
+    if (P) {
+      P.checkPermissions().then((p) => {
+        if (p.receive === 'granted') label.textContent = t('notif_on');
+        else if (p.receive === 'denied') label.textContent = t('notif_blocked');
+      }).catch(() => {});
+    }
+    const nativeHint = document.getElementById('menu-notif-hint');
+    if (nativeHint) { nativeHint.hidden = true; nativeHint.innerHTML = ''; }
     return;
   }
   const hint = document.getElementById('menu-notif-hint');
