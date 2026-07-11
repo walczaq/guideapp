@@ -221,6 +221,17 @@ the iOS spec contains the identical section):**
    covering location + push data), content rating, data-safety form
    (declares location collection, shared with guide during tour).
 
+## Phase A5b — App-first boarding (designed, decided)
+
+After Gates A1–A4 pass on BOTH platforms, boarding flips app-first: the
+/j/* QR routes to a download landing page (App Store / Play with install
+referrer / direct APK for GMS-less Chinese phones / browser rescue link).
+Complete design incl. the router page, the "I installed it — open my
+tour" handoff, welcome-talk script, guide Wi-Fi pre-flight, zero-tap
+boarding for returning passengers, direct-APK hosting via CI, and the
+rollout gate: **`boarding-native-addendum.md`** (same folder). Huawei
+AppGallery follows as a distribution add-on after v1.
+
 ## Phase A6 — Background location opt-in (post-v1; designed, decided)
 
 Run ONLY after Gates A1–A4 pass. The complete product design — opt-in

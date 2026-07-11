@@ -231,6 +231,14 @@ placeholder art. Launch screen storyboard background to `#f1ece0`.
    (real work: Mapbox origin allowlist + build step copying `v0.5.html` into
    `www/` + SW-less asset strategy) — do NOT preemptively build this.
 
+## Phase I6b — App-first boarding (designed, decided)
+
+After v1 gates pass on BOTH platforms, the /j/* QR flips to a download
+landing page; iOS specifics: clipboard session handoff before the App
+Store bounce, the "I installed it — open my tour" universal-link button
+as the floor, guide-name finder as the final fallback. Full design:
+**`boarding-native-addendum.md`** (same folder).
+
 ## Phase I7 — Background location opt-in (post-v1; designed, decided)
 
 Run ONLY after Gates I1–I3 pass (ideally after the App Store v1 is

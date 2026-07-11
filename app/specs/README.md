@@ -15,7 +15,12 @@ migration in a fresh AI session (or by hand). One platform per session.
    post-v1 background-location opt-in (product rules, consent copy,
    auto-expiry, per-platform wiring, gate). Referenced by Android Phase A6
    and iOS Phase I7 — run only after the v1 gates pass.
-5. **`appendix-push-reference.md`** — EXACT code for the shared push
+5. **`boarding-native-addendum.md`** — the app-first boarding endgame
+   (decided): QR → download landing page (App Store / Play / direct APK
+   for GMS-less phones) with a browser rescue link; welcome-talk script,
+   post-install session handoff, zero-tap returning boarding, rollout
+   gate. Referenced by Android A5b and iOS I6b.
+6. **`appendix-push-reference.md`** — EXACT code for the shared push
    plumbing: the `native_push_tokens` migration SQL verbatim, verified Deno
    crypto for Google/FCM OAuth (RS256) and direct APNs (ES256), the fan-out
    loop, and the `nativePushRegister()` web-bridge shape. Referenced from
