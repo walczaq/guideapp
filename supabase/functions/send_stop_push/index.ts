@@ -9,6 +9,8 @@
 //   VAPID_PUBLIC_KEY       — must match VAPID_PUBLIC_KEY in v0.5.html
 //   VAPID_PRIVATE_KEY      — the private key from `web-push generate-vapid-keys`
 //   VAPID_SUBJECT          — e.g. "mailto:you@example.com" (required by the spec)
+//   FIREBASE_SERVICE_ACCOUNT — full service-account JSON (native Android
+//                              push via FCM v1; fan-out skipped if unset)
 //   SUPABASE_URL           — Supabase project URL (auto-injected on Supabase)
 //   SUPABASE_SERVICE_ROLE_KEY — service role key (auto-injected on Supabase)
 //
@@ -39,6 +41,119 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
+
+// ── Native push (Capacitor Android app) — FCM HTTP v1 ─────────────────────
+// Crypto verbatim from app/specs/appendix-push-reference.md. Kept inline
+// (same convention as send_stop_update_push's helpers: no shared-code
+// dependency between functions). ios tokens are NOT delivered here yet —
+// the iOS migration session adds direct APNs (spec I2.1). TODO(ios).
+
+const FIREBASE_SERVICE_ACCOUNT = Deno.env.get('FIREBASE_SERVICE_ACCOUNT') || '';
+
+// Cache across warm invocations.
+let _gToken: { token: string; exp: number } | null = null;
+
+const b64url = (buf: ArrayBuffer | Uint8Array) =>
+  btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const b64urlJson = (obj: unknown) =>
+  b64url(new TextEncoder().encode(JSON.stringify(obj)));
+const pemToDer = (pem: string) =>
+  Uint8Array.from(atob(pem.replace(/-----[^-]+-----/g, "").replace(/\s/g, "")),
+    (c) => c.charCodeAt(0));
+
+async function googleAccessToken(): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  if (_gToken && _gToken.exp - 60 > now) return _gToken.token;
+  const sa = JSON.parse(Deno.env.get("FIREBASE_SERVICE_ACCOUNT")!);
+  const key = await crypto.subtle.importKey(
+    "pkcs8", pemToDer(sa.private_key),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  const unsigned =
+    b64urlJson({ alg: "RS256", typ: "JWT" }) + "." +
+    b64urlJson({
+      iss: sa.client_email,
+      scope: "https://www.googleapis.com/auth/firebase.messaging",
+      aud: "https://oauth2.googleapis.com/token",
+      iat: now, exp: now + 3600,
+    });
+  const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key,
+    new TextEncoder().encode(unsigned));
+  const assertion = unsigned + "." + b64url(sig);
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion,
+    }),
+  });
+  if (!res.ok) throw new Error("google token: " + res.status + " " + await res.text());
+  const j = await res.json();
+  _gToken = { token: j.access_token, exp: now + (j.expires_in ?? 3600) };
+  return _gToken.token;
+}
+
+// project id comes from the same service-account JSON (sa.project_id)
+async function sendFcm(saProjectId: string, token: string,
+                       title: string, body: string,
+                       data: Record<string, string>): Promise<"ok" | "gone" | "error"> {
+  const res = await fetch(
+    `https://fcm.googleapis.com/v1/projects/${saProjectId}/messages:send`, {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + await googleAccessToken(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ message: {
+      token,
+      notification: { title, body },
+      data,                                   // string values ONLY
+      android: { priority: "HIGH" },
+    }}),
+  });
+  if (res.ok) return "ok";
+  const txt = await res.text();
+  // UNREGISTERED / NOT_FOUND → delete the token row.
+  if (res.status === 404 || txt.includes("UNREGISTERED")) return "gone";
+  console.warn("[fcm]", res.status, txt);
+  return "error";
+}
+
+// Fan out the SAME copy as the web-push path to the session's native
+// tokens. Runs even when there are zero web subscriptions — a session can
+// have only native subscribers. Errors never fail the request: web-push
+// delivery must not depend on FCM health.
+async function sendNativePushes(supabase: any, sessionId: string,
+                                title: string, body: string,
+                                data: Record<string, string>) {
+  const out = { nativeSent: 0, nativeFailed: 0, nativeRemoved: 0, nativeDeferred: 0 };
+  if (!FIREBASE_SERVICE_ACCOUNT) return out;   // secret not configured yet
+  let saProjectId = '';
+  try { saProjectId = JSON.parse(FIREBASE_SERVICE_ACCOUNT).project_id || ''; } catch { /* fall through */ }
+  if (!saProjectId) { console.warn('[fcm] FIREBASE_SERVICE_ACCOUNT missing project_id'); return out; }
+  const { data: natives, error } = await supabase
+    .from('native_push_tokens')
+    .select('id, platform, token, lang')
+    .eq('session_id', sessionId);
+  if (error) { console.warn('[fcm] native token lookup failed', error); return out; }
+  for (const t of natives ?? []) {
+    // TODO(ios): deliver ios tokens via direct APNs (native-ios-migration.md I2.1).
+    if (t.platform !== 'android') { out.nativeDeferred++; continue; }
+    try {
+      const r = await sendFcm(saProjectId, t.token, title, body, data);
+      if (r === 'ok') out.nativeSent++;
+      else if (r === 'gone') {
+        out.nativeRemoved++;
+        try { await supabase.from('native_push_tokens').delete().eq('id', t.id); } catch { /* next send retries */ }
+      } else out.nativeFailed++;
+    } catch (err) {
+      out.nativeFailed++;
+      console.warn('[fcm] send threw', err);
+    }
+  }
+  return out;
 }
 
 function extractActivationRow(body: any): any | null {
@@ -103,9 +218,8 @@ Deno.serve(async (req: Request) => {
     return jsonResp(500, { ok: false, error: subsErr.message });
   }
 
-  if (!subs || subs.length === 0) {
-    return jsonResp(200, { ok: true, sent: 0, note: 'no subscriptions' });
-  }
+  // NOTE: no early return on zero web subscriptions — a session can have
+  // only native (app) subscribers, and the FCM fan-out below must still run.
 
   // Title: action + name. Body: what happened, ending with the tap CTA.
   // We keep the stop ordinal in the title only when present so the user
@@ -137,41 +251,52 @@ Deno.serve(async (req: Request) => {
   let failed = 0;
   const expired: string[] = [];
 
-  const results = await Promise.allSettled(subs.map((s) => {
-    return webpush.sendNotification(
-      { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-      payload,
-    ).then(() => { sent++; })
-      .catch((err: any) => {
-        failed++;
-        // 404/410 → endpoint is dead; queue for cleanup.
-        if (err?.statusCode === 404 || err?.statusCode === 410) {
-          expired.push(s.endpoint);
-        } else {
-          console.warn('[send_stop_push] send failed', err?.statusCode, err?.body);
-        }
-      });
-  }));
+  if (subs && subs.length > 0) {
+    await Promise.allSettled(subs.map((s) => {
+      return webpush.sendNotification(
+        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+        payload,
+      ).then(() => { sent++; })
+        .catch((err: any) => {
+          failed++;
+          // 404/410 → endpoint is dead; queue for cleanup.
+          if (err?.statusCode === 404 || err?.statusCode === 410) {
+            expired.push(s.endpoint);
+          } else {
+            console.warn('[send_stop_push] send failed', err?.statusCode, err?.body);
+          }
+        });
+    }));
 
-  // Cleanup expired subscriptions in a single follow-up query — failures
-  // here are non-fatal; the next activation will try them again.
-  if (expired.length) {
-    try {
-      await supabase
-        .from('push_subscriptions')
-        .delete()
-        .in('endpoint', expired);
-    } catch (err) {
-      console.warn('[send_stop_push] expired cleanup failed', err);
+    // Cleanup expired subscriptions in a single follow-up query — failures
+    // here are non-fatal; the next activation will try them again.
+    if (expired.length) {
+      try {
+        await supabase
+          .from('push_subscriptions')
+          .delete()
+          .in('endpoint', expired);
+      } catch (err) {
+        console.warn('[send_stop_push] expired cleanup failed', err);
+      }
     }
   }
+
+  // Native app tokens (Android via FCM; ios deferred — TODO(ios)). Same
+  // title/body as the web-push payload.
+  const native = await sendNativePushes(supabase, sessionId, title, notificationBody, {
+    sessionId,
+    stopId: String(stopId),
+    kind: 'stop',
+  });
 
   return jsonResp(200, {
     ok: true,
     sent,
     failed,
     expired: expired.length,
-    total: results.length,
+    total: subs?.length ?? 0,
+    ...native,
   });
 });
 
