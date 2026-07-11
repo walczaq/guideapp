@@ -24,24 +24,42 @@ does it in parallel, and a guaranteed rescue floor for stragglers.
   zero-tap boarding (see below).
 - **No app:** the browser opens a single small page (session id retained)
   with, in this order:
-  1. **iPhone** → App Store listing (before navigating, copy the session
+  0. **Header: whose tour this is.** One anon Supabase query by session
+     id (sessions are world-readable): "You're joining {guide_name}'s
+     tour — {tour name}". This is the scanned-the-right-QR confirmation.
+     If the session has `ended_at` set, the page says "This tour has
+     ended — ask your guide for a fresh code" instead of offering
+     installs (the auto-end cron makes ended_at trustworthy). If the
+     query fails (offline/captive portal), degrade to the generic page —
+     never block on it.
+  1. **"Open my tour in the app"** — primary button, shown always:
+     a custom URL scheme link (`fieldnote://j/<id>`), registered by both
+     shells. ⚠️ This MUST be the custom scheme, not the https link: iOS
+     suppresses universal links tapped from a page on the SAME domain,
+     so a fieldnote.guide page linking to fieldnote.guide/j/<id> opens
+     the page again, not the app. The custom scheme opens the installed
+     app straight into the session on both platforms and does nothing
+     visible when the app is absent (the store buttons are right below).
+     This one button is the universal post-install handoff — it covers
+     referrer/clipboard failures and sideloads alike. Final fallback
+     inside the app: the guide-name finder.
+  2. **iPhone** → App Store listing (before navigating, copy the session
      id to the clipboard for the post-install paste handoff).
-  2. **Android** → Play Store listing with
+  3. **Android** → Play Store listing with
      `&referrer=session%3D<id>` (Install Referrer API handoff).
-  3. **Direct APK** (label also in Chinese: 直接下载应用 — for
+  4. **Direct APK** (label also in Chinese: 直接下载应用 — for
      Huawei/GMS-less phones) → downloads the signed APK from the site.
-  4. A persistent **"I installed it — open my tour"** button: simply the
-     same `fieldnote.guide/j/<id>` link. Once the app is installed the OS
-     opens it into the session — this one button is the universal
-     post-install handoff and the floor for every path (works even when
-     referrer/clipboard fail). Final fallback inside the app: the
-     guide-name finder.
   5. Small, visually quiet: **"Doesn't work? Open in browser"** → the
      webapp session exactly as today (`/v0.5?session=<id>`). This is the
      rescue for forgotten Apple IDs, full storage, store outages, and
      anyone the stores fail. It is never removed — it costs nothing (the
      webapp IS the app's engine) and it guarantees no passenger is ever
      excluded.
+
+  Shell requirement this creates (both platforms, add to A3/I3 work):
+  register the `fieldnote://` custom scheme alongside App/Universal
+  Links; the `appUrlOpen` handler parses BOTH `https://fieldnote.guide/j/<id>`
+  and `fieldnote://j/<id>` to the same navigation.
 
 The page is static, tiny, translated (EN/ES/ZH), platform-detected only
 to HIGHLIGHT the right button (all three remain visible per Filip).
@@ -102,8 +120,11 @@ banner is dead code — remove it then.
 2. One real mixed-device tour boarded app-first with the browser as
    silent fallback: join success rate and boarding minutes recorded, and
    not worse than the browser-only baseline.
-3. Router page live and tested with all four paths (App Store, Play with
-   referrer, direct APK, browser rescue) + the "I installed it" handoff.
+3. Router page live and tested with all paths (App Store, Play with
+   referrer, direct APK, browser rescue) + the guide-name header, the
+   ended-session state, and the custom-scheme "Open my tour in the app"
+   button verified on BOTH platforms (specifically: tapped from the
+   router page itself on iOS — the same-domain case).
 4. Booking-channel install ask (operator email/WhatsApp template: install
    before the tour) drafted — the night-before install is the real
    endgame; on-bus install is the recovery, not the plan.
