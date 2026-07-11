@@ -221,12 +221,19 @@ the iOS spec contains the identical section):**
    covering location + push data), content rating, data-safety form
    (declares location collection, shared with guide during tour).
 
-## Phase A5 — Later / explicitly out of scope now
+## Phase A6 — Background location opt-in (post-v1; designed, decided)
 
-- Background location (survives screen-lock) — battery + Play policy
-  implications ("location in background" declaration + review). Decide only
-  after field data shows lock-screen GPS loss on Android matters
-  (trial evidence so far: Android tracked fine through 6.5h tours).
+Run ONLY after Gates A1–A4 pass. The complete product design — opt-in
+rules, copy, auto-expiry, battery discipline, plugin choice, and the
+verification gate — is in **`background-location-addendum.md`** (same
+folder). Follow it exactly; the product rules there encode the privacy
+promise and are not negotiable without a human decision. Android-specific
+wiring (manifest, Android-11+ settings hop, foreground-service
+notification, Play declaration + demo video) is in the addendum's Android
+section.
+
+## Phase A7 — Later / explicitly out of scope now
+
 - Bundled-assets mode (offline-first shell) — requires the Mapbox token
   origin fix noted in §0.
 - In-app update prompts, crash reporting (Sentry), analytics.

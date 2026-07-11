@@ -231,12 +231,20 @@ placeholder art. Launch screen storyboard background to `#f1ece0`.
    (real work: Mapbox origin allowlist + build step copying `v0.5.html` into
    `www/` + SW-less asset strategy) — do NOT preemptively build this.
 
-## Phase I6 — Later / out of scope
+## Phase I7 — Background location opt-in (post-v1; designed, decided)
 
-Background location on iOS (`NSLocationAlwaysAndWhenInUseUsageDescription` +
-`location` background mode) — this is the likely fix for "phone in pocket,
-GPS dead" (suspected in trial-2 Dawn case), but it's an App Store review
-magnet; ship v1 without it, gather field data from native trials first.
+Run ONLY after Gates I1–I3 pass (ideally after the App Store v1 is
+approved — adding Always-location to a first submission compounds review
+risk). The complete product design — opt-in rules, copy, auto-expiry,
+battery discipline, plugin choice, verification gate — is in
+**`background-location-addendum.md`** (same folder). Follow it exactly;
+its product rules encode the privacy promise and are not negotiable
+without a human decision. iOS-specific wiring (Always authorization
+ladder, Info.plist strings, background mode, review notes) is in the
+addendum's iOS section.
+
+## Phase I8 — Later / out of scope
+
 Live Activities (departure countdown on the lock screen) — compelling
 future differentiator, not now.
 

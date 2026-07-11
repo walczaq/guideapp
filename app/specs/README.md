@@ -11,7 +11,11 @@ migration in a fresh AI session (or by hand). One platform per session.
 3. **`native-ios-migration.md`** — iOS execution spec (phases I0–I6 with
    gates). Blocked on Apple Developer enrollment (done on an iPhone via the
    Apple Developer app) — see its Phase I0.
-4. **`appendix-push-reference.md`** — EXACT code for the shared push
+4. **`background-location-addendum.md`** — the designed-and-decided
+   post-v1 background-location opt-in (product rules, consent copy,
+   auto-expiry, per-platform wiring, gate). Referenced by Android Phase A6
+   and iOS Phase I7 — run only after the v1 gates pass.
+5. **`appendix-push-reference.md`** — EXACT code for the shared push
    plumbing: the `native_push_tokens` migration SQL verbatim, verified Deno
    crypto for Google/FCM OAuth (RS256) and direct APNs (ES256), the fan-out
    loop, and the `nativePushRegister()` web-bridge shape. Referenced from
