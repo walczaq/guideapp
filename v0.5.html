@@ -1034,10 +1034,10 @@
 
   /* about screen text */
   .about-block {
-    font-size: 15px; line-height: 1.55; color: #2a2e2a;
+    font-size: 15px; line-height: 1.55; color: var(--ink);
     margin-bottom: 14px;
   }
-  .about-block.muted { color: #4a4a4a; }
+  .about-block.muted { color: var(--muted); }
   .about-block b { font-weight: 600; color: var(--ink); }
 
   /* ── Chunk B: stops list in guide bottom sheet ──────────────────────────
@@ -2547,9 +2547,25 @@
     font-variation-settings: "opsz" 90;
   }
   .session-ended-sub {
-    font-size: 15px; line-height: 1.5; color: #4a4a4a;
+    font-size: 15px; line-height: 1.5; color: var(--muted);
     max-width: 280px;
   }
+  .session-ended-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 14px 28px; background: transparent; color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 6px; cursor: pointer;
+    margin-top: 10px;
+  }
+
+  /* Form controls inherit the theme ink. Many inputs set only their
+     background inline (var(--paper-2)); without this the UA default black
+     text is invisible in the dark theme (first seen in the Android shell). */
+  input, textarea, select {
+    color: var(--ink);
+    caret-color: var(--ink);
+  }
+  input::placeholder, textarea::placeholder { color: var(--muted); }
 </style>
 <!-- Beacon restyle + identification layer (handoff 2026-06). Loaded AFTER the
      base <style> block so they win the cascade: beacon.css owns tokens +
@@ -3147,6 +3163,10 @@
     <div class="session-ended-stamp">Fieldnote · Tour ended</div>
     <div class="session-ended-title">That's a wrap.</div>
     <div class="session-ended-sub">Your guide has ended this tour. Thanks for walking with us.</div>
+    <!-- Escape hatch. In the native shell there is no URL bar: without this,
+         auto-resuming into an ended session traps the user on this screen
+         forever (same class of bug as the invite-screen trap, trial-2 obs 1). -->
+    <button type="button" class="session-ended-btn" id="session-ended-leave">Back to start</button>
   </div>
 
   <!-- NOTES MODAL — edit notes for an already-active stop. Reachable by
@@ -3376,6 +3396,7 @@ const I18N = {
     join_err_empty: 'Enter a name to continue.', join_err_long: 'Name is too long.',
     ended_stamp: 'Fieldnote · Tour ended', ended_title: "That's a wrap.",
     ended_sub: 'Your guide has ended this tour. Thanks for walking with us.',
+    ended_leave: 'Back to start',
     nsb_next: 'Next',
     intro_skip: 'Skip',
     // Boarding v2 — single setup page (trial-4 field ask).
@@ -3443,6 +3464,7 @@ const I18N = {
     join_err_empty: 'Escribe un nombre para continuar.', join_err_long: 'El nombre es demasiado largo.',
     ended_stamp: 'Fieldnote · Tour finalizado', ended_title: 'Eso es todo.',
     ended_sub: 'Tu guía ha finalizado este tour. Gracias por acompañarnos.',
+    ended_leave: 'Volver al inicio',
     nsb_next: 'Siguiente',
     intro_skip: 'Omitir',
     intro_s_stamp: 'Bienvenido a bordo', intro_s_title: 'Dos toques y listo',
@@ -3509,6 +3531,7 @@ const I18N = {
     join_err_empty: '请输入名字以继续。', join_err_long: '名字太长了。',
     ended_stamp: 'Fieldnote · 行程已结束', ended_title: '行程结束。',
     ended_sub: '你的向导已结束本次行程。感谢你的同行。',
+    ended_leave: '返回首页',
     nsb_next: '下一站',
     intro_skip: '跳过',
     intro_s_stamp: '欢迎上车', intro_s_title: '两次点击即可就绪',
@@ -11963,8 +11986,17 @@ function showSessionEnded() {
     const st = screen.querySelector('.session-ended-stamp'); if (st) st.textContent = t('ended_stamp');
     const ti = screen.querySelector('.session-ended-title'); if (ti) ti.textContent = t('ended_title');
     const su = screen.querySelector('.session-ended-sub'); if (su) su.textContent = t('ended_sub');
+    const lv = document.getElementById('session-ended-leave');
+    if (lv) {
+      lv.textContent = t('ended_leave');
+      lv.onclick = () => { window.location.href = window.location.pathname; };
+    }
     screen.classList.add('show');
   }
+  // The session is over — forget it as the auto-resume target. Without this
+  // the native shell (fixed start URL, no address bar) reopens into this
+  // screen on every launch with no way out.
+  if (SESSION && getLastSession() === SESSION.id) clearLastSession();
   // Stop any further realtime work on this page — the session is over.
   try { if (_stopActivationChannel) _stopActivationChannel.unsubscribe(); } catch {}
   try { if (_sessionChannel) _sessionChannel.unsubscribe(); } catch {}
