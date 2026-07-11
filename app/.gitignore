@@ -1,4 +1,7 @@
 node_modules/
+# Firebase config — never commit; Codemagic writes it from the
+# GOOGLE_SERVICES_JSON env var (base64) in a pre-build step.
+android/app/google-services.json
 android/.gradle/
 android/app/build/
 android/build/

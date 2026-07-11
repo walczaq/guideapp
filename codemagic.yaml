@@ -19,6 +19,19 @@ workflows:
       java: 17
       node: 22.14.0
     scripts:
+      - name: Write google-services.json (Firebase push)
+        # GOOGLE_SERVICES_JSON = base64 of the Firebase config, set as a
+        # secure env var in Codemagic. Without it the build still succeeds —
+        # the Gradle google-services plugin is applied conditionally — but
+        # native push registration won't work in the resulting APK.
+        # openssl (not `base64 -d`) so the same line works on mac + linux.
+        script: |
+          if [ -n "${GOOGLE_SERVICES_JSON:-}" ]; then
+            echo "$GOOGLE_SERVICES_JSON" | openssl base64 -d -A > app/android/app/google-services.json
+            echo "google-services.json written ($(wc -c < app/android/app/google-services.json) bytes)"
+          else
+            echo "GOOGLE_SERVICES_JSON not set — building without push support"
+          fi
       - name: Install web deps
         script: cd app && npm ci
       - name: Capacitor sync
