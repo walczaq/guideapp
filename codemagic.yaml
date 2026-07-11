@@ -43,6 +43,42 @@ workflows:
     artifacts:
       - app/android/app/build/outputs/apk/debug/app-debug.apk
 
+  android-release:
+    name: Android release AAB (Play internal testing)
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      groups:
+        - firebase   # GOOGLE_SERVICES_JSON (base64, secure)
+      android_signing:
+        # Upload keystore generated + stored in Codemagic UI
+        # (Settings → Code signing identities → Android). Codemagic injects
+        # CM_KEYSTORE_PATH/_PASSWORD/CM_KEY_ALIAS/_PASSWORD which
+        # app/android/app/build.gradle's release signingConfig reads.
+        - fieldnote_upload
+      java: 17
+      node: 22.14.0
+    scripts:
+      - name: Write google-services.json (Firebase push)
+        script: |
+          if [ -n "${GOOGLE_SERVICES_JSON:-}" ]; then
+            echo "$GOOGLE_SERVICES_JSON" | openssl base64 -d -A > app/android/app/google-services.json
+            echo "google-services.json written ($(wc -c < app/android/app/google-services.json) bytes)"
+          else
+            echo "GOOGLE_SERVICES_JSON not set — building without push support"
+            exit 1   # release builds MUST have push; fail loudly
+          fi
+      - name: Install web deps
+        script: cd app && npm ci
+      - name: Capacitor sync
+        script: cd app && npx cap sync android
+      - name: Build signed AAB
+        # versionCode auto-increments from Codemagic's project build number;
+        # versionName is pinned in build.gradle (starts 0.7.0).
+        script: cd app/android && chmod +x gradlew && ./gradlew bundleRelease -PappVersionCode=$BUILD_NUMBER
+    artifacts:
+      - app/android/app/build/outputs/bundle/release/app-release.aab
+
   ios-testflight:
     name: iOS TestFlight
     instance_type: mac_mini_m2
