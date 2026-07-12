@@ -4461,6 +4461,87 @@ function showLanguageGate() {
   });
 }
 
+// ── EASTER EGG: the "Attacker" guide ──
+// A guide registered under the display name "Attacker" via an anonaddy relay
+// address on 2026-07-12. Harmless so far (no sessions, no tours), but the name
+// was a wink — so we wink back. On every boot for THIS guide id we throw up a
+// nyan-cat gate that makes them pinky-promise before the app loads. Both
+// buttons say yes; it's a gag, not real auth. Delete this id (or the block in
+// boot() that calls it) to retire it. Self-contained: inline SVG + CSS only,
+// no external assets, so it's CSP-safe and works offline.
+const NYAN_GUIDE_ID = '78a71c09-588f-4ae9-8a0a-22d400e50bdd';
+
+function showAttackerGate() {
+  return new Promise((resolve) => {
+    hideLoading();
+    let el = document.getElementById('nyan-gate'); if (el) el.remove();
+    el = document.createElement('div');
+    el.id = 'nyan-gate';
+    el.style.cssText = 'position:absolute; inset:0; z-index:200; background:radial-gradient(circle at 50% 40%, #1a1350, #060320); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:26px; padding:32px; text-align:center; overflow:hidden;';
+    el.innerHTML = `
+      <style>
+        #nyan-gate .nyan-stars{position:absolute; inset:0; pointer-events:none;}
+        #nyan-gate .nyan-stars i{position:absolute; width:5px; height:5px; background:#fff;
+          box-shadow:5px 0 #fff,-5px 0 #fff,0 5px #fff,0 -5px #fff; animation:nyanTwinkle 1.1s steps(2,end) infinite;}
+        @keyframes nyanTwinkle{0%,100%{opacity:.12; transform:scale(.5);}50%{opacity:.9; transform:scale(1);}}
+        #nyan-gate .nyan-cat{width:240px; height:84px; animation:nyanBob .32s steps(2,end) infinite;}
+        @keyframes nyanBob{0%,100%{transform:translateY(-4px);}50%{transform:translateY(4px);}}
+        #nyan-gate .nyan-q{font-family:'Fraunces',serif; font-style:italic; font-size:22px; line-height:1.35; color:#fff; max-width:300px; text-shadow:0 2px 8px rgba(0,0,0,.5);}
+        #nyan-gate .nyan-btns{display:flex; flex-direction:column; gap:12px; width:240px;}
+        #nyan-gate .nyan-btns button{font-family:'JetBrains Mono',monospace; font-size:15px; padding:15px;
+          background:rgba(255,255,255,.10); color:#fff; border:1px solid rgba(255,255,255,.55); border-radius:10px; cursor:pointer;}
+        #nyan-gate .nyan-btns button:active{background:rgba(255,255,255,.22);}
+        #nyan-gate .nyan-foot{font-family:'JetBrains Mono',monospace; font-size:10px; color:rgba(255,255,255,.4);}
+      </style>
+      <div class="nyan-stars"></div>
+      <svg class="nyan-cat" viewBox="0 0 240 84" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+        <!-- rainbow trail -->
+        <g>
+          <rect x="0" y="20" width="132" height="8" fill="#ff1e1e"/>
+          <rect x="0" y="28" width="132" height="8" fill="#ff8c1e"/>
+          <rect x="0" y="36" width="132" height="8" fill="#ffe01e"/>
+          <rect x="0" y="44" width="132" height="8" fill="#3ddc4a"/>
+          <rect x="0" y="52" width="132" height="8" fill="#3d9bff"/>
+          <rect x="0" y="60" width="132" height="8" fill="#a24dff"/>
+        </g>
+        <!-- pop-tart body -->
+        <rect x="122" y="24" width="60" height="40" rx="4" fill="#ffcfe1" stroke="#7a2b46" stroke-width="3"/>
+        <circle cx="138" cy="38" r="2.5" fill="#7a2b46"/><circle cx="156" cy="34" r="2.5" fill="#7a2b46"/>
+        <circle cx="168" cy="48" r="2.5" fill="#7a2b46"/><circle cx="146" cy="52" r="2.5" fill="#7a2b46"/>
+        <!-- legs -->
+        <rect x="128" y="62" width="8" height="10" fill="#5a5a5a"/><rect x="150" y="64" width="8" height="10" fill="#5a5a5a"/>
+        <rect x="168" y="62" width="8" height="10" fill="#5a5a5a"/>
+        <!-- head -->
+        <rect x="178" y="22" width="44" height="42" rx="3" fill="#9a9a9a" stroke="#3a3a3a" stroke-width="2"/>
+        <polygon points="182,22 182,10 194,22" fill="#9a9a9a" stroke="#3a3a3a" stroke-width="2"/>
+        <polygon points="218,22 218,10 206,22" fill="#9a9a9a" stroke="#3a3a3a" stroke-width="2"/>
+        <circle cx="192" cy="40" r="3.5" fill="#1a1a1a"/><circle cx="208" cy="40" r="3.5" fill="#1a1a1a"/>
+        <circle cx="188" cy="50" r="4" fill="#ff9ec2"/><circle cx="212" cy="50" r="4" fill="#ff9ec2"/>
+        <rect x="198" y="48" width="4" height="3" fill="#3a3a3a"/>
+        <path d="M196 54 q4 4 8 0" fill="none" stroke="#3a3a3a" stroke-width="1.5"/>
+      </svg>
+      <div class="nyan-q">Do you solely promise you have nothing nefarious on your mind?</div>
+      <div class="nyan-btns">
+        <button type="button" data-yes="1">Yes</button>
+        <button type="button" data-yes="2">Yes, obviously</button>
+      </div>
+      <div class="nyan-foot">this gate is legally binding in exactly zero jurisdictions</div>`;
+    document.getElementById('phone').appendChild(el);
+    // Scatter deterministic twinkling stars (no external image, no Math.random reliance needed).
+    const pts = [[8,12],[22,68],[35,30],[48,80],[60,18],[72,55],[85,38],[15,45],[90,72],[40,60],[65,85],[28,88],[78,14],[52,42]];
+    const wrap = el.querySelector('.nyan-stars');
+    pts.forEach((p, i) => {
+      const s = document.createElement('i');
+      s.style.left = p[0] + '%'; s.style.top = p[1] + '%';
+      s.style.animationDelay = (i * 0.13).toFixed(2) + 's';
+      wrap.appendChild(s);
+    });
+    el.querySelectorAll('.nyan-btns button').forEach(b => {
+      b.addEventListener('click', () => { el.remove(); resolve(); });
+    });
+  });
+}
+
 async function boot() {
   // Dependency check FIRST. The libs (supabase-js, mapbox-gl) are loaded by
   // <script> tags in <head> — same-origin /vendor copies, but on a weak
@@ -4547,6 +4628,10 @@ async function boot() {
   // Verify any stored guide token. Cheap — one RPC call. Result populates
   // module-level GUIDE so downstream code knows whether we're a logged-in guide.
   GUIDE = await verifyGuideToken();
+
+  // Easter egg: the self-styled "Attacker" guide must pinky-promise first.
+  // See showAttackerGate — both buttons say yes, it's a wink, not real auth.
+  if (GUIDE && GUIDE.id === NYAN_GUIDE_ID) { await showAttackerGate(); }
 
   // Auth gate: ?role=guide requires a valid token. If missing or invalid,
   // show the invite-code form. After successful redemption the form reloads
