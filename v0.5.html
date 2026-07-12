@@ -2962,6 +2962,8 @@
         <button class="install-btn" id="menu-install-btn" type="button">Install website</button>
         <div class="install-hint" id="menu-install-hint"></div>
       </div>
+      <!-- Guide-only: the permanent per-guide QR (print it once, use forever). -->
+      <button type="button" class="menu-guidelogin-link" id="menu-my-qr" style="display:none;">My QR code</button>
       <!-- Discreet developer-info link (same text-link style; replaces the old "About" row). -->
       <button type="button" class="menu-guidelogin-link" id="menu-dev-info" style="margin-top:2px;">Developer info</button>
     </div>
@@ -3399,6 +3401,10 @@ const I18N = {
     ended_leave: 'Back to start',
     nsb_next: 'Next',
     intro_skip: 'Skip',
+    // Permanent guide QR — pre-tour wait state.
+    gw_title: '{guide}’s tour hasn’t started yet',
+    gw_body: 'You’re in the right place. Keep this page open — you’ll join automatically the moment the tour begins.',
+    gw_watching: 'watching for the tour to start…',
     // Boarding v2 — single setup page (trial-4 field ask).
     intro_s_stamp: 'Welcome aboard', intro_s_title: 'Two taps and you’re set',
     intro_s_guide: 'You’re on {guide}’s tour.',
@@ -3468,6 +3474,9 @@ const I18N = {
     ended_leave: 'Volver al inicio',
     nsb_next: 'Siguiente',
     intro_skip: 'Omitir',
+    gw_title: 'El tour de {guide} aún no ha empezado',
+    gw_body: 'Estás en el lugar correcto. Mantén esta página abierta: te unirás automáticamente en cuanto empiece el tour.',
+    gw_watching: 'esperando a que empiece el tour…',
     intro_s_stamp: 'Bienvenido a bordo', intro_s_title: 'Dos toques y listo',
     intro_s_guide: 'Estás en el tour de {guide}.',
     intro_s_loc_why: 'Para que aparezcas en el mapa y las paradas se iluminen cerca de ti. Solo se comparte durante este tour.',
@@ -3536,6 +3545,9 @@ const I18N = {
     ended_leave: '返回首页',
     nsb_next: '下一站',
     intro_skip: '跳过',
+    gw_title: '{guide} 的导览尚未开始',
+    gw_body: '你来对地方了。请保持此页面打开——导览一开始你将自动加入。',
+    gw_watching: '正在等待导览开始…',
     intro_s_stamp: '欢迎上车', intro_s_title: '两次点击即可就绪',
     intro_s_guide: '你正在参加 {guide} 的导览。',
     intro_s_loc_why: '让你出现在地图上，附近的停靠点会亮起。仅在本次导览期间共享。',
@@ -4499,6 +4511,33 @@ async function boot() {
     }
   }
 
+  // Permanent per-guide QR: /g/<guideCode> (or ?guide=). One printed code
+  // per guide, forever — resolves to their CURRENT live session via the
+  // resolve_guide_qr RPC (safe because sessions auto-end, migration 041).
+  // No live session → the wait screen, which self-joins when one starts.
+  if (!sessionId) {
+    let guideCode = params.get('guide');
+    if (!guideCode) {
+      const gm = window.location.pathname.match(/^\/g\/([A-Za-z0-9_-]+)/);
+      if (gm) guideCode = gm[1];
+    }
+    if (guideCode && supabaseClient) {
+      try {
+        const { data, error } = await supabaseClient.rpc('resolve_guide_qr', { p_code: guideCode });
+        if (!error && data && data.found) {
+          if (data.session_id) {
+            sessionId = data.session_id;
+            try { history.replaceState(null, '', '/v0.5?session=' + encodeURIComponent(sessionId)); } catch (_e) {}
+          } else {
+            showGuideWaitScreen(guideCode, data.guide_name);
+            return;
+          }
+        }
+        // not found (or RPC error) → fall through to the landing screen
+      } catch (_e) { /* offline — landing screen still explains joining */ }
+    }
+  }
+
   // Language gate — PASSENGERS ONLY. A passenger is joining a session and is
   // not a guide (no stored guide token, not ?role=guide). Guides are never
   // prompted. The gate reloads on pick so the rest of boot renders localized.
@@ -4671,6 +4710,50 @@ function showLandingScreen() {
   }
   findBtn.addEventListener('click', findTourByGuideName);
   nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') findTourByGuideName(); });
+}
+
+// Permanent-guide-QR wait state: the scanned guide has no live session yet
+// (early bus, or the booking-email pre-scan the night before). Shows whose
+// code this is and self-joins the moment their session starts — re-checks
+// every 20s, so the guide pressing "Start" on their phone pulls every
+// waiting passenger in without anyone re-scanning.
+function showGuideWaitScreen(guideCode, guideName) {
+  hideLoading();
+  let el = document.getElementById('guide-wait-screen');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'guide-wait-screen';
+  el.style.cssText =
+    'position:absolute; inset:0; z-index:90; background:var(--paper);' +
+    'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+    'gap:18px; padding:40px; text-align:center;';
+  el.innerHTML = `
+    <img class="brand-logo" src="/icon.svg" alt="Fieldnote" />
+    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
+      Fieldnote
+    </div>
+    <div style="font-family:'Fraunces',serif; font-style:italic; font-size:24px; color:var(--ink); max-width:300px; line-height:1.3;">
+      ${t('gw_title', { guide: (guideName || 'Your guide') })}
+    </div>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:270px; line-height:1.6;">
+      ${t('gw_body')}
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); opacity:0.7;">
+      <span class="gw-pulse" style="width:8px; height:8px; border-radius:50%; background:var(--signal-good); display:inline-block; animation: pulse 2s ease-in-out infinite;"></span>
+      <span>${t('gw_watching')}</span>
+    </div>
+  `;
+  document.getElementById('phone').appendChild(el);
+
+  const tick = setInterval(async () => {
+    try {
+      const { data, error } = await supabaseClient.rpc('resolve_guide_qr', { p_code: guideCode });
+      if (!error && data && data.found && data.session_id) {
+        clearInterval(tick);
+        window.location.href = `${window.location.pathname}?session=${encodeURIComponent(data.session_id)}`;
+      }
+    } catch (_e) { /* offline blip — keep polling */ }
+  }, 20000);
 }
 
 // Remember the last session a device joined, so launching the installed
@@ -10810,6 +10893,12 @@ document.querySelectorAll('[data-close-screen]').forEach(b => b.addEventListener
   if (devInfoLink) devInfoLink.addEventListener('click', () => {
     openScreen('screen-about');
   });
+  // Guide-only: permanent personal QR (print once, use on every tour).
+  const myQrLink = document.getElementById('menu-my-qr');
+  if (myQrLink) myQrLink.addEventListener('click', () => {
+    while (screenStack.length) closeScreen();
+    openMyQrScreen();
+  });
 }
 
 document.getElementById('burger-btn').addEventListener('click', () => {
@@ -10862,6 +10951,11 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   const guideLoginItem = document.getElementById('menu-guide-login');
   if (guideLoginItem) {
     guideLoginItem.style.display = GUIDE ? 'none' : '';
+  }
+  // "My QR code" — the inverse of guide login: only for logged-in guides.
+  const myQrItem = document.getElementById('menu-my-qr');
+  if (myQrItem) {
+    myQrItem.style.display = GUIDE ? '' : 'none';
   }
   // "Your name" — passenger-only, only when in a session. Show current name
   // as a subtitle so they know what's stored without opening the form.
@@ -11026,6 +11120,90 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
 // Build the Share screen contents (QR + URL + copy button) and open it.
 // Re-renders the QR each time it's opened, in case the session ever changes
 // (it doesn't currently, but cheap insurance).
+// The guide's PERMANENT personal QR (fieldnote.guide/g/<code>) — print it,
+// laminate it, save it to Photos; it joins whatever session the guide is
+// running, forever (resolve_guide_qr; scanned early it shows the wait
+// screen that self-joins). Fetched once per page load via get_my_guide_qr.
+let _myGuideQrCode = null;
+async function openMyQrScreen() {
+  const token = getStoredGuideToken();
+  if (!token) return;
+  let el = document.getElementById('my-qr-screen');
+  if (el) el.remove();
+  if (!_myGuideQrCode) {
+    try {
+      const { data, error } = await supabaseClient.rpc('get_my_guide_qr', { p_guide_token: token });
+      if (error || !data) { try { showToast('Could not load your QR — check your connection.'); } catch (_e) {} return; }
+      _myGuideQrCode = data;
+    } catch (_e) { return; }
+  }
+  const url = `https://fieldnote.guide/g/${_myGuideQrCode}`;
+  el = document.createElement('div');
+  el.id = 'my-qr-screen';
+  el.style.cssText =
+    'position:absolute; inset:0; z-index:95; background:var(--paper);' +
+    'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+    'gap:14px; padding:32px; text-align:center; overflow-y:auto;';
+  el.innerHTML = `
+    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule);">
+      Fieldnote · My QR
+    </div>
+    <div style="font-family:'Fraunces',serif; font-style:italic; font-size:22px; color:var(--ink);">
+      Your permanent tour code
+    </div>
+    <div id="my-qr-box" style="display:flex; justify-content:center; padding:16px; background:#ffffff; border:2px solid var(--ink); border-radius:12px;"></div>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink); user-select:all;">${url}</div>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); max-width:280px; line-height:1.6;">
+      This code is yours forever — print it, laminate it, or save the image.
+      Passengers who scan it join whichever tour you're running right now.
+      Scanned before you start, it waits and joins automatically.
+    </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+      <button id="my-qr-save" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; padding:12px 20px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;">Save image</button>
+      <button id="my-qr-copy" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; padding:12px 20px; background:var(--paper-2); color:var(--ink); border:1px solid var(--ink); border-radius:6px; cursor:pointer;">Copy link</button>
+      <button id="my-qr-close" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; padding:12px 20px; background:transparent; color:var(--rule); border:1px solid var(--rule); border-radius:6px; cursor:pointer;">Close</button>
+    </div>
+  `;
+  document.getElementById('phone').appendChild(el);
+
+  const box = document.getElementById('my-qr-box');
+  if (box && typeof qrcode === 'function') {
+    try {
+      const qr = qrcode(0, 'M');
+      qr.addData(url);
+      qr.make();
+      box.innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+      const svg = box.querySelector('svg');
+      if (svg) {
+        svg.style.maxWidth = '240px'; svg.style.width = '100%';
+        svg.style.height = 'auto'; svg.style.display = 'block';
+        svg.querySelectorAll('path').forEach(p => p.setAttribute('fill', '#000000'));
+        svg.querySelectorAll('rect').forEach(r => r.setAttribute('fill', '#ffffff'));
+        svg.style.background = '#ffffff';
+      }
+      // Save: the library renders a GIF data URL — big cells for print quality.
+      const save = document.getElementById('my-qr-save');
+      if (save) save.addEventListener('click', () => {
+        try {
+          const a = document.createElement('a');
+          a.href = qr.createDataURL(16, 8);
+          a.download = 'fieldnote-my-qr.gif';
+          a.click();
+        } catch (_e) { try { showToast('Could not save — screenshot this screen instead.'); } catch (_e2) {} }
+      });
+    } catch (err) {
+      box.innerHTML = '<div style="font-family:\'JetBrains Mono\',monospace; font-size:11px; color:var(--mark);">QR could not be generated.</div>';
+    }
+  }
+  const copy = document.getElementById('my-qr-copy');
+  if (copy) copy.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(url); copy.textContent = 'Copied ✓'; }
+    catch (_e) { copy.textContent = url; }
+  });
+  const close = document.getElementById('my-qr-close');
+  if (close) close.addEventListener('click', () => el.remove());
+}
+
 function openShareScreen() {
   if (!SESSION) return;
   const url = inviteUrlFor(SESSION.id);

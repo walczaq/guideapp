@@ -13,3 +13,8 @@
 # (:splat is whatever follows /j/.) Lets invites read cleanly; the in-app
 # Share invite can be switched to emit these on request.
 /j/*     /v0.5?session=:splat   302
+
+# Permanent per-guide QR: fieldnote.guide/g/<guideCode> → the guide's
+# CURRENT live session, resolved client-side (boot's ?guide= handler via
+# the resolve_guide_qr RPC). One printed/laminated code per guide, forever.
+/g/*     /v0.5?guide=:splat     302
