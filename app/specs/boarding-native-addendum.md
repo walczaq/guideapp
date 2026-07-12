@@ -67,6 +67,30 @@ Implementation moment: the `_redirects` rule for `/j/*` flips from the
 webapp to this page ONLY after native v1 gates pass on both platforms —
 until then, today's browser boarding stays the default.
 
+## Permanent per-guide QR (SHIPPED on web, 2026-07-12 — fd65927)
+
+Each guide has ONE immutable code (`guides.qr_code`, migration 043):
+`fieldnote.guide/g/<code>` resolves to their CURRENT live session via the
+`resolve_guide_qr` RPC (trustworthy because sessions auto-end). No live
+session → a wait screen that self-joins when the tour starts — which is
+what makes the SAME printed code work in booking emails the night before.
+Guides print/save it from menu → "My QR code".
+
+**Native work this creates (fold into A3/I3):**
+- App Links / Universal Links / AASA `paths` must cover `/g/*` in addition
+  to `/j/*`; the custom scheme likewise (`fieldnote://g/<code>`).
+- The `appUrlOpen` handler for `/g/<code>` navigates the WebView to
+  `/v0.5?guide=<code>` — the web boot already resolves it (live session →
+  join; none → wait screen; the wait screen's 20s poll works identically
+  inside the shell).
+- The router page's session-specific handoffs adapt when reached via a
+  guide code with NO live session yet: install referrer / clipboard carry
+  `guide=<code>` instead of `session=<id>`, and the app's first-launch
+  handler accepts either.
+- The guide QR printed BEFORE the app-first flip keeps working after it —
+  same URL, only the /g/* redirect target changes to the router page.
+  This continuity is the point of permanent codes; never break it.
+
 ## Welcome-talk boarding sequence (guide script)
 
 1. Passengers connect to bus Wi-Fi, tap through any captive portal.
