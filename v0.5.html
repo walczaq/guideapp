@@ -13188,9 +13188,22 @@ if (isNativeApp()) {
     if (A) {
       A.addListener('appUrlOpen', (ev) => { if (ev && ev.url) handleNativeAppUrl(ev.url); });
       // Cold start via a link: the event fired before this script ran, so
-      // also ask for the launch URL explicitly.
+      // also ask for the launch URL explicitly. ⚠️ getLaunchUrl returns the
+      // SAME url on every page load for the life of the app process — and
+      // handleNativeAppUrl navigates, which reloads the page, which re-runs
+      // this code. Without the handled-once guard that's an infinite reload
+      // loop (found the hard way: black map on every /g/ QR launch).
+      // sessionStorage survives in-WebView navigations but not app restarts,
+      // which is exactly the lifetime we want.
       if (typeof A.getLaunchUrl === 'function') {
-        A.getLaunchUrl().then((r) => { if (r && r.url) handleNativeAppUrl(r.url); }).catch(() => {});
+        A.getLaunchUrl().then((r) => {
+          if (!r || !r.url) return;
+          let seen = null;
+          try { seen = sessionStorage.getItem('fn_launch_url_handled'); } catch (_e) {}
+          if (seen === r.url) return;
+          try { sessionStorage.setItem('fn_launch_url_handled', r.url); } catch (_e) {}
+          handleNativeAppUrl(r.url);
+        }).catch(() => {});
       }
     }
   } catch (_e) { /* App plugin missing — links open the browser instead */ }
