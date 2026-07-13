@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "guide.fieldnote.app",
+      "sha256_cert_fingerprints": [
+        "26:55:E3:AA:1B:6F:DE:CF:25:1E:00:57:01:8E:6F:35:37:20:B8:CA:8F:39:5E:9F:EE:05:BB:7B:D4:E7:22:B8",
+        "D9:74:D3:54:B9:51:98:B2:32:21:FD:F4:52:FE:03:15:85:C5:A7:A9:9A:69:15:02:D0:7E:16:6A:A9:66:E4:38"
+      ]
+    }
+  }
+]
