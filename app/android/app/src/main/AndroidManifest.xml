@@ -1,6 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8" ?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -8,7 +7,6 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
             android:name=".MainActivity"
@@ -16,23 +14,35 @@
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
             android:exported="true">
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Session QR deep links: https://fieldnote.guide/j/<sessionId>
-                 opens the app straight into that session. autoVerify needs
-                 /.well-known/assetlinks.json on the site with the release
-                 signing cert's SHA-256 (see app/store-setup/SETUP.md). -->
+            <!-- QR deep links: /j/<sessionId> (per-session) and /g/<code>
+                 (permanent per-guide, boarding addendum) open the app.
+                 autoVerify needs /.well-known/assetlinks.json on the site
+                 with the release signing cert's SHA-256
+                 (see app/store-setup/SETUP.md). -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="fieldnote.guide" android:pathPrefix="/j/" />
+                <data android:scheme="https" android:host="fieldnote.guide" android:pathPrefix="/g/" />
             </intent-filter>
 
+            <!-- Custom scheme (fieldnote://j/<id>, fieldnote://g/<code>):
+                 the router page's "Open my tour in the app" button uses it
+                 because iOS suppresses same-domain universal links; Android
+                 registers it for parity. No autoVerify — custom schemes
+                 aren't verified. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="fieldnote" />
+            </intent-filter>
         </activity>
 
         <provider
@@ -40,9 +50,7 @@
             android:authorities="${applicationId}.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths"></meta-data>
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
     </application>
 
