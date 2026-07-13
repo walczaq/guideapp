@@ -2558,10 +2558,14 @@
     margin-top: 10px;
   }
 
-  /* Form controls inherit the theme ink. Many inputs set only their
-     background inline (var(--paper-2)); without this the UA default black
-     text is invisible in the dark theme (first seen in the Android shell). */
-  input, textarea, select {
+  /* Form controls inherit the theme ink. Many inputs AND buttons set only
+     their background inline (transparent / var(--paper-2)); without this the
+     UA default black text is invisible in the dark theme (first seen in the
+     Android shell; buttons — Developer info's log out / view as / sync now
+     etc. — caught in the 2026-07-13 field screenshots). Element-level
+     specificity, so every button that DOES set its color inline or via a
+     class still wins. */
+  input, textarea, select, button {
     color: var(--ink);
     caret-color: var(--ink);
   }
@@ -3328,7 +3332,10 @@ window.addEventListener('unhandledrejection', function () {
 
 // Build version. Bumped every time a new file is shipped — visible in the
 // About panel so you can confirm you're running the latest deploy.
-const BUILD_VERSION = '0.6 · beacon v2 (guide light console + appearance toggle) + icon set v2 + AI-1 lite auto-translate + iOS location recovery · build 2026-06-10-1110';
+// Bump this WITH each meaningful deploy — it's the only build indicator a
+// phone in the field can show us (a stale stamp here misled a 2026-07-13
+// debugging session into suspecting a stale app).
+const BUILD_VERSION = '0.7 · native shell (Capacitor) + permanent guide QR + boarding v2 + control center v2 + session auto-end · build 2026-07-13';
 
 // Verbose tracing — OFF in production so real warnings/errors aren't buried under
 // the per-render [maybeShow]/[catch-up]/[realtime] spam (~1800 lines a session).
