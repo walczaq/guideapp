@@ -2568,17 +2568,6 @@
     will-change: filter;
     transform: translateZ(0);
   }
-  /* …and while the camera is moving, drop the filter entirely (the class
-     is toggled on movestart/idle). The per-frame filter cost disappears
-     exactly when frames are most expensive; the settled frame gets
-     re-filtered once on idle. Tradeoff: raw tile colors flash through
-     during gestures — most visible in dark mode, judged acceptable vs the
-     stutter. Selectors carry the #id/.tb-map weight to outgun beacon.css's
-     filter rule without !important. */
-  html.native-shell.fn-map-moving #mapbox-map .mapboxgl-canvas,
-  html.native-shell.fn-map-moving .tb-map .mapboxgl-canvas {
-    filter: none;
-  }
 
   /* Form controls inherit the theme ink. Many inputs AND buttons set only
      their background inline (transparent / var(--paper-2)); without this the
@@ -6464,12 +6453,6 @@ async function openTourEditor(tourId) {
   }
   try {
     _tbEditorMap = new mapboxgl.Map(edOpts);
-    // Same shell-only filter suspension as the main map (zoom stutter).
-    if (isNativeApp()) {
-      const _rootCls = document.documentElement.classList;
-      _tbEditorMap.on('movestart', () => _rootCls.add('fn-map-moving'));
-      _tbEditorMap.on('idle', () => _rootCls.remove('fn-map-moving'));
-    }
     // Watchdog: surface the reason on-screen if the editor map never loads.
     let _edLoaded = false, _edLastErr = '';
     _tbEditorMap.on('error', (e) => {
@@ -8045,16 +8028,6 @@ function initMap(token) {
   map = new mapboxgl.Map(mapOpts);
   map.touchZoomRotate.disableRotation();
   map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
-
-  // Native shell: suspend the canvas filter while the camera moves
-  // (fn-map-moving class, see the html.native-shell CSS) — the WebView's
-  // per-frame filter rasterization is the zoom-stutter culprit. 'idle'
-  // (camera settled + tiles rendered) restores it in one pass.
-  if (isNativeApp()) {
-    const _rootCls = document.documentElement.classList;
-    map.on('movestart', () => _rootCls.add('fn-map-moving'));
-    map.on('idle', () => _rootCls.remove('fn-map-moving'));
-  }
 
   // Watchdog: capture the last Mapbox error and, if the map never finishes
   // loading, surface it on-screen (a blank map gives no clue on a phone).
