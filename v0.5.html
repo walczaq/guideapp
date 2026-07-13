@@ -13143,17 +13143,35 @@ function wireNativePushListeners() {
   });
 }
 
-// App Links (spec A3): scanning a session QR (fieldnote.guide/j/<id>)
-// opens the APP; the OS hands the URL to the shell via appUrlOpen (app
-// already running) or as the launch URL (cold start). Both funnel here.
-// Navigation is skipped when the session is already on screen.
+// App Links (spec A3 + boarding addendum): the OS hands the shell a URL
+// via appUrlOpen (app already running) or as the launch URL (cold start).
+// Both funnel here. Three accepted shapes:
+//   /j/<sessionId>  → join that session (skipped if already on screen)
+//   /g/<code>       → permanent per-guide QR; the web boot resolves
+//                     ?guide= to the live session or the wait screen
+//   fieldnote://j|g/… → custom scheme from the router page's "open in
+//                     app" button (iOS suppresses same-domain universal
+//                     links; Android registers it for parity)
 function handleNativeAppUrl(url) {
   try {
-    const m = /\/j\/([^/?#]+)/.exec(new URL(url).pathname);
-    if (!m || !m[1]) return;
-    const id = decodeURIComponent(m[1]);
-    if (!SESSION || SESSION.id !== id) {
-      window.location.href = '/v0.5?session=' + encodeURIComponent(id);
+    // Custom-scheme URLs parse with "j"/"g" in the AUTHORITY position
+    // (fieldnote://j/<id> → host "j", pathname "/<id>"), so normalize to
+    // the equivalent https URL before path-matching.
+    const normalized = String(url).replace(/^fieldnote:\/\//i, 'https://fieldnote.guide/');
+    const path = new URL(normalized).pathname;
+    let m = /\/j\/([^/?#]+)/.exec(path);
+    if (m && m[1]) {
+      const id = decodeURIComponent(m[1]);
+      if (!SESSION || SESSION.id !== id) {
+        window.location.href = '/v0.5?session=' + encodeURIComponent(id);
+      }
+      return;
+    }
+    m = /\/g\/([^/?#]+)/.exec(path);
+    if (m && m[1]) {
+      // Always navigate: the guide's CURRENT live session may differ from
+      // whatever is on screen, and re-resolving is the cheap, correct move.
+      window.location.href = '/v0.5?guide=' + encodeURIComponent(decodeURIComponent(m[1]));
     }
   } catch (_e) { /* malformed URL — ignore */ }
 }
