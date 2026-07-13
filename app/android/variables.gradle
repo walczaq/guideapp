@@ -1,7 +1,9 @@
 ext {
     minSdkVersion = 22
-    compileSdkVersion = 34
-    targetSdkVersion = 34
+    // API 35: Play requires new apps to target Android 15 (rejected the
+    // first AAB at 34). Needs AGP >= 8.6 — see the root build.gradle.
+    compileSdkVersion = 35
+    targetSdkVersion = 35
     androidxActivityVersion = '1.8.0'
     androidxAppCompatVersion = '1.6.1'
     androidxCoordinatorLayoutVersion = '1.2.0'
