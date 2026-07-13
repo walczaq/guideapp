@@ -6437,11 +6437,6 @@ async function openTourEditor(tourId) {
     style: 'mapbox://styles/mapbox/outdoors-v12',
     attributionControl: false, pitchWithRotate: false, dragRotate: false,
   };
-  // Same shell-only render-resolution cap as the live map (WebView WebGL
-  // throughput — see the mapOpts.pixelRatio comment there).
-  if (isNativeApp()) {
-    edOpts.pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-  }
   // Same mobile trap as the live map: passing `bounds` to the constructor while
   // the container is briefly 0-height (phone layout race) bakes in an invalid
   // camera → blank map. Open at a center+zoom, then fitBounds after load.
@@ -8009,15 +8004,6 @@ function initMap(token) {
     // stays available without re-fetching (helps when the signal drops).
     maxTileCacheSize: 2000,
   };
-  // Native shell: cap the render resolution. Perf HUD 2026-07-13, Samsung
-  // (dpr 3.75, Adreno): the WebView's WebGL path delivered 4-5 fps at high
-  // zoom where Samsung Internet did 60 at the SAME dpr/canvas/GPU — the
-  // WebView just has a fraction of the browser's throughput. Rendering at
-  // dpr 2 (iPhone-retina density, still crisp) cuts pixels ~3.5x. Browsers
-  // are untouched.
-  if (isNativeApp()) {
-    mapOpts.pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-  }
   // Guides keep the whole-tour overview, framed on the stops; we apply that
   // framing AFTER load via fitBounds (see below), not at construction.
   let guideFitBounds = null;
