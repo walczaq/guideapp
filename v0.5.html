@@ -2558,6 +2558,17 @@
     margin-top: 10px;
   }
 
+  /* Native shell (html.native-shell set by the Capacitor bridge): promote
+     the filtered map canvas onto its own composited GPU layer. The Android
+     WebView re-rasterizes the --map-filter chain far less efficiently than
+     full Chrome/Samsung Internet — visible as zoom stutter in the app while
+     the same page is smooth in the browser. Scoped to the shell so browser
+     rendering (already smooth) is untouched. */
+  html.native-shell .mapboxgl-canvas {
+    will-change: filter;
+    transform: translateZ(0);
+  }
+
   /* Form controls inherit the theme ink. Many inputs AND buttons set only
      their background inline (transparent / var(--paper-2)); without this the
      UA default black text is invisible in the dark theme (first seen in the
@@ -13183,6 +13194,10 @@ function handleNativeAppUrl(url) {
   } catch (_e) { /* malformed URL — ignore */ }
 }
 if (isNativeApp()) {
+  // Marker class for shell-only CSS (map canvas GPU-layer promotion, see
+  // the html.native-shell rule in the base styles). Set at parse time —
+  // well before the map initializes.
+  try { document.documentElement.classList.add('native-shell'); } catch (_e) { /* ignore */ }
   try {
     const A = window.Capacitor.Plugins && window.Capacitor.Plugins.App;
     if (A) {
