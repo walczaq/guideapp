@@ -13193,6 +13193,47 @@ function handleNativeAppUrl(url) {
     }
   } catch (_e) { /* malformed URL — ignore */ }
 }
+// TEMP diagnostic — WebView zoom-stutter hunt (2026-07-13). Tiny perf HUD:
+// fps, worst frame, devicePixelRatio, map canvas resolution, GPU renderer.
+// Shows in the native shell always, in browsers only with ?fps=1, so the
+// numbers can be compared side by side. REMOVE when the stutter is solved.
+(function fnPerfHud() {
+  let want = false;
+  try {
+    want = isNativeApp() || new URLSearchParams(window.location.search).get('fps') === '1';
+  } catch (_e) {}
+  if (!want) return;
+  let gpu = '';
+  try {
+    const g = document.createElement('canvas').getContext('webgl');
+    const ext = g && g.getExtension('WEBGL_debug_renderer_info');
+    if (g && ext) gpu = String(g.getParameter(ext.UNMASKED_RENDERER_WEBGL)).slice(0, 48);
+  } catch (_e) {}
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed; left:6px; bottom:34px; z-index:99999;'
+    + 'font:10px/1.5 monospace; background:rgba(0,0,0,0.6); color:#7cff7c;'
+    + 'padding:4px 7px; border-radius:4px; pointer-events:none; white-space:pre;';
+  document.body.appendChild(el);
+  let frames = 0, last = performance.now(), worst = 0, prev = performance.now();
+  function loop(now) {
+    frames++;
+    const dt = now - prev; prev = now;
+    if (dt > worst) worst = dt;
+    if (now - last >= 1000) {
+      let cv = '';
+      try {
+        const c = document.querySelector('.mapboxgl-canvas');
+        if (c) cv = c.width + 'x' + c.height;
+      } catch (_e) {}
+      el.textContent = 'fps ' + frames + '  worst ' + worst.toFixed(0) + 'ms\n'
+        + 'dpr ' + (window.devicePixelRatio || '?') + '  canvas ' + cv + '\n' + gpu;
+      frames = 0; worst = 0; last = now;
+    }
+    window.requestAnimationFrame(loop);
+  }
+  window.requestAnimationFrame(loop);
+})();
+
 if (isNativeApp()) {
   // Marker class for shell-only CSS (map canvas GPU-layer promotion, see
   // the html.native-shell rule in the base styles). Set at parse time —
