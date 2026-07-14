@@ -8079,8 +8079,10 @@ function initMap(token) {
     }
   }, 8500);
 
-  map.on('move', renderAll);
-  map.on('zoom', renderAll);
+  // Camera frames get the cheap reposition pass; full rebuilds (renderAll)
+  // are reserved for data changes. See repositionOverlay's header comment.
+  map.on('move', repositionOverlay);
+  map.on('zoom', repositionOverlay);
 
   // user dragging the map breaks follow mode
   map.on('dragstart', () => {
@@ -8649,6 +8651,9 @@ function drawDottedTrail(layer, points, opts) {
       path.setAttribute('class', cls);
       if (opts.dataId) path.setAttribute('data-passenger-id', opts.dataId);
       path.setAttribute('d', d);
+      // Camera fast path (repositionOverlay): geo points cached as a JS prop.
+      path.dataset.geo = 'path';
+      path.__geoPts = seg.map(t => ({ lng: t.lng, lat: t.lat }));
       if (opts.color) path.setAttribute('stroke', opts.color);
       path.setAttribute('stroke-width', '3.5');
       path.setAttribute('stroke-linecap', 'round');
@@ -8734,6 +8739,7 @@ function renderPassengers() {
     g.setAttribute('data-passenger-id', passengerId);
     g.setAttribute('data-state', state || 'default');
     g.setAttribute('transform', `translate(${x}, ${y})`);
+    geoStamp(g, p.lng, p.lat);
     g.setAttribute('opacity', String(dotOpacity));
     g.style.cursor = 'pointer';
 
@@ -10273,6 +10279,70 @@ function pxPerMeter() {
   return Math.abs(p2.y - p1.y) || 1;
 }
 
+// ── Overlay camera fast path (perf, 2026-07-14) ─────────────────────────
+// The overlay SVG used to be torn down and rebuilt (innerHTML = '' + full
+// createElement pass) on EVERY move/zoom frame — up to 60x/s during a
+// pinch, thrashing the main thread exactly while Mapbox's own per-frame
+// tile work peaks at deep zoom. That was the universal "map stutters when
+// zoomed in" (all platforms; worst on content-rich sessions).
+// Now: renderAll() (full rebuild) runs only on DATA changes; camera frames
+// run repositionOverlay(), which touches nothing structural — it updates
+// transforms, meter-scaled radii and cached-geometry line/path shapes on
+// the EXISTING nodes. Builders stamp geo coords via geoStamp/meterStamp
+// (dataset) and __geoA/__geoB/__geoPts (JS props on line/path elements).
+// RULE FOR FUTURE EDITS: anything positioned by lng/lat that renderAll
+// builds MUST stamp itself, or it will freeze in place during pan/zoom
+// until the next data rebuild.
+
+function geoStamp(el, lng, lat) {
+  el.dataset.lng = lng;
+  el.dataset.lat = lat;
+}
+
+// Circles whose radius is real meters (zones, pin trigger radii, GPS
+// accuracy halo): stamp radius + the visual px clamp so reposition can
+// recompute r on zoom exactly like the builder did.
+function meterStamp(circle, radiusMeters, minPx, maxPx) {
+  circle.dataset.radiusM = radiusMeters;
+  circle.dataset.rMin = minPx;
+  circle.dataset.rMax = (maxPx === Infinity) ? '' : maxPx;
+}
+
+function repositionOverlay() {
+  if (!map) return;
+  const ppm = pxPerMeter();
+  const layers = [pinsLayer, passengersLayer, youLayer];
+  for (const layer of layers) {
+    if (!layer) continue;
+    for (const g of layer.querySelectorAll('[data-lng]')) {
+      const { x, y } = project(+g.dataset.lng, +g.dataset.lat);
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        g.setAttribute('transform', `translate(${x}, ${y})`);
+      }
+    }
+    for (const c of layer.querySelectorAll('circle[data-radius-m]')) {
+      const raw = +c.dataset.radiusM * ppm;
+      const min = +c.dataset.rMin || 0;
+      const max = (c.dataset.rMax === '') ? Infinity : +c.dataset.rMax;
+      c.setAttribute('r', Math.max(min, Math.min(max, raw)));
+    }
+    for (const el of layer.querySelectorAll('[data-geo]')) {
+      if (el.dataset.geo === 'line' && el.__geoA && el.__geoB) {
+        const a = project(el.__geoA.lng, el.__geoA.lat);
+        const b = project(el.__geoB.lng, el.__geoB.lat);
+        if ([a.x, a.y, b.x, b.y].every(Number.isFinite)) {
+          el.setAttribute('x1', a.x); el.setAttribute('y1', a.y);
+          el.setAttribute('x2', b.x); el.setAttribute('y2', b.y);
+        }
+      } else if (el.dataset.geo === 'path' && el.__geoPts) {
+        const d = trailSmoothPath(el.__geoPts.map(t => project(t.lng, t.lat)));
+        if (d) el.setAttribute('d', d);
+      }
+    }
+  }
+  updateMapZoomReadout();
+}
+
 function renderAll() {
   renderPins();
   renderPassengers();
@@ -10382,6 +10452,10 @@ function renderRouteLine(layer) {
     ln.setAttribute('x1', a.x); ln.setAttribute('y1', a.y);
     ln.setAttribute('x2', b.x); ln.setAttribute('y2', b.y);
     ln.setAttribute('opacity', String(op));
+    // Camera fast path (repositionOverlay): endpoints cached as JS props.
+    ln.dataset.geo = 'line';
+    ln.__geoA = { lng: pts[i].lng, lat: pts[i].lat };
+    ln.__geoB = { lng: pts[i + 1].lng, lat: pts[i + 1].lat };
     layer.appendChild(ln);
   }
 }
@@ -10399,10 +10473,12 @@ function renderPins() {
     const g = document.createElementNS(SVGNS, 'g');
     g.setAttribute('class', 'zone-group');
     g.setAttribute('transform', `translate(${x}, ${y})`);
+    geoStamp(g, z.lng, z.lat);
     const zr = Math.max(14, Math.min(220, z.radius * ppm));
     const circle = document.createElementNS(SVGNS, 'circle');
     circle.setAttribute('class', 'zone-circle');
     circle.setAttribute('r', zr);
+    meterStamp(circle, z.radius, 14, 220);
     circle.setAttribute('fill', cat.color);
     circle.setAttribute('stroke', cat.color);
     g.appendChild(circle);
@@ -10425,6 +10501,7 @@ function renderPins() {
     const g = document.createElementNS(SVGNS, 'g');
     g.setAttribute('class', 'amenity-group');
     g.setAttribute('transform', `translate(${x}, ${y})`);
+    geoStamp(g, a.lng, a.lat);
     const badge = document.createElementNS(SVGNS, 'circle');
     badge.setAttribute('r', 12); badge.setAttribute('fill', cat.color);
     badge.setAttribute('stroke', '#fff'); badge.setAttribute('stroke-width', '2');
@@ -10450,6 +10527,7 @@ function renderPins() {
     const g = document.createElementNS(SVGNS, 'g');
     g.setAttribute('class', 'amenity-group' + (state.firedPinIds.has(sp.id) ? ' visited' : ''));
     g.setAttribute('transform', `translate(${x}, ${y})`);
+    geoStamp(g, sp.lng, sp.lat);
     const badge = document.createElementNS(SVGNS, 'circle');
     badge.setAttribute('r', 13); badge.setAttribute('fill', cat.color);
     badge.setAttribute('stroke', '#fff'); badge.setAttribute('stroke-width', '2');
@@ -10472,6 +10550,7 @@ function renderPins() {
     if (state.firedPinIds.has(pin.id) && pin.id !== state.armedPinId) classes += ' visited';
     g.setAttribute('class', classes);
     g.setAttribute('transform', `translate(${x}, ${y})`);
+    geoStamp(g, pin.lng, pin.lat);
 
     // Trigger radius — visual representation of the pin's reach.
     // We softly clamp the rendered circle so it doesn't get absurdly huge
@@ -10489,6 +10568,7 @@ function renderPins() {
     const r = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     r.setAttribute('class', 'pin-radius');
     r.setAttribute('r', visualPx);
+    meterStamp(r, pin.radius, VISUAL_RADIUS_MIN_PX, VISUAL_RADIUS_MAX_PX);
     g.appendChild(r);
 
     // marker — fixed screen size
@@ -10574,6 +10654,7 @@ function renderYou() {
   // class live between re-renders; this just seeds it correctly.
   g.setAttribute('class', 'you-group' + (isGuide && guideFixIsStale() ? ' stale' : ''));
   g.setAttribute('transform', `translate(${x}, ${y})`);
+  geoStamp(g, state.youLng, state.youLat);
 
   // accuracy halo — only when we have real GPS with known accuracy.
   // Cap visually so a wildly imprecise WiFi-based fix (which can be 10km+)
@@ -10582,6 +10663,7 @@ function renderYou() {
     const acc = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     acc.setAttribute('class', cls('you-accuracy'));
     acc.setAttribute('r', state.accuracy * ppm);
+    meterStamp(acc, state.accuracy, 0, Infinity);
     g.appendChild(acc);
   }
 
