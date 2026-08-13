@@ -7787,8 +7787,28 @@ function applyTourMetadata() {
       <button id="debug-force-sync" style="margin-left:4px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 8px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">sync now</button>
       <br>
       <span id="debug-sync-stats" style="opacity:0.7;">Sync: idle</span><br>
-      <span id="debug-passengers" style="opacity:0.7;">Passengers: idle</span>${simBlock ? '<br>' + simBlock : ''}
+      <span id="debug-passengers" style="opacity:0.7;">Passengers: idle</span><br>
+      <span id="debug-bg-share" style="opacity:0.7;">BG share: n/a</span>${simBlock ? '<br>' + simBlock : ''}
     `;
+    // A6 diagnostics: live watcher state, refreshed while the screen is
+    // open. "watcher <id> · last fix Ns ago" is the line that matters —
+    // a watcher with no fixes after a pocket walk means delivery was
+    // suspended (OEM power management), no watcher means arming failed.
+    if (isNativeApp()) {
+      const bgLine = document.getElementById('debug-bg-share');
+      const fmtBg = () => {
+        const arm = bgShareArmed();
+        const parts = [];
+        parts.push(_bgWatcherId ? ('watcher ' + String(_bgWatcherId).slice(0, 8)) : 'NO watcher');
+        parts.push(arm ? ('armed ' + Math.round((Date.now() - arm.armedAt) / 60000) + 'min ago') : 'not armed');
+        parts.push(_bgLastFixAt ? ('last bg fix ' + Math.round((Date.now() - _bgLastFixAt) / 1000) + 's ago') : 'no bg fix yet');
+        return 'BG share: ' + parts.join(' · ');
+      };
+      if (bgLine) {
+        bgLine.textContent = fmtBg();
+        setInterval(() => { try { bgLine.textContent = fmtBg(); } catch (_e) {} }, 2000);
+      }
+    }
     if (GUIDE) {
       const logoutBtn = document.getElementById('debug-logout');
       if (logoutBtn) logoutBtn.addEventListener('click', () => {
@@ -13396,6 +13416,7 @@ function wireNativePushListeners() {
 const BG_SHARE_KEY = 'fn_bg_share_v1';           // {sessionId, armedAt}
 const BG_SHARE_MAX_MS = 12 * 60 * 60 * 1000;     // hard cap — rule 3b
 let _bgWatcherId = null;
+let _bgLastFixAt = 0;                            // diagnostics (Developer info)
 
 function bgPlugin() {
   return (window.Capacitor && window.Capacitor.Plugins
@@ -13449,6 +13470,7 @@ async function bgShareStart() {
         return;
       }
       if (!location) return;
+      _bgLastFixAt = Date.now();
       onGpsSuccess({
         coords: {
           longitude: location.longitude,
