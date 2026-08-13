@@ -130,7 +130,11 @@ streaming. LIVE locked-screen delivery requires a NATIVE upload path —
 the foreground service posting fixes to Supabase directly (own
 FusedLocation + HTTP client, replacing the community plugin), a
 bounded but real piece of native work requiring build-per-iteration
-development. Decision pending (Filip).
+development. **Decision (Filip, 2026-08-13): ship v1 with
+record+backfill; build the native upload path AFTER the iOS port**
+— iOS will hit the same WebView wall, so the native path gets designed
+once for both platforms, with field data on how much the stale-dot
+window hurts in real tours.
 
 ## Gate (both platforms)
 
