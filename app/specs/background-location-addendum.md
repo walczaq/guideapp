@@ -111,6 +111,27 @@ strictly opt-in, transparently worded, auto-expiring.
 - App Store review notes: explain opt-in + auto-expiry + the passenger
   benefit; expect extra scrutiny on this build.
 
+## Android field findings (2026-08-13, Samsung, Gate A6 testing)
+
+What works locked-in-pocket: GPS fixes, the watcher's JS callbacks, the
+IndexedDB offline queue — full cadence, correct timestamps. What does
+NOT: network. The WebView's network stack suspends the moment the
+screen locks; every in-flight/new request freezes until unlock, then
+the store-and-forward queue flushes at once (verified via
+passenger_locations.synced_at deltas growing linearly to 5.5min).
+Ruled out by experiment: watcher arming (fixed in 127592b — arm on
+first fix, permission race), the sync-worker's in-flight latch (made
+stealable in 50f88a7 — needed anyway), Samsung battery optimization
+(Unrestricted changed nothing), Play-level permissions (n/a).
+
+Consequence: with the WebView approach, locked-screen behavior is
+"path recorded + backfilled on unlock + stale-ring honesty", not live
+streaming. LIVE locked-screen delivery requires a NATIVE upload path —
+the foreground service posting fixes to Supabase directly (own
+FusedLocation + HTTP client, replacing the community plugin), a
+bounded but real piece of native work requiring build-per-iteration
+development. Decision pending (Filip).
+
 ## Gate (both platforms)
 
 1. Board normally (location agreed; Android: settings hop completed),
