@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fieldnote · Privacy Policy</title>
+<style>
+  /* Matches the app's paper/ink palette; standalone on purpose (this page
+     must not depend on the app shell, its SW cache, or beacon.css). */
+  :root {
+    --paper: #f1ece0; --ink: #221f1d; --muted: #76705f; --rule: #9a9384;
+    --accent: #b2472e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #24211c; --ink: #efe9da; --muted: #9d978a; --rule: #6b655a; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 16px/1.6 Georgia, 'Times New Roman', serif;
+  }
+  main { max-width: 680px; margin: 0 auto; padding: 48px 24px 80px; }
+  .stamp {
+    font: 11px/1.4 'Courier New', monospace; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+  }
+  h1 { font-size: 30px; font-style: italic; font-weight: 400; margin: 0 0 6px; }
+  .updated { color: var(--muted); font-size: 14px; margin-bottom: 32px; }
+  h2 { font-size: 19px; margin: 34px 0 10px; }
+  p, li { color: var(--ink); }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  a { color: var(--accent); }
+  .rule { border: 0; border-top: 1px solid var(--rule); opacity: 0.4; margin: 36px 0; }
+  .quiet { color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="stamp">Fieldnote · fieldnote.guide</div>
+  <h1>Privacy Policy</h1>
+  <div class="updated">Last updated: 15 July 2026</div>
+
+  <p>Fieldnote is a live walking-tour companion: a guide runs a tour session,
+  and passengers join it to see the tour map, revealed stops, and each other's
+  position during the tour. This policy explains what data Fieldnote handles,
+  why, and what happens to it. It applies to the Fieldnote web app at
+  fieldnote.guide and the Fieldnote mobile apps, which are the same
+  application.</p>
+
+  <h2>What we collect, and why</h2>
+  <ul>
+    <li><strong>Your live location — only during a tour.</strong> If you allow
+    location access, your position is shared with your guide and shown on the
+    tour's shared map while the tour session is running and the app is open.
+    We do not track your location in the background or outside a tour
+    session. You can stop sharing at any time from the menu ("Stop sharing my
+    location"), and everything else keeps working.</li>
+    <li><strong>The name you enter when joining.</strong> Shown to your guide
+    and tour group so they can recognize you on the map. Use any name you
+    like.</li>
+    <li><strong>Push notification tokens.</strong> If you enable
+    notifications, we store the delivery address your browser or phone issues
+    for this purpose (a web-push subscription or a device push token) so we
+    can notify you when a stop starts, a warning is posted, or it's time to
+    head back. Disabling notifications removes it.</li>
+    <li><strong>Group chat messages and photos.</strong> If your tour uses
+    the group chat, the messages and photos you post there are visible to the
+    tour group and stored with the session.</li>
+    <li><strong>Language and appearance preferences,</strong> stored on your
+    own device.</li>
+    <li><strong>For guides:</strong> an account name, sign-in credentials,
+    and the tours you build.</li>
+  </ul>
+
+  <h2>What we do NOT do</h2>
+  <ul>
+    <li>No selling of personal data — to anyone, ever.</li>
+    <li>No advertising, no ad trackers, no third-party analytics profiles.</li>
+    <li>No background location tracking. Location flows only while a tour
+    session is live and the app is in use.</li>
+    <li>No collection beyond what the tour needs to run.</li>
+  </ul>
+
+  <h2>Who your data is shared with</h2>
+  <p>Your location, name, and chat activity are visible to your guide and —
+  on the shared map — to the rest of your tour group, only during the tour.
+  Beyond that, data is handled by the infrastructure providers Fieldnote runs
+  on, acting as processors:</p>
+  <ul>
+    <li><strong>Supabase</strong> (database &amp; realtime, hosted in the EU —
+    Frankfurt) — stores sessions, locations, names, chat, and push tokens.</li>
+    <li><strong>Cloudflare</strong> — serves the app itself.</li>
+    <li><strong>Mapbox</strong> — serves the map tiles (your device requests
+    tiles directly, which involves your IP address, like any website).</li>
+    <li><strong>Google Firebase Cloud Messaging</strong> and
+    <strong>Apple Push Notification service</strong> — deliver push
+    notifications to the mobile apps, if you enable them.</li>
+  </ul>
+
+  <h2>Retention</h2>
+  <p>Tour sessions end automatically. Session data (including location
+  history and chat) is retained afterwards so tour operators can review how
+  tours went and so we can improve Fieldnote, and is periodically cleaned
+  up. Push tokens are removed when they stop working or when you disable
+  notifications. If you want data about you deleted, email us — we'll do it
+  promptly.</p>
+
+  <h2>Your choices</h2>
+  <ul>
+    <li>Location and notification permissions are optional — the app works
+    without them; you'll simply follow along on the map without appearing on
+    it or being notified.</li>
+    <li>Both can be turned off any time in the menu or your device
+    settings.</li>
+    <li>For access, correction, or deletion of your data, contact us
+    below.</li>
+  </ul>
+
+  <h2>Children</h2>
+  <p>Fieldnote is used by tour groups of all ages under the supervision of a
+  tour guide. We do not knowingly collect data from children beyond what any
+  passenger's participation in a tour involves, and we collect no more from
+  anyone than the tour needs.</p>
+
+  <h2>Changes</h2>
+  <p>If Fieldnote's data handling changes — for example, an optional feature
+  to keep sharing location with your guide while your phone is locked during
+  a tour — this policy will be updated first, and the date above will
+  change.</p>
+
+  <h2>Contact</h2>
+  <p>Questions, requests, deletions: <a href="mailto:help@fieldnote.guide">help@fieldnote.guide</a></p>
+
+  <hr class="rule">
+  <p class="quiet">Fieldnote · a live tour companion · fieldnote.guide</p>
+</main>
+</body>
+</html>
