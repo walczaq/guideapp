@@ -71,4 +71,10 @@
          human decision: it re-triggers Play's declaration + video review. -->
     <!-- Android 13+ runtime permission for push notifications. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- In-app QR scanner (landing screen): the WebView's getUserMedia +
+         BarcodeDetector need the app to hold CAMERA. required=false so
+         Play doesn't filter out camera-less devices — the scan button
+         simply won't help there, everything else works. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>

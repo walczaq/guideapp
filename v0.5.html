@@ -4732,6 +4732,102 @@ async function boot() {
 // to auto-resume from. They must NOT be funnelled into making a guide account
 // (trial-2 field report). So: the guide-name finder is the hero; "Guide login"
 // is a small, plain text link at the very bottom.
+// ── In-app QR scanner ────────────────────────────────────────────────
+// Scans a tour QR (permanent /g/ guide code, per-session /j/, or the
+// fieldnote:// scheme) from INSIDE the app/site — the join path that
+// works even where OS App Links can't (sideloads, GMS-less phones,
+// unverified installs). Uses the platform BarcodeDetector (Chromium on
+// Android, incl. the WebView — needs CAMERA in the shell manifest); the
+// button simply doesn't render where the API is missing (iOS WebKit,
+// desktop Chrome), so there's no broken fallback path.
+
+function qrScanSupported() {
+  return typeof window.BarcodeDetector === 'function'
+    && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+
+let _qrStream = null;
+let _qrTimer = null;
+
+function closeQrScanner() {
+  if (_qrTimer) { clearInterval(_qrTimer); _qrTimer = null; }
+  if (_qrStream) {
+    try { _qrStream.getTracks().forEach(tr => tr.stop()); } catch (_e) {}
+    _qrStream = null;
+  }
+  const el = document.getElementById('qr-scan-overlay');
+  if (el) el.remove();
+}
+
+async function openQrScanner() {
+  closeQrScanner();
+  const el = document.createElement('div');
+  el.id = 'qr-scan-overlay';
+  el.style.cssText = 'position:fixed; inset:0; z-index:120; background:#000;';
+  const video = document.createElement('video');
+  video.setAttribute('playsinline', '');
+  video.muted = true;
+  video.style.cssText = 'position:absolute; inset:0; width:100%; height:100%; object-fit:cover;';
+  el.appendChild(video);
+  const hint = document.createElement('div');
+  hint.textContent = 'Point at the tour QR code';
+  hint.style.cssText = 'position:absolute; top:44px; left:0; right:0; text-align:center;'
+    + "font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:0.08em;"
+    + 'color:#fff; text-shadow:0 1px 4px rgba(0,0,0,0.8); padding:0 30px; line-height:1.5;';
+  el.appendChild(hint);
+  const frame = document.createElement('div');
+  frame.style.cssText = 'position:absolute; top:50%; left:50%; width:230px; height:230px;'
+    + 'transform:translate(-50%,-50%); border:2px solid rgba(255,255,255,0.9);'
+    + 'border-radius:18px; box-shadow:0 0 0 4000px rgba(0,0,0,0.35);';
+  el.appendChild(frame);
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.textContent = 'Cancel';
+  cancel.style.cssText = 'position:absolute; bottom:44px; left:50%; transform:translateX(-50%);'
+    + "font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em;"
+    + 'text-transform:uppercase; padding:13px 28px; background:rgba(0,0,0,0.55); color:#fff;'
+    + 'border:1px solid rgba(255,255,255,0.7); border-radius:6px; cursor:pointer;';
+  cancel.addEventListener('click', closeQrScanner);
+  el.appendChild(cancel);
+  document.body.appendChild(el);
+
+  try {
+    _qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+  } catch (_err) {
+    // Denied / no camera: keep the overlay up with an explanation + Cancel.
+    hint.textContent = 'Camera not available. Allow camera access and try again — or scan the code with your camera app.';
+    return;
+  }
+  video.srcObject = _qrStream;
+  try { await video.play(); } catch (_e) { /* autoplay quirks — detect loop still works once frames flow */ }
+
+  let detector;
+  try {
+    detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+  } catch (_e) {
+    hint.textContent = 'Scanning isn’t supported on this device — scan the code with your camera app instead.';
+    return;
+  }
+  let busy = false;
+  _qrTimer = setInterval(async () => {
+    if (busy || !video.videoWidth) return;
+    busy = true;
+    try {
+      const codes = await detector.detect(video);
+      for (const c of codes || []) {
+        const target = parseTourLink(c.rawValue);
+        if (target) {
+          closeQrScanner();
+          window.location.href = '/v0.5?' + (target.kind === 'guide' ? 'guide=' : 'session=')
+            + encodeURIComponent(target.id);
+          return;   // navigating — leave `busy` latched
+        }
+      }
+    } catch (_e) { /* transient detect failure — keep scanning */ }
+    busy = false;
+  }, 350);
+}
+
 function showLandingScreen() {
   hideLoading();
   let el = document.getElementById('landing-screen');
@@ -4761,6 +4857,10 @@ function showLandingScreen() {
       style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:13px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
     >Find my tour</button>
     <div id="landing-find-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em; max-width:260px;"></div>
+    <button
+      id="landing-scan-btn"
+      style="display:none; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:13px 28px; background:transparent; color:var(--ink); border:1px solid var(--rule); border-radius:6px; cursor:pointer;"
+    >Scan QR code</button>
     <div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); opacity:0.7; max-width:260px; line-height:1.5;">
       Or open the link your guide sent you.
     </div>
@@ -4775,6 +4875,15 @@ function showLandingScreen() {
     el.remove();
     showInviteCodeForm();
   });
+
+  // In-app QR scan — shown only where the platform can actually do it
+  // (BarcodeDetector: Android Chromium + the app's WebView; hidden on
+  // iOS WebKit and desktop). The join path that needs no App Links.
+  const scanBtn = document.getElementById('landing-scan-btn');
+  if (scanBtn && qrScanSupported()) {
+    scanBtn.style.display = '';
+    scanBtn.addEventListener('click', openQrScanner);
+  }
 
   // Trial-2 obs 2: passengers often have the guide standing in front of them
   // but no working link. Name → the guide's freshest live session (started
@@ -13358,28 +13467,38 @@ function maybeResumeBgShare() {
 //   fieldnote://j|g/… → custom scheme from the router page's "open in
 //                     app" button (iOS suppresses same-domain universal
 //                     links; Android registers it for parity)
-function handleNativeAppUrl(url) {
+// Parse ANY Fieldnote tour-link shape into a routing target, or null:
+// https/j/, /g/, ?session=, ?guide=, and the fieldnote:// scheme (whose
+// URLs parse with "j"/"g" in the AUTHORITY position — fieldnote://j/<id>
+// → host "j" — so we normalize to the https form before matching).
+// Shared by the deep-link handler below and the in-app QR scanner.
+function parseTourLink(url) {
   try {
-    // Custom-scheme URLs parse with "j"/"g" in the AUTHORITY position
-    // (fieldnote://j/<id> → host "j", pathname "/<id>"), so normalize to
-    // the equivalent https URL before path-matching.
     const normalized = String(url).replace(/^fieldnote:\/\//i, 'https://fieldnote.guide/');
-    const path = new URL(normalized).pathname;
-    let m = /\/j\/([^/?#]+)/.exec(path);
-    if (m && m[1]) {
-      const id = decodeURIComponent(m[1]);
-      if (!SESSION || SESSION.id !== id) {
-        window.location.href = '/v0.5?session=' + encodeURIComponent(id);
-      }
-      return;
+    const u = new URL(normalized);
+    let m = /\/j\/([^/?#]+)/.exec(u.pathname);
+    if (m && m[1]) return { kind: 'session', id: decodeURIComponent(m[1]) };
+    m = /\/g\/([^/?#]+)/.exec(u.pathname);
+    if (m && m[1]) return { kind: 'guide', id: decodeURIComponent(m[1]) };
+    const qs = u.searchParams;
+    if (qs.get('session')) return { kind: 'session', id: qs.get('session') };
+    if (qs.get('guide')) return { kind: 'guide', id: qs.get('guide') };
+    return null;
+  } catch (_e) { return null; }
+}
+
+function handleNativeAppUrl(url) {
+  const target = parseTourLink(url);
+  if (!target) return;
+  if (target.kind === 'session') {
+    if (!SESSION || SESSION.id !== target.id) {
+      window.location.href = '/v0.5?session=' + encodeURIComponent(target.id);
     }
-    m = /\/g\/([^/?#]+)/.exec(path);
-    if (m && m[1]) {
-      // Always navigate: the guide's CURRENT live session may differ from
-      // whatever is on screen, and re-resolving is the cheap, correct move.
-      window.location.href = '/v0.5?guide=' + encodeURIComponent(decodeURIComponent(m[1]));
-    }
-  } catch (_e) { /* malformed URL — ignore */ }
+    return;
+  }
+  // Guide code: always navigate — the guide's CURRENT live session may
+  // differ from whatever is on screen; re-resolving is cheap and correct.
+  window.location.href = '/v0.5?guide=' + encodeURIComponent(target.id);
 }
 if (isNativeApp()) {
   try {
