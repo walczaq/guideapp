@@ -10213,6 +10213,14 @@ function onGpsSuccess(pos) {
   }
   // First fix? Hide any "searching" banner.
   hideGpsBanner();
+  // A6: a real fix proves location permission is granted — the only safe
+  // moment to (re)arm the background watcher: no permission-dialog race,
+  // and it self-heals if the watcher ever died (each fix retries; the
+  // _bgWatcherId guard makes it a no-op while one is running).
+  if (isNativeApp() && ROLE === 'passenger' && SESSION && !SESSION.ended_at
+      && !_bgWatcherId && !_locationSharingOff) {
+    try { bgShareStart(); } catch (_e) {}
+  }
   state.gpsMode = 'real';
   state.lastFixAt = Date.now();
   state.youLng = pos.coords.longitude;
@@ -13414,8 +13422,12 @@ async function bgShareStart() {
     _bgWatcherId = await P.addWatcher({
       backgroundTitle: 'Fieldnote',
       backgroundMessage: t('bg_notif_body'),
-      requestPermissions: true,   // no-op if boarding already granted; drives
-                                  // the OS dialog if the watcher wins the race
+      // false, deliberately: the watcher is only armed from onGpsSuccess,
+      // i.e. AFTER a real fix proved the permission is granted. Letting the
+      // plugin request permissions raced the boarding tap's own OS dialog
+      // and could silently kill the watcher (Gate A6 field failure:
+      // 13.5min of zero fixes in the pocket walk).
+      requestPermissions: false,
       stale: false,
       distanceFilter: 10,         // rule 6 band is 10-15m; field feedback
                                   // (guide-screen dot too steppy) took it
@@ -13703,13 +13715,11 @@ function wireIntro() {
     // watch. This was the likely cause of trial passengers who tapped Allow but
     // still sent zero fixes.
     requestLocationOnTap();
-    // A6: this tap is ALSO the in-your-pocket sharing consent moment (one
-    // consent at boarding, addendum rule 1) — arm the watcher in the shell.
-    // WhatsApp model: the foreground service keeps fixes flowing with only
-    // while-in-use permission, so there is NO settings hop.
-    if (isNativeApp()) {
-      try { bgShareStart(); } catch (_e) {}
-    }
+    // A6: this tap is the in-your-pocket sharing CONSENT moment (addendum
+    // rule 1) — but the watcher itself is armed from onGpsSuccess, once a
+    // real fix proves the permission came through. Arming right here raced
+    // the OS permission dialog this same tap opens, and the loser of that
+    // race silently killed the watcher (Gate A6 field failure).
     // Confirm in place once the fix actually lands (or nudge if it didn't).
     let checks = 0;
     const tick = setInterval(() => {
