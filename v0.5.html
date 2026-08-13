@@ -3416,6 +3416,12 @@ const I18N = {
     intro_s_stamp: 'Welcome aboard', intro_s_title: 'Two taps and you’re set',
     intro_s_guide: 'You’re on {guide}’s tour.',
     intro_s_loc_why: 'So you appear on the map and stops light up near you. Shared only during this tour.',
+    // A6 native shells only — doubles as Play's prominent disclosure; the
+    // "in your pocket" and auto-off sentences are compliance load-bearing.
+    intro_s_loc_why_bg: 'So you appear on the map and stops light up near you — even with your phone in your pocket. Shared only with your guide during this tour. Turns off by itself when the tour ends, after 12 hours at the latest, or whenever you switch it off.',
+    intro_st_loc_bg_hint: 'Android: choose “Allow all the time” in Settings so it works in your pocket.',
+    intro_bg_settings: 'Open settings',
+    bg_notif_body: 'Sharing your location with your guide',
     intro_s_ntf_why: 'A buzz when a stop starts, a warning is posted, or it’s time to head back to the bus.',
     intro_s_inst_why: 'Easier to get back in — and on iPhone it’s the only way to get notifications (they don’t work from the browser).',
     intro_i_cta2: 'Add to home screen',
@@ -3487,6 +3493,10 @@ const I18N = {
     intro_s_stamp: 'Bienvenido a bordo', intro_s_title: 'Dos toques y listo',
     intro_s_guide: 'Estás en el tour de {guide}.',
     intro_s_loc_why: 'Para que aparezcas en el mapa y las paradas se iluminen cerca de ti. Solo se comparte durante este tour.',
+    intro_s_loc_why_bg: 'Para que aparezcas en el mapa y las paradas se iluminen cerca de ti — incluso con el móvil en el bolsillo. Se comparte solo con tu guía durante este tour. Se apaga solo al terminar el tour, como máximo a las 12 horas, o cuando tú lo desactives.',
+    intro_st_loc_bg_hint: 'Android: elige “Permitir siempre” en Ajustes para que funcione con el móvil en el bolsillo.',
+    intro_bg_settings: 'Abrir ajustes',
+    bg_notif_body: 'Compartiendo tu ubicación con tu guía',
     intro_s_ntf_why: 'Un aviso cuando empieza una parada, se publica una advertencia o es hora de volver al autobús.',
     intro_s_inst_why: 'Vuelve a entrar más fácil — y en iPhone es la única forma de recibir notificaciones (no funcionan desde el navegador).',
     intro_i_cta2: 'Añadir a pantalla de inicio',
@@ -3558,6 +3568,10 @@ const I18N = {
     intro_s_stamp: '欢迎上车', intro_s_title: '两次点击即可就绪',
     intro_s_guide: '你正在参加 {guide} 的导览。',
     intro_s_loc_why: '让你出现在地图上，附近的停靠点会亮起。仅在本次导览期间共享。',
+    intro_s_loc_why_bg: '让你出现在地图上，附近的停靠点会亮起——手机放进口袋也一样。仅在本次导览期间与你的向导共享。导览结束后自动关闭，最长 12 小时，你也可以随时关闭。',
+    intro_st_loc_bg_hint: '安卓：请在设置中选择“始终允许”，手机放进口袋也能继续使用。',
+    intro_bg_settings: '打开设置',
+    bg_notif_body: '正在与你的向导共享位置',
     intro_s_ntf_why: '停靠点开始、发布警示或该回大巴时，你会收到提醒。',
     intro_s_inst_why: '更方便地回到应用——而且在 iPhone 上这是接收通知的唯一方式（浏览器中无法推送）。',
     intro_i_cta2: '添加到主屏幕',
@@ -4991,6 +5005,10 @@ async function loadSessionAndTour(sessionId) {
   // (they're the source of activations).
   if (ROLE === 'passenger') {
     initPushSubscription().catch(err => console.warn('[push] init failed', err));
+    // A6: re-arm background sharing if THIS session armed it and the 12h
+    // cap hasn't passed (the watcher doesn't survive an app kill). No-op
+    // on web, for guides, and on ended sessions.
+    try { maybeResumeBgShare(); } catch (_e) {}
   }
 
   // Chunk C: subscribe to live stop_activation INSERTs for this session.
@@ -11201,6 +11219,13 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
       const lbl = document.getElementById('menu-share-loc-label');
       if (lbl) lbl.textContent = _locationSharingOff ? t('menu_loc_share') : t('menu_loc_stop');
       try { showToast(_locationSharingOff ? t('loc_stopped') : t('loc_resumed')); } catch (_e) {}
+      // A6 rule 3c: the toggle is also the background-watcher kill switch —
+      // off stops the foreground service (notification disappears within
+      // seconds); back on re-arms it for the live session.
+      if (isNativeApp()) {
+        if (_locationSharingOff) { try { bgShareStop(); } catch (_e) {} }
+        else if (SESSION && !SESSION.ended_at) { try { bgShareStart(); } catch (_e) {} }
+      }
       // Resuming sharing IS a user tap — the one moment iOS lets us (re)arm
       // geolocation. If there's no live fix (permission denied earlier, or the
       // watch never started), re-request now so "Share my location" actually
@@ -12363,6 +12388,9 @@ function showSessionEnded() {
   // the native shell (fixed start URL, no address bar) reopens into this
   // screen on every launch with no way out.
   if (SESSION && getLastSession() === SESSION.id) clearLastSession();
+  // A6 rule 3a: the background watcher dies with the session (covers both
+  // the realtime ended event and the auto-end cron via the poll backstop).
+  try { bgShareStop(); } catch (_e) {}
   // Stop any further realtime work on this page — the session is over.
   try { if (_stopActivationChannel) _stopActivationChannel.unsubscribe(); } catch {}
   try { if (_sessionChannel) _sessionChannel.unsubscribe(); } catch {}
@@ -13232,6 +13260,131 @@ function wireNativePushListeners() {
   });
 }
 
+// ── Background location (Phase A6, background-location-addendum.md) ───
+// Passenger-only, native-only. Armed from the boarding "Allow location"
+// tap (ONE consent moment — rule 1); the watcher runs an Android
+// foreground service whose notification is the passenger's visible kill
+// switch. Every fix funnels into onGpsSuccess, so the 5s queue throttle,
+// transit sparse-heartbeat and offline queue all apply unchanged (rule 6).
+// Auto-expiry enforced in code (rule 3): session end, hard 12h cap
+// checked on every fix, and the "Stop sharing my location" toggle.
+
+const BG_SHARE_KEY = 'fn_bg_share_v1';           // {sessionId, armedAt}
+const BG_SHARE_MAX_MS = 12 * 60 * 60 * 1000;     // hard cap — rule 3b
+let _bgWatcherId = null;
+
+function bgPlugin() {
+  return (window.Capacitor && window.Capacitor.Plugins
+    && window.Capacitor.Plugins.BackgroundGeolocation) || null;
+}
+
+function bgShareArmed() {
+  try {
+    const o = JSON.parse(localStorage.getItem(BG_SHARE_KEY) || 'null');
+    return (o && o.sessionId && o.armedAt) ? o : null;
+  } catch (_e) { return null; }
+}
+
+async function bgShareStart() {
+  const P = bgPlugin();
+  if (!P || !SESSION || ROLE !== 'passenger') return;
+  if (_locationSharingOff) return;                 // respect the toggle
+  if (_bgWatcherId) return;                        // already running
+  try {
+    localStorage.setItem(BG_SHARE_KEY,
+      JSON.stringify({ sessionId: SESSION.id, armedAt: Date.now() }));
+  } catch (_e) {}
+  try {
+    _bgWatcherId = await P.addWatcher({
+      backgroundTitle: 'Fieldnote',
+      backgroundMessage: t('bg_notif_body'),
+      requestPermissions: true,   // no-op if boarding already granted; drives
+                                  // the OS dialog if the watcher wins the race
+      stale: false,
+      distanceFilter: 15,         // rule 6: 15m default, tunable 10-15
+    }, (location, error) => {
+      if (error) {
+        // Denied / revoked → disarm quietly; the app stays fully functional
+        // as foreground-only (rule 1's explicit requirement).
+        if (error.code === 'NOT_AUTHORIZED') bgShareStop();
+        return;
+      }
+      // Rule 3, checked on EVERY background fix: session match + 12h cap
+      // + the privacy toggle. Belt-and-suspenders on top of session end.
+      const arm = bgShareArmed();
+      if (!arm || !SESSION || arm.sessionId !== SESSION.id
+          || (Date.now() - arm.armedAt) > BG_SHARE_MAX_MS
+          || _locationSharingOff) {
+        bgShareStop();
+        return;
+      }
+      if (!location) return;
+      onGpsSuccess({
+        coords: {
+          longitude: location.longitude,
+          latitude: location.latitude,
+          accuracy: location.accuracy,
+          heading: location.bearing,
+        },
+        timestamp: location.time || Date.now(),
+      });
+    });
+  } catch (err) {
+    console.warn('[bg-share] addWatcher failed', err);
+    _bgWatcherId = null;
+  }
+}
+
+async function bgShareStop() {
+  try { localStorage.removeItem(BG_SHARE_KEY); } catch (_e) {}
+  const P = bgPlugin();
+  const id = _bgWatcherId;
+  _bgWatcherId = null;
+  if (P && id) {
+    try { await P.removeWatcher({ id }); } catch (_e) { /* already gone */ }
+  }
+}
+
+// Boot path: re-arm if THIS session armed sharing, is still live, and the
+// 12h cap hasn't passed (the watcher itself doesn't survive an app kill).
+function maybeResumeBgShare() {
+  if (!isNativeApp() || !SESSION || SESSION.ended_at) return;
+  const arm = bgShareArmed();
+  if (!arm || arm.sessionId !== SESSION.id) return;
+  if (Date.now() - arm.armedAt > BG_SHARE_MAX_MS) { bgShareStop(); return; }
+  bgShareStart();
+}
+
+// Android 11+ reality (rule 1): "Allow all the time" can't be granted in
+// the runtime dialog — show the one-line Settings nudge with a deep link.
+// Skipping it leaves the passenger foreground-only, which must work fine.
+function maybeShowBgSettingsHint() {
+  try {
+    if (!isNativeApp() || window.Capacitor.getPlatform() !== 'android') return;
+    if (document.getElementById('intro-bg-hint')) return;
+    const st = document.getElementById('intro-location-status');
+    if (!st || !st.parentNode) return;
+    const d = document.createElement('div');
+    d.id = 'intro-bg-hint';
+    d.style.cssText = 'margin-top:8px; font-size:12px; line-height:1.5; color:var(--muted);';
+    const line = document.createElement('div');
+    line.textContent = t('intro_st_loc_bg_hint');
+    d.appendChild(line);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = t('intro_bg_settings');
+    b.style.cssText = 'margin-top:6px; font-family:inherit; font-size:12px;'
+      + 'padding:8px 14px; background:transparent; color:var(--ink);'
+      + 'border:1px solid var(--rule); border-radius:6px; cursor:pointer;';
+    b.addEventListener('click', () => {
+      const P = bgPlugin();
+      if (P && P.openSettings) P.openSettings().catch(() => {});
+    });
+    d.appendChild(b);
+    st.parentNode.insertBefore(d, st.nextSibling);
+  } catch (_e) { /* cosmetic only */ }
+}
+
 // App Links (spec A3 + boarding addendum): the OS hands the shell a URL
 // via appUrlOpen (app already running) or as the launch URL (cold start).
 // Both funnel here. Three accepted shapes:
@@ -13329,6 +13482,15 @@ function renderIntroSetup() {
   if (gl && SESSION && SESSION.guide_name) {
     gl.textContent = t('intro_s_guide', { guide: SESSION.guide_name });
     gl.style.display = '';
+  }
+
+  // A6: in the native shell the location "why" copy is the background-
+  // sharing disclosure (Play's prominent-disclosure requirement — must be
+  // visible BEFORE the permission dialogs). Web keeps the original copy;
+  // browsers can't background-share and must not claim to.
+  if (isNativeApp()) {
+    const why = document.querySelector('#intro-overlay [data-i18n="intro_s_loc_why"]');
+    if (why) why.textContent = t('intro_s_loc_why_bg');
   }
 
   // Location: pre-check via the Permissions API where available, so a
@@ -13443,6 +13605,13 @@ function wireIntro() {
     // watch. This was the likely cause of trial passengers who tapped Allow but
     // still sent zero fixes.
     requestLocationOnTap();
+    // A6: this tap is ALSO the background-sharing consent moment (one
+    // consent at boarding, addendum rule 1) — arm the watcher in the shell
+    // and surface the Android "Allow all the time" settings nudge.
+    if (isNativeApp()) {
+      try { bgShareStart(); } catch (_e) {}
+      maybeShowBgSettingsHint();
+    }
     // Confirm in place once the fix actually lands (or nudge if it didn't).
     let checks = 0;
     const tick = setInterval(() => {
