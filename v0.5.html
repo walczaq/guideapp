@@ -4082,7 +4082,14 @@ async function clearLocationQueue() {
 
 const SYNC_INTERVAL_MS = 10000;
 const SYNC_BATCH_SIZE = 50;
+// A sync attempt older than this is presumed frozen, not slow. Android can
+// freeze an app's in-flight network request when the screen locks (A6 field
+// data: rows recorded all through a locked walk, everything synced in one
+// burst at unlock) — that request's `finally` never runs, so the in-flight
+// latch must be stealable or it blocks every retry until unlock.
+const SYNC_STUCK_MS = 45000;
 let _syncInFlight = false;
+let _syncStartedAt = 0;
 let _syncTimer = null;
 // Stats kept for the debug panel — purely informational.
 const _syncStats = {
@@ -4093,9 +4100,16 @@ const _syncStats = {
 };
 
 async function syncOnce() {
-  if (_syncInFlight) return;          // already running
+  if (_syncInFlight) {
+    if (Date.now() - _syncStartedAt < SYNC_STUCK_MS) return;   // genuinely running
+    // Stale latch: the previous attempt's request froze (screen-off lock).
+    // Steal it and start fresh — the zombie settles harmlessly after unlock
+    // (a late duplicate insert is tolerated by design, see the delete note).
+    console.warn('[sync] in-flight latch stale after', Math.round((Date.now() - _syncStartedAt) / 1000), 's — stealing');
+  }
   if (!navigator.onLine) return;      // browser knows we're offline; skip
   _syncInFlight = true;
+  _syncStartedAt = Date.now();
   _syncStats.lastAttemptAt = Date.now();
 
   try {
@@ -4122,9 +4136,16 @@ async function syncOnce() {
       client_recorded_at: r.client_recorded_at,
     }));
 
-    const { error } = await supabaseClient
-      .from('passenger_locations')
-      .insert(payload);
+    // 20s abort: turns an ordinarily-hung request into a clean retry. (The
+    // screen-off freeze also suspends timers, so this alone can't fire
+    // there — the stale-latch steal above is the guard for that case.)
+    // AbortSignal.timeout is Safari 16+/Chromium 103+; older passenger
+    // phones just skip the abort and rely on the latch steal.
+    let insertQuery = supabaseClient.from('passenger_locations').insert(payload);
+    if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+      insertQuery = insertQuery.abortSignal(AbortSignal.timeout(20000));
+    }
+    const { error } = await insertQuery;
 
     if (error) {
       // Could be RLS, schema mismatch, network blip, server outage. We don't
