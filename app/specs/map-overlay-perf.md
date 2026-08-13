@@ -11,7 +11,7 @@ down a native rabbit hole — WebView update, GPU-layer CSS hints
 (`d6976dd`, reverted), suspending the dark-theme `--map-filter` during
 gestures (`0c0e8ff`, reverted: ugly AND didn't help), a shell-only
 pixelRatio cap (`87c7867`, reverted: blurry AND didn't help). A perf HUD
-(`d304f86`, still in — remove after field confirmation of this fix)
+(`d304f86`, removed after the fix was field-confirmed 2026-07-15)
 measured 4–5 fps zoomed-in on a Samsung whose
 browser did 60 at identical dpr/canvas/GPU. The native theories all died
 when the stutter reproduced in desktop browsers and on other phones —
