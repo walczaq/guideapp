@@ -10433,6 +10433,12 @@ function repositionOverlay() {
   if (!map) return;
   const ppm = pxPerMeter();
   const layers = [pinsLayer, passengersLayer, youLayer];
+  // Path-rebuild throttle window is decided ONCE per call — deciding it
+  // per layer would let the first layer consume the budget and starve the
+  // later layers' trails permanently.
+  const nowTs = performance.now();
+  const rebuildPaths = (nowTs - _geoPathRebuiltAt) >= 150;
+  if (rebuildPaths) _geoPathRebuiltAt = nowTs;
   for (const layer of layers) {
     if (!layer) continue;
     for (const g of layer.querySelectorAll('[data-lng]')) {
@@ -10447,6 +10453,12 @@ function repositionOverlay() {
       const max = (c.dataset.rMax === '') ? Infinity : +c.dataset.rMax;
       c.setAttribute('r', Math.max(min, Math.min(max, raw)));
     }
+    // Trail paths are the expensive reposition case (Catmull-Rom smoothing
+    // per path, dozens of paths on a long walk) — rebuilding them at 60fps
+    // re-created the zoom stutter whenever trails were in view. Throttle
+    // path geometry to ~7/s; the breadcrumbs lag a gesture by ≤150ms, which
+    // is imperceptible. Route-line LEGS stay per-frame: they're a handful
+    // of cheap lines pinned to stop markers and would visibly detach.
     for (const el of layer.querySelectorAll('[data-geo]')) {
       if (el.dataset.geo === 'line' && el.__geoA && el.__geoB) {
         const a = project(el.__geoA.lng, el.__geoA.lat);
@@ -10455,7 +10467,7 @@ function repositionOverlay() {
           el.setAttribute('x1', a.x); el.setAttribute('y1', a.y);
           el.setAttribute('x2', b.x); el.setAttribute('y2', b.y);
         }
-      } else if (el.dataset.geo === 'path' && el.__geoPts) {
+      } else if (rebuildPaths && el.dataset.geo === 'path' && el.__geoPts) {
         const d = trailSmoothPath(el.__geoPts.map(t => project(t.lng, t.lat)));
         if (d) el.setAttribute('d', d);
       }
@@ -10463,6 +10475,7 @@ function repositionOverlay() {
   }
   updateMapZoomReadout();
 }
+let _geoPathRebuiltAt = 0;
 
 function renderAll() {
   renderPins();
