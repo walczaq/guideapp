@@ -13417,7 +13417,9 @@ async function bgShareStart() {
       requestPermissions: true,   // no-op if boarding already granted; drives
                                   // the OS dialog if the watcher wins the race
       stale: false,
-      distanceFilter: 15,         // rule 6: 15m default, tunable 10-15
+      distanceFilter: 10,         // rule 6 band is 10-15m; field feedback
+                                  // (guide-screen dot too steppy) took it
+                                  // to the pre-approved floor
     }, (location, error) => {
       if (error) {
         // Denied / revoked → disarm quietly; the app stays fully functional
