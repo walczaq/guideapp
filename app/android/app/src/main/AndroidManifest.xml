@@ -60,6 +60,12 @@
     <!-- Live tour map: passenger/guide position while the app is in use. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Phase A6 (background-location-addendum): opt-in in-your-pocket
+         sharing during a tour. The plugin's foreground service + persistent
+         notification is the passenger's visible kill switch. Requires the
+         Play Console sensitive-permission declaration (form + video) before
+         any release carrying this permission rolls out. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <!-- Android 13+ runtime permission for push notifications. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>
