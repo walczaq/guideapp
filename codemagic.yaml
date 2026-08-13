@@ -72,12 +72,16 @@ workflows:
         script: cd app && npm ci
       - name: Capacitor sync
         script: cd app && npx cap sync android
-      - name: Build signed AAB
+      - name: Build signed AAB + APK
         # versionCode auto-increments from Codemagic's project build number;
         # versionName is pinned in build.gradle (starts 0.7.0).
-        script: cd app/android && chmod +x gradlew && ./gradlew bundleRelease -PappVersionCode=$BUILD_NUMBER
+        # The APK is the direct-distribution channel (Filip's call: no Play
+        # internal testing — guides sideload). Signed with the upload key,
+        # which assetlinks.json lists, so App Links verify on sideloads.
+        script: cd app/android && chmod +x gradlew && ./gradlew bundleRelease assembleRelease -PappVersionCode=$BUILD_NUMBER
     artifacts:
       - app/android/app/build/outputs/bundle/release/app-release.aab
+      - app/android/app/build/outputs/apk/release/app-release.apk
 
   ios-testflight:
     name: iOS TestFlight
