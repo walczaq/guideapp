@@ -61,11 +61,14 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- Phase A6 (background-location-addendum): opt-in in-your-pocket
-         sharing during a tour. The plugin's foreground service + persistent
-         notification is the passenger's visible kill switch. Requires the
-         Play Console sensitive-permission declaration (form + video) before
-         any release carrying this permission rolls out. -->
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+         sharing during a tour, WhatsApp-model (Filip's decision 2026-08-13):
+         a foreground service + persistent notification keeps fixes flowing
+         with only while-in-use permission, so ACCESS_BACKGROUND_LOCATION is
+         deliberately NOT requested — no "Allow all the time" settings hop
+         for passengers, and no Play sensitive-permission declaration. The
+         plugin's merged manifest declares its own location foreground
+         service. Do not add ACCESS_BACKGROUND_LOCATION back without a
+         human decision: it re-triggers Play's declaration + video review. -->
     <!-- Android 13+ runtime permission for push notifications. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

@@ -30,16 +30,18 @@ strictly opt-in, transparently worded, auto-expiring.
    BEFORE the runtime permission ask — keep "even with your phone in your
    pocket" and the auto-off sentence; they are the compliance load-bearing
    parts).
-   ⚠️ Platform reality on Android 11+: "Allow all the time" cannot be
-   granted in the runtime dialog — the OS routes the user to Settings.
-   Sequence at boarding: request foreground location first (dialog), then
-   immediately show one inline line: "Android: choose 'Allow all the
-   time' in Settings so it works in your pocket" with a button that
-   deep-links to the app's location settings. If the passenger skips the
-   hop, they simply remain foreground-only — the app must work fine
-   either way. If field data shows the hop hurts boarding, the fallback
-   (pre-approved) is moving ONLY the settings-hop nudge to after the
-   first stop activation.
+   ~~⚠️ Platform reality on Android 11+: "Allow all the time" cannot be
+   granted in the runtime dialog — the OS routes the user to Settings…~~
+   **SUPERSEDED — Filip's decision, 2026-08-13 (the "WhatsApp model"):**
+   no settings hop at all. The plugin's foreground service + persistent
+   notification keeps fixes flowing with only while-in-use permission,
+   exactly like WhatsApp live sharing — so `ACCESS_BACKGROUND_LOCATION`
+   is NOT requested, the Android boarding sequence is just the one
+   permission dialog, and (major win) Play's sensitive-permission
+   declaration + review video are NOT required. Reinstate the hop (and
+   the manifest permission, and the Play declaration) only if field data
+   shows fixes stopping with the screen locked on real devices — the
+   Gate walk test is the check.
 2. **No battery talk in user copy.** The auto-off sentence is the whole
    reassurance. (Battery discipline still exists internally — see rule 6
    and the gate — we just don't advertise it.)
@@ -76,24 +78,20 @@ strictly opt-in, transparently worded, auto-expiring.
 
 ## Android wiring (Phase A6)
 
-- Manifest: `ACCESS_BACKGROUND_LOCATION`.
-- Runtime: foreground permission from the boarding tap, then the
-  Settings deep-link nudge for "Allow all the time" (see product rule 1 —
-  the app must remain fully functional if the passenger skips the hop).
+- Manifest: ~~`ACCESS_BACKGROUND_LOCATION`~~ **deliberately absent**
+  (WhatsApp model, see rule 1's superseding decision). The plugin's
+  merged manifest declares its own location foreground service.
+- Runtime: foreground permission from the boarding tap. No settings
+  hop.
 - Foreground-service notification text: "Fieldnote — sharing your
   location with your guide" (localized). This notification is mandatory
   and is a FEATURE: it is the passenger's visible kill switch.
-- Play Console: the **background-location sensitive-permission
-  declaration**. This is a form in Play Console (App content → Sensitive
-  app permissions) that every app requesting ACCESS_BACKGROUND_LOCATION
-  must complete before release: you state the feature's purpose AND
-  attach a short screen-recorded video (uploaded to YouTube, link pasted
-  into the form) showing (1) the prominent in-app disclosure — our
-  boarding copy — appearing BEFORE (2) the permission dialogs and (3) the
-  feature working. Google reviewers watch it to approve the permission;
-  without an accepted declaration the release is blocked. Record it on
-  the Samsung once the flow works: boarding → disclosure visible →
-  dialogs → locked phone → dot moving on a second device.
+- Play Console: **no sensitive-permission declaration needed** under the
+  WhatsApp model — the declaration (form + review video) is triggered
+  solely by requesting ACCESS_BACKGROUND_LOCATION, which we don't. The
+  in-app disclosure copy stays anyway (honest UX, and it future-proofs a
+  reinstatement). If the permission ever comes back, the full
+  declaration procedure is in this file's git history.
 - Swipe-kill: the foreground service typically survives an app swipe;
   force-stop kills it — acceptable, document in the gate results.
 

@@ -3419,8 +3419,6 @@ const I18N = {
     // A6 native shells only — doubles as Play's prominent disclosure; the
     // "in your pocket" and auto-off sentences are compliance load-bearing.
     intro_s_loc_why_bg: 'So you appear on the map and stops light up near you — even with your phone in your pocket. Shared only with your guide during this tour. Turns off by itself when the tour ends, after 12 hours at the latest, or whenever you switch it off.',
-    intro_st_loc_bg_hint: 'Android: choose “Allow all the time” in Settings so it works in your pocket.',
-    intro_bg_settings: 'Open settings',
     bg_notif_body: 'Sharing your location with your guide',
     intro_s_ntf_why: 'A buzz when a stop starts, a warning is posted, or it’s time to head back to the bus.',
     intro_s_inst_why: 'Easier to get back in — and on iPhone it’s the only way to get notifications (they don’t work from the browser).',
@@ -3494,8 +3492,6 @@ const I18N = {
     intro_s_guide: 'Estás en el tour de {guide}.',
     intro_s_loc_why: 'Para que aparezcas en el mapa y las paradas se iluminen cerca de ti. Solo se comparte durante este tour.',
     intro_s_loc_why_bg: 'Para que aparezcas en el mapa y las paradas se iluminen cerca de ti — incluso con el móvil en el bolsillo. Se comparte solo con tu guía durante este tour. Se apaga solo al terminar el tour, como máximo a las 12 horas, o cuando tú lo desactives.',
-    intro_st_loc_bg_hint: 'Android: elige “Permitir siempre” en Ajustes para que funcione con el móvil en el bolsillo.',
-    intro_bg_settings: 'Abrir ajustes',
     bg_notif_body: 'Compartiendo tu ubicación con tu guía',
     intro_s_ntf_why: 'Un aviso cuando empieza una parada, se publica una advertencia o es hora de volver al autobús.',
     intro_s_inst_why: 'Vuelve a entrar más fácil — y en iPhone es la única forma de recibir notificaciones (no funcionan desde el navegador).',
@@ -3569,8 +3565,6 @@ const I18N = {
     intro_s_guide: '你正在参加 {guide} 的导览。',
     intro_s_loc_why: '让你出现在地图上，附近的停靠点会亮起。仅在本次导览期间共享。',
     intro_s_loc_why_bg: '让你出现在地图上，附近的停靠点会亮起——手机放进口袋也一样。仅在本次导览期间与你的向导共享。导览结束后自动关闭，最长 12 小时，你也可以随时关闭。',
-    intro_st_loc_bg_hint: '安卓：请在设置中选择“始终允许”，手机放进口袋也能继续使用。',
-    intro_bg_settings: '打开设置',
     bg_notif_body: '正在与你的向导共享位置',
     intro_s_ntf_why: '停靠点开始、发布警示或该回大巴时，你会收到提醒。',
     intro_s_inst_why: '更方便地回到应用——而且在 iPhone 上这是接收通知的唯一方式（浏览器中无法推送）。',
@@ -13355,36 +13349,6 @@ function maybeResumeBgShare() {
   bgShareStart();
 }
 
-// Android 11+ reality (rule 1): "Allow all the time" can't be granted in
-// the runtime dialog — show the one-line Settings nudge with a deep link.
-// Skipping it leaves the passenger foreground-only, which must work fine.
-function maybeShowBgSettingsHint() {
-  try {
-    if (!isNativeApp() || window.Capacitor.getPlatform() !== 'android') return;
-    if (document.getElementById('intro-bg-hint')) return;
-    const st = document.getElementById('intro-location-status');
-    if (!st || !st.parentNode) return;
-    const d = document.createElement('div');
-    d.id = 'intro-bg-hint';
-    d.style.cssText = 'margin-top:8px; font-size:12px; line-height:1.5; color:var(--muted);';
-    const line = document.createElement('div');
-    line.textContent = t('intro_st_loc_bg_hint');
-    d.appendChild(line);
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = t('intro_bg_settings');
-    b.style.cssText = 'margin-top:6px; font-family:inherit; font-size:12px;'
-      + 'padding:8px 14px; background:transparent; color:var(--ink);'
-      + 'border:1px solid var(--rule); border-radius:6px; cursor:pointer;';
-    b.addEventListener('click', () => {
-      const P = bgPlugin();
-      if (P && P.openSettings) P.openSettings().catch(() => {});
-    });
-    d.appendChild(b);
-    st.parentNode.insertBefore(d, st.nextSibling);
-  } catch (_e) { /* cosmetic only */ }
-}
-
 // App Links (spec A3 + boarding addendum): the OS hands the shell a URL
 // via appUrlOpen (app already running) or as the launch URL (cold start).
 // Both funnel here. Three accepted shapes:
@@ -13605,12 +13569,12 @@ function wireIntro() {
     // watch. This was the likely cause of trial passengers who tapped Allow but
     // still sent zero fixes.
     requestLocationOnTap();
-    // A6: this tap is ALSO the background-sharing consent moment (one
-    // consent at boarding, addendum rule 1) — arm the watcher in the shell
-    // and surface the Android "Allow all the time" settings nudge.
+    // A6: this tap is ALSO the in-your-pocket sharing consent moment (one
+    // consent at boarding, addendum rule 1) — arm the watcher in the shell.
+    // WhatsApp model: the foreground service keeps fixes flowing with only
+    // while-in-use permission, so there is NO settings hop.
     if (isNativeApp()) {
       try { bgShareStart(); } catch (_e) {}
-      maybeShowBgSettingsHint();
     }
     // Confirm in place once the fix actually lands (or nudge if it didn't).
     let checks = 0;
