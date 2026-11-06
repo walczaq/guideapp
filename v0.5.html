@@ -257,7 +257,7 @@
   }
   /* Overview/Detail preset toggle, stacked above the +/- buttons */
   .zoom-btn.preset.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-  /* Group-chat button: WhatsApp icon + small caption stacked */
+  /* Tour-chat button: chat-bubble icon + small caption stacked */
   .zoom-btn.chat { flex-direction: column; gap: 1px; }
   .zoom-btn-cap {
     font-family: 'JetBrains Mono', monospace; font-size: 7.5px; font-weight: 700;
@@ -534,12 +534,6 @@
     color: var(--ink); cursor: pointer;
   }
   .menu-guidecard-btn:active { background: var(--paper-2); }
-  /* Small red reminder note (guide, no group chat set) */
-  .menu-chat-note {
-    display: block; margin-top: 8px; cursor: pointer;
-    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.03em;
-    color: var(--mark);
-  }
   .menu-session-stop {
     display: none;
     padding: 10px 12px;
@@ -1847,6 +1841,41 @@
   .gc-photo { display: block; margin: 2px 0; }
   .gc-photo img { max-width: 220px; max-height: 260px; border-radius: 12px; border: 1px solid var(--rule-soft); display: block; }
   .gc-msg.mine .gc-photo { margin-left: auto; }
+  /* Tour chat (v0.7) — reuses .gc-* plus tabs, guide inbox, unread dots */
+  .sc-tabs { display: flex; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--rule-soft); }
+  .sc-tab {
+    flex: 1; position: relative; cursor: pointer; padding: 8px 10px; border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    background: transparent; color: var(--ink); border: 1px solid var(--rule);
+  }
+  .sc-tab.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .sc-dot { display: none; position: absolute; top: 4px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--mark); }
+  .sc-dot.on { display: block; }
+  .sc-thread-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--rule-soft); }
+  .sc-thread-back { background: transparent; border: none; color: var(--ink); cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 4px 0; }
+  .sc-thread-title { font-family: 'Fraunces', serif; font-weight: 700; font-size: 16px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sc-inbox-note { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--rule); padding: 2px 2px 6px; }
+  .sc-thread {
+    display: block; width: 100%; text-align: left; cursor: pointer; padding: 11px 12px; border-radius: 10px;
+    background: var(--paper-2); border: 1px solid var(--rule-soft); color: var(--ink);
+  }
+  .sc-thread-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .sc-thread-name { font-family: 'Fraunces', serif; font-size: 15px; font-weight: 600; }
+  .sc-thread-when { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--rule); }
+  .sc-thread-prev { font-size: 13px; color: var(--rule); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sc-thread.unread .sc-thread-name::after { content: ''; display: inline-block; width: 8px; height: 8px; margin-left: 7px; border-radius: 50%; background: var(--mark); vertical-align: middle; }
+  .sc-thread.unread .sc-thread-prev { color: var(--ink); font-weight: 600; }
+  .gc-msg.sc-from-guide .gc-bubble { border-color: var(--ink); border-width: 1.5px; }
+  .sc-ended { text-align: center; padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px); font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--rule); border-top: 1px solid var(--rule-soft); }
+  .sc-photo { padding: 0 10px; font-size: 16px; align-self: stretch; }
+  .zoom-btn.chat { position: relative; }
+  .zoom-btn.chat.has-unread::after, .menu-item.has-unread .menu-label::after {
+    content: ''; position: absolute; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--mark); border: 1.5px solid var(--paper);
+  }
+  .zoom-btn.chat.has-unread::after { top: -2px; right: -2px; }
+  .menu-item.has-unread .menu-label { position: relative; }
+  .menu-item.has-unread .menu-label::after { position: relative; display: inline-block; margin-left: 8px; vertical-align: middle; }
 
   /* ── Tour builder (v0.6) ────────────────────────────────────────────── */
   .tb-screen, .tb-editor {
@@ -2706,12 +2735,11 @@
       <div class="map-zoom-readout" id="map-zoom-readout">z —</div>
 
       <div class="zoom-controls">
-        <button class="zoom-btn chat" id="map-chat-btn" type="button" style="display:none;" aria-label="Group chat" title="Group chat">
-          <svg viewBox="0 0 32 32" width="17" height="17" fill="currentColor" aria-hidden="true">
-            <path d="M16 .4C7.4.4.4 7.4.4 16c0 2.82.74 5.46 2.02 7.75L.27 31.73l8.16-2.14A15.5 15.5 0 0 0 16 31.6h.01C24.6 31.6 31.6 24.6 31.6 16S24.6.4 16 .4zm0 28.5h-.01a12.9 12.9 0 0 1-6.58-1.8l-.47-.28-4.88 1.28 1.3-4.76-.31-.49A12.88 12.88 0 0 1 3.08 16C3.08 8.9 8.9 3.1 16 3.1c3.45 0 6.69 1.34 9.13 3.78A12.83 12.83 0 0 1 28.92 16c0 7.11-5.81 12.9-12.92 12.9z"/>
-            <path d="M23.5 19.13c-.39-.2-2.3-1.13-2.66-1.26-.36-.13-.62-.2-.88.2-.26.39-1.01 1.26-1.24 1.52-.23.26-.46.29-.85.1-.39-.2-1.64-.6-3.13-1.93-1.16-1.03-1.94-2.31-2.17-2.7-.23-.39-.02-.6.17-.8.18-.18.39-.46.59-.69.2-.23.26-.39.39-.65.13-.26.07-.49-.03-.69-.1-.2-.88-2.12-1.2-2.9-.32-.76-.64-.66-.88-.67h-.75c-.26 0-.69.1-1.05.49-.36.39-1.38 1.35-1.38 3.28 0 1.94 1.41 3.81 1.61 4.07.2.26 2.78 4.25 6.74 5.96.94.41 1.68.65 2.25.83.95.3 1.81.26 2.49.16.76-.11 2.3-.94 2.63-1.85.32-.91.32-1.68.23-1.85-.1-.16-.36-.26-.75-.46z"/>
+        <button class="zoom-btn chat" id="map-chat-btn" type="button" style="display:none;" aria-label="Chat" title="Chat">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.8-.8L3 21l1.9-5.2A8.4 8.4 0 1 1 21 11.5z"/>
           </svg>
-          <span class="zoom-btn-cap">Group</span>
+          <span class="zoom-btn-cap" id="map-chat-cap">Chat</span>
         </button>
         <div class="zoom-sep"></div>
         <button class="zoom-btn" id="titles-toggle" type="button" title="Show place names" aria-label="Show place names" style="font-family:'Fraunces',serif; font-size:14px; font-weight:700;">Aa</button>
@@ -2829,7 +2857,7 @@
               <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
             </svg>
           </div>
-          <div class="menu-label" id="menu-group-chat-label">Group chat</div>
+          <div class="menu-label" id="menu-group-chat-label">Chat</div>
           <span class="menu-chevron">›</span>
         </button>
         <button class="menu-item" data-action="my-sessions" id="menu-my-sessions" style="display:none;">
@@ -3457,7 +3485,7 @@ const I18N = {
     gps_timeout: 'GPS timed out. Make sure location services are on, then tap here to retry.',
     loading_joining: 'Joining session…',
     reward_stamp: '🎉 On time!', reward_title: 'Nice — you made it back!', reward_body: "You're at the bus with time to spare. Sit back and enjoy the ride.",
-    menu_group_chat: 'Group chat', menu_reset: 'Reset visited pins', menu_about: 'About this build',
+    menu_group_chat: 'Chat', chat_title: 'Tour chat', chat_btn: 'Chat', chat_tab_group: 'Group', chat_tab_guide: 'Guide', chat_empty_group: 'No messages yet. Say hello to the group!', chat_empty_guide: 'Message your guide privately — only they will see it.', chat_ph_group: 'Message the group…', chat_ph_guide: 'Message your guide…', chat_private_note: 'Private · only you and your guide', chat_photo: 'Add a photo', chat_send: 'Send', chat_you: 'You', chat_guide: 'Guide', chat_passenger: 'Passenger', chat_back: 'Back', chat_loading: 'Loading…', chat_load_failed: "Couldn't load messages. Check your connection.", chat_ended: 'This tour has ended — the chat is read-only.', chat_uploading: 'Uploading photo…', chat_upload_failed: 'Photo upload failed — try again', chat_send_failed: "Couldn't send — check your connection and try again", chat_slow_down: 'Slow down a little — try again in a moment', chat_unavailable: "Chat isn't available on this device. Try rejoining the tour with your link.", menu_reset: 'Reset visited pins', menu_about: 'About this build',
     menu_at_bus: "I'm at the bus", at_bus_done: "✓ Marked you as back at the bus.",
     menu_loc_stop: 'Stop sharing my location', menu_loc_share: 'Share my location',
     loc_stopped: "Location sharing off — your guide can't see where you are. The app still works.",
@@ -3530,7 +3558,7 @@ const I18N = {
     gps_timeout: 'El GPS tardó demasiado. Comprueba que la localización está activada y toca aquí para reintentar.',
     loading_joining: 'Uniéndote a la sesión…',
     reward_stamp: '🎉 ¡A tiempo!', reward_title: '¡Bien, llegaste a tiempo!', reward_body: 'Estás en el autobús con tiempo de sobra. Relájate y disfruta del viaje.',
-    menu_group_chat: 'Chat del grupo', menu_reset: 'Restablecer paradas vistas', menu_about: 'Acerca de esta versión',
+    menu_group_chat: 'Chat', chat_title: 'Chat del tour', chat_btn: 'Chat', chat_tab_group: 'Grupo', chat_tab_guide: 'Guía', chat_empty_group: 'Aún no hay mensajes. ¡Saluda al grupo!', chat_empty_guide: 'Escribe a tu guía en privado: solo él o ella lo verá.', chat_ph_group: 'Escribe al grupo…', chat_ph_guide: 'Escribe a tu guía…', chat_private_note: 'Privado · solo tú y tu guía', chat_photo: 'Añadir una foto', chat_send: 'Enviar', chat_you: 'Tú', chat_guide: 'Guía', chat_passenger: 'Pasajero', chat_back: 'Atrás', chat_loading: 'Cargando…', chat_load_failed: 'No se pudieron cargar los mensajes. Revisa tu conexión.', chat_ended: 'Este tour ha terminado: el chat es solo de lectura.', chat_uploading: 'Subiendo foto…', chat_upload_failed: 'No se pudo subir la foto. Inténtalo de nuevo', chat_send_failed: 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo', chat_slow_down: 'Más despacio: inténtalo de nuevo en un momento', chat_unavailable: 'El chat no está disponible en este dispositivo. Vuelve a unirte al tour con tu enlace.', menu_reset: 'Restablecer paradas vistas', menu_about: 'Acerca de esta versión',
     menu_at_bus: 'Estoy en el autobús', at_bus_done: '✓ Te marcamos como de vuelta en el autobús.',
     menu_loc_stop: 'Dejar de compartir mi ubicación', menu_loc_share: 'Compartir mi ubicación',
     loc_stopped: 'Ubicación desactivada: tu guía no puede verte. La app sigue funcionando.',
@@ -3603,7 +3631,7 @@ const I18N = {
     gps_timeout: 'GPS 超时。请确认定位服务已开启，然后点按此处重试。',
     loading_joining: '正在加入…',
     reward_stamp: '🎉 准时！', reward_title: '太好了——你赶回来了！', reward_body: '你已到达大巴，还有充足时间。请坐好，享受旅程。',
-    menu_group_chat: '群聊', menu_reset: '重置已访问的点', menu_about: '关于此版本',
+    menu_group_chat: '聊天', chat_title: '行程聊天', chat_btn: '聊天', chat_tab_group: '群组', chat_tab_guide: '导游', chat_empty_group: '还没有消息。跟大家打个招呼吧！', chat_empty_guide: '私信你的导游——只有导游能看到。', chat_ph_group: '发消息给大家…', chat_ph_guide: '发消息给导游…', chat_private_note: '私密 · 仅你和导游可见', chat_photo: '添加照片', chat_send: '发送', chat_you: '你', chat_guide: '导游', chat_passenger: '乘客', chat_back: '返回', chat_loading: '加载中…', chat_load_failed: '无法加载消息，请检查网络连接。', chat_ended: '本次行程已结束，聊天仅可查看。', chat_uploading: '正在上传照片…', chat_upload_failed: '照片上传失败，请重试', chat_send_failed: '发送失败，请检查网络后重试', chat_slow_down: '发送太快了，请稍后再试', chat_unavailable: '此设备无法使用聊天。请用你的链接重新加入行程。', menu_reset: '重置已访问的点', menu_about: '关于此版本',
     menu_at_bus: '我在大巴上', at_bus_done: '✓ 已标记你已回到大巴。',
     menu_loc_stop: '停止共享我的位置', menu_loc_share: '共享我的位置',
     loc_stopped: '位置共享已关闭——向导看不到你的位置。应用仍可使用。',
@@ -6039,6 +6067,466 @@ function closeGuideChat() {
   if (el) el.remove();
 }
 
+// ── Tour chat (v0.7) ──────────────────────────────────────────────────────
+// In-app chat for a session, replacing the external WhatsApp link. Two kinds
+// of conversation (see migration 047):
+//   • Group   — guide + every passenger in the session.
+//   • Private — one thread per passenger, visible only to them and the guide.
+// Passengers: tabs "Group" | "Guide". Guide: tabs "Group" | "Passengers"
+// (an inbox listing every passenger → tap one to open that thread).
+// Like the guides room, it polls while open (no realtime — the table has no
+// public-read policy). A slow background poll lights an unread dot on the
+// map's chat button + the menu row.
+//
+// Passenger auth: PASSENGER_ID is not secret (session_passengers is public),
+// so each device keeps a random chat key in localStorage and claims it once
+// per session (claim_session_chat_key); every chat call sends it.
+let _sc = null;              // open-screen state, null when closed
+let _scPollTimer = null;
+let _scBadgeTimer = null;
+const _scKeyClaims = {};     // sessionId → Promise<boolean>
+let _scMemKey = null;        // fallback when localStorage is unavailable
+
+function scChatKey() {
+  try {
+    let k = localStorage.getItem('fieldnote_chat_key');
+    if (!k || k.length < 24) {
+      const b = new Uint8Array(16); crypto.getRandomValues(b);
+      k = Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem('fieldnote_chat_key', k);
+    }
+    return k;
+  } catch (_e) {
+    if (!_scMemKey) {
+      const b = new Uint8Array(16); crypto.getRandomValues(b);
+      _scMemKey = Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+    }
+    return _scMemKey;
+  }
+}
+
+// Claim (or re-confirm) this device's chat key for a session. Cached per
+// session; a failure is not cached so a later open can retry (e.g. offline).
+function scEnsureKey(sessionId) {
+  if (!_scKeyClaims[sessionId]) {
+    _scKeyClaims[sessionId] = supabaseClient.rpc('claim_session_chat_key',
+      { p_session_id: sessionId, p_passenger_id: PASSENGER_ID, p_chat_key: scChatKey() })
+      .then(({ error }) => {
+        if (error) { console.warn('[tourchat] key claim failed', error); delete _scKeyClaims[sessionId]; return false; }
+        return true;
+      });
+  }
+  return _scKeyClaims[sessionId];
+}
+
+// Credentials for the chat RPCs: the guide token when acting as the guide,
+// else passenger id + chat key.
+function scCreds(asGuide) {
+  if (asGuide) return { p_guide_token: getStoredGuideToken() };
+  return { p_passenger_id: PASSENGER_ID, p_chat_key: scChatKey() };
+}
+
+// Per-session "seen up to" marks for the unread dots: g = group, p = private
+// (passenger: their thread; guide: the inbox as a whole), t = per-thread (guide).
+function scSeenGet(sid) {
+  try { return JSON.parse(localStorage.getItem('fieldnote_chat_seen_' + sid) || '{}') || {}; } catch (_e) { return {}; }
+}
+function scSeenSet(sid, patch) {
+  const s = scSeenGet(sid);
+  for (const k in patch) {
+    if (k === 't') { s.t = Object.assign({}, s.t || {}, patch.t); }
+    else s[k] = Math.max(Number(s[k]) || 0, Number(patch[k]) || 0);
+  }
+  try { localStorage.setItem('fieldnote_chat_seen_' + sid, JSON.stringify(s)); } catch (_e) {}
+}
+
+async function scFetch(threadPid, afterId) {
+  const { data, error } = await supabaseClient.rpc('list_session_chat', Object.assign({
+    p_session_id: _sc.session.id, p_thread_passenger_id: threadPid || null,
+    p_after_id: afterId || 0, p_limit: 200,
+  }, scCreds(_sc.asGuide)));
+  if (error) { console.warn('[tourchat] list failed', error); return null; }
+  return data || [];
+}
+
+async function scFetchThreads() {
+  const { data, error } = await supabaseClient.rpc('list_session_chat_threads',
+    { p_session_id: _sc.session.id, p_guide_token: getStoredGuideToken() });
+  if (error) { console.warn('[tourchat] threads failed', error); return null; }
+  return data || [];
+}
+
+async function scSend(threadPid, body, mediaUrl) {
+  const { error } = await supabaseClient.rpc('post_session_chat', Object.assign({
+    p_session_id: _sc.session.id, p_thread_passenger_id: threadPid || null,
+    p_body: body, p_media_url: mediaUrl || null,
+  }, scCreds(_sc.asGuide)));
+  return error ? { error: error.message } : { ok: true };
+}
+
+// Compress, get a signed upload URL from session_chat_upload (checks guide
+// token or chat key), upload, return the public URL.
+async function scUploadPhoto(file) {
+  const blob = await gcCompressImage(file);
+  const payload = { session_id: _sc.session.id, ext: 'jpg' };
+  if (_sc.asGuide) payload.guide_token = getStoredGuideToken();
+  else { payload.passenger_id = PASSENGER_ID; payload.chat_key = scChatKey(); }
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/session_chat_upload`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'apikey': SUPABASE_KEY, 'authorization': 'Bearer ' + SUPABASE_KEY },
+    body: JSON.stringify(payload),
+  });
+  if (!resp.ok) { let e = {}; try { e = await resp.json(); } catch (_e) {} throw new Error(e.error || 'Upload failed'); }
+  const { path, token: upToken, publicUrl } = await resp.json();
+  const { error } = await supabaseClient.storage.from('session-chat')
+    .uploadToSignedUrl(path, upToken, blob, { contentType: 'image/jpeg' });
+  if (error) throw new Error(error.message || 'Upload failed');
+  return publicUrl;
+}
+
+function scMessageEl(m) {
+  const wrap = gcMessageEl({ id: m.id, mine: m.mine, guide_name: m.sender_name, body: m.body, media_url: m.media_url, created_at: m.created_at });
+  const nameSpan = wrap.querySelector('.gc-meta span');
+  if (nameSpan) {
+    if (m.mine) nameSpan.textContent = t('chat_you');
+    else if (m.sender_role === 'guide') nameSpan.textContent = (m.sender_name || '') + ' · ' + t('chat_guide');
+    else nameSpan.textContent = m.sender_name || t('chat_passenger');
+  }
+  if (m.sender_role === 'guide' && !m.mine) wrap.classList.add('sc-from-guide');
+  return wrap;
+}
+
+function scThreadPidForView() {
+  if (!_sc) return null;
+  if (_sc.view === 'private') return PASSENGER_ID;
+  if (_sc.view === 'thread') return _sc.thread && _sc.thread.passenger_id;
+  return null;
+}
+
+function scEmptyText() {
+  if (_sc.view === 'group') return t('chat_empty_group');
+  if (_sc.view === 'private') return t('chat_empty_guide');
+  return 'No messages with ' + ((_sc.thread && _sc.thread.passenger_name) || 'this passenger') + ' yet.';
+}
+
+function scMarkSeen() {
+  if (!_sc || !_sc.lastId) return;
+  const sid = _sc.session.id;
+  if (_sc.view === 'group') scSeenSet(sid, { g: _sc.lastId });
+  else if (_sc.view === 'private') scSeenSet(sid, { p: _sc.lastId });
+  else if (_sc.view === 'thread' && _sc.thread) scSeenSet(sid, { t: { [_sc.thread.passenger_id]: _sc.lastId } });
+  scRefreshBadge();
+}
+
+async function scRefreshMessages(initial) {
+  const list = document.getElementById('sc-list');
+  if (!list || !_sc) return;
+  const view = _sc.view, threadPid = scThreadPidForView();
+  const rows = await scFetch(threadPid, initial ? 0 : _sc.lastId);
+  // Bail if the screen closed or the view changed while we were waiting.
+  if (!_sc || !document.getElementById('sc-list') || _sc.view !== view || scThreadPidForView() !== threadPid) return;
+  if (rows === null) {
+    if (initial) list.innerHTML = `<div class="gc-empty">${t('chat_load_failed')}</div>`;
+    return;
+  }
+  if (initial) { list.innerHTML = ''; _sc.lastId = 0; }
+  const fresh = rows.filter(r => r.id > _sc.lastId);
+  if (initial && !rows.length) {
+    const d = document.createElement('div'); d.className = 'gc-empty'; d.textContent = scEmptyText();
+    list.appendChild(d);
+    return;
+  }
+  if (!fresh.length) return;
+  const empty = list.querySelector('.gc-empty'); if (empty) empty.remove();
+  const stick = gcNearBottom(list) || initial;
+  for (const m of fresh) { list.appendChild(scMessageEl(m)); _sc.lastId = Math.max(_sc.lastId, m.id); }
+  if (stick) list.scrollTop = list.scrollHeight;
+  scMarkSeen();
+}
+
+async function scRefreshInbox(initial) {
+  const list = document.getElementById('sc-list');
+  if (!list || !_sc || _sc.view !== 'inbox') return;
+  const rows = await scFetchThreads();
+  if (!_sc || _sc.view !== 'inbox' || !document.getElementById('sc-list')) return;
+  if (rows === null) { if (initial) list.innerHTML = '<div class="gc-empty">Couldn\'t load passengers.</div>'; return; }
+  const seen = scSeenGet(_sc.session.id);
+  const seenT = seen.t || {};
+  // Opening the inbox counts as having seen it (per-thread bold marks remain).
+  const maxP = rows.reduce((a, r) => Math.max(a, Number(r.last_passenger_msg_id) || 0), 0);
+  scSeenSet(_sc.session.id, { p: maxP });
+  scRefreshBadge();
+  list.innerHTML = '';
+  if (!rows.length) {
+    list.innerHTML = '<div class="gc-empty">No passengers have joined yet.</div>';
+    return;
+  }
+  const note = document.createElement('div');
+  note.className = 'sc-inbox-note';
+  note.textContent = 'Private messages — only you and that passenger see them.';
+  list.appendChild(note);
+  for (const r of rows) {
+    const unread = (Number(r.last_passenger_msg_id) || 0) > (Number(seenT[r.passenger_id]) || 0);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'sc-thread' + (unread ? ' unread' : '');
+    const top = document.createElement('div'); top.className = 'sc-thread-top';
+    const nm = document.createElement('span'); nm.className = 'sc-thread-name'; nm.textContent = r.passenger_name || 'Passenger';
+    const when = document.createElement('span'); when.className = 'sc-thread-when';
+    try { when.textContent = r.last_at ? new Date(r.last_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''; } catch (_e) {}
+    top.appendChild(nm); top.appendChild(when);
+    const prev = document.createElement('div'); prev.className = 'sc-thread-prev';
+    prev.textContent = r.last_id ? ((r.last_from_guide ? 'You: ' : '') + (r.last_body || '')) : 'No messages yet — tap to write';
+    b.appendChild(top); b.appendChild(prev);
+    b.addEventListener('click', () => scSetView('thread', { passenger_id: r.passenger_id, passenger_name: r.passenger_name }));
+    list.appendChild(b);
+  }
+}
+
+function scRenderChrome() {
+  const el = document.getElementById('tour-chat-screen');
+  if (!el || !_sc) return;
+  const tabsRow = el.querySelector('.sc-tabs');
+  const threadHead = document.getElementById('sc-thread-head');
+  const composer = document.getElementById('sc-composer');
+  const ended = document.getElementById('sc-ended');
+  const input = document.getElementById('sc-input');
+  el.querySelectorAll('.sc-tab').forEach(b => {
+    const tab = b.dataset.tab;
+    const on = (tab === 'group' && _sc.view === 'group') ||
+               (tab === 'private' && (_sc.view === 'private' || _sc.view === 'inbox' || _sc.view === 'thread'));
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  tabsRow.style.display = _sc.view === 'thread' ? 'none' : '';
+  threadHead.style.display = _sc.view === 'thread' ? '' : 'none';
+  if (_sc.view === 'thread') {
+    document.getElementById('sc-thread-name').textContent = (_sc.thread && _sc.thread.passenger_name) || 'Passenger';
+  }
+  const canWrite = !_sc.ended && _sc.view !== 'inbox';
+  composer.style.display = canWrite ? '' : 'none';
+  ended.style.display = (_sc.ended && _sc.view !== 'inbox') ? '' : 'none';
+  if (input) {
+    input.placeholder = _sc.view === 'group' ? t('chat_ph_group')
+      : _sc.view === 'private' ? t('chat_ph_guide')
+      : 'Message ' + ((_sc.thread && _sc.thread.passenger_name) || 'passenger') + '…';
+  }
+  const sub = document.getElementById('sc-sub');
+  if (sub) sub.textContent = _sc.view === 'private' ? t('chat_private_note')
+    : _sc.view === 'thread' ? 'Private · only you and this passenger'
+    : (_sc.session.label || '');
+  scRefreshBadge();
+}
+
+function scSetView(view, thread) {
+  if (!_sc) return;
+  _sc.view = view;
+  _sc.thread = thread || null;
+  _sc.lastId = 0;
+  const list = document.getElementById('sc-list');
+  if (list) list.innerHTML = `<div class="gc-empty">${t('chat_loading')}</div>`;
+  scRenderChrome();
+  if (_scPollTimer) clearInterval(_scPollTimer);
+  if (view === 'inbox') {
+    scRefreshInbox(true);
+    _scPollTimer = setInterval(() => scRefreshInbox(false), 6000);
+  } else {
+    scRefreshMessages(true);
+    _scPollTimer = setInterval(() => scRefreshMessages(false), 4000);
+  }
+}
+
+// Open the tour chat. `sessionObj` defaults to the live SESSION; the guide's
+// My Sessions list passes another (possibly ended) session to read it back.
+async function openTourChat(sessionObj, opts) {
+  const session = sessionObj || SESSION;
+  if (!session || !session.id) return;
+  const asGuide = !!((opts && opts.asGuide) || (ROLE === 'guide' && getStoredGuideToken()));
+  closeTourChat();
+  _sc = { session, asGuide, view: 'group', thread: null, lastId: 0, ended: !!session.ended_at };
+
+  const el = document.createElement('div');
+  el.id = 'tour-chat-screen';
+  el.className = 'gc-screen';
+  el.innerHTML = `
+    <div class="gc-header">
+      <button class="gc-back" id="sc-back" aria-label="${t('chat_back')}">‹ ${t('chat_back')}</button>
+      <div class="gc-titles">
+        <div class="gc-title">${t('chat_title')}</div>
+        <div class="gc-sub" id="sc-sub"></div>
+      </div>
+    </div>
+    <div class="sc-tabs" role="tablist">
+      <button class="sc-tab" data-tab="group" role="tab" type="button">${t('chat_tab_group')}<span class="sc-dot" id="sc-dot-group"></span></button>
+      <button class="sc-tab" data-tab="private" role="tab" type="button">${asGuide ? 'Passengers' : t('chat_tab_guide')}<span class="sc-dot" id="sc-dot-private"></span></button>
+    </div>
+    <div class="sc-thread-head" id="sc-thread-head" style="display:none;">
+      <button class="sc-thread-back" id="sc-thread-back" type="button">‹ All passengers</button>
+      <span class="sc-thread-title" id="sc-thread-name"></span>
+    </div>
+    <div class="gc-list" id="sc-list"><div class="gc-empty">${t('chat_loading')}</div></div>
+    <div class="sc-ended" id="sc-ended" style="display:none;">${t('chat_ended')}</div>
+    <div class="gc-composer" id="sc-composer">
+      <div class="gc-attach-preview" id="sc-attach-preview" style="display:none;"></div>
+      <div class="gc-row">
+        <button class="gc-tool sc-photo" id="sc-attach" type="button" title="${t('chat_photo')}" aria-label="${t('chat_photo')}">🖼</button>
+        <textarea class="gc-input" id="sc-input" rows="1" maxlength="1000"></textarea>
+        <button class="gc-send" id="sc-send" disabled>${t('chat_send')}</button>
+      </div>
+    </div>
+    <input type="file" id="sc-file" accept="image/*" style="display:none;" />`;
+  document.getElementById('phone').appendChild(el);
+
+  const input = document.getElementById('sc-input');
+  const sendBtn = document.getElementById('sc-send');
+  const attachBtn = document.getElementById('sc-attach');
+  const fileInput = document.getElementById('sc-file');
+  const preview = document.getElementById('sc-attach-preview');
+  let pendingMedia = null, uploading = false, sending = false;
+
+  function autoGrow() { input.style.height = 'auto'; input.style.height = Math.min(120, input.scrollHeight) + 'px'; }
+  function syncSend() { sendBtn.disabled = sending || uploading || (!input.value.trim() && !pendingMedia); }
+  input.addEventListener('input', () => { autoGrow(); syncSend(); });
+
+  function renderPreview(msg) {
+    preview.innerHTML = '';
+    if (msg) { preview.style.display = ''; const s = document.createElement('span'); s.className = 'gc-attach-status'; s.textContent = msg; preview.appendChild(s); return; }
+    if (!pendingMedia) { preview.style.display = 'none'; return; }
+    preview.style.display = '';
+    const im = document.createElement('img'); im.src = pendingMedia; im.alt = t('chat_photo');
+    const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'gc-attach-x'; rm.textContent = '✕';
+    rm.addEventListener('click', () => { pendingMedia = null; renderPreview(); syncSend(); });
+    preview.appendChild(im); preview.appendChild(rm);
+  }
+  function flash(msg) {
+    renderPreview(msg);
+    setTimeout(() => { if (!uploading) renderPreview(); }, 3000);
+  }
+
+  attachBtn.addEventListener('click', () => { if (!uploading) fileInput.click(); });
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files && fileInput.files[0];
+    fileInput.value = '';
+    if (!file) return;
+    uploading = true; pendingMedia = null; renderPreview(t('chat_uploading')); syncSend();
+    try {
+      pendingMedia = await scUploadPhoto(file);
+      uploading = false; renderPreview(); syncSend();
+    } catch (err) {
+      console.warn('[tourchat] photo upload failed', err);
+      uploading = false; flash(t('chat_upload_failed')); syncSend();
+    }
+  });
+
+  async function doSend() {
+    if (!_sc || uploading || sending) return;
+    const body = input.value.trim();
+    if (!body && !pendingMedia) return;
+    sending = true; syncSend();
+    const r = await scSend(scThreadPidForView(), body, pendingMedia);
+    sending = false;
+    if (r.error) {
+      console.warn('[tourchat] send failed', r.error);
+      if (/ended/i.test(r.error) && _sc) { _sc.ended = true; scRenderChrome(); }
+      else flash(/slow down/i.test(r.error) ? t('chat_slow_down') : t('chat_send_failed'));
+      syncSend();
+      return;
+    }
+    input.value = ''; pendingMedia = null; renderPreview(); autoGrow(); syncSend();
+    scRefreshMessages(false);
+  }
+  sendBtn.addEventListener('click', doSend);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
+  });
+
+  el.querySelectorAll('.sc-tab').forEach(b => b.addEventListener('click', () => {
+    if (!_sc) return;
+    if (b.dataset.tab === 'group') scSetView('group');
+    else scSetView(_sc.asGuide ? 'inbox' : 'private');
+  }));
+  document.getElementById('sc-thread-back').addEventListener('click', () => scSetView('inbox'));
+  document.getElementById('sc-back').addEventListener('click', () => {
+    if (_sc && _sc.view === 'thread') scSetView('inbox');
+    else closeTourChat();
+  });
+
+  scRenderChrome();
+  if (!asGuide) {
+    const ok = await scEnsureKey(session.id);
+    if (!_sc || _sc.session !== session) return;
+    if (!ok) {
+      document.getElementById('sc-list').innerHTML = `<div class="gc-empty">${t('chat_unavailable')}</div>`;
+      document.getElementById('sc-composer').style.display = 'none';
+      return;
+    }
+  }
+  // Open on whichever side has unread messages (private first — it's personal).
+  const latest = await scFetchLatest(session.id, asGuide);
+  if (!_sc || _sc.session !== session) return;
+  const seen = scSeenGet(session.id);
+  if (latest && latest.private_last_id > (Number(seen.p) || 0)) {
+    scSetView(asGuide ? 'inbox' : 'private');
+  } else {
+    scSetView('group');
+  }
+}
+
+function closeTourChat() {
+  if (_scPollTimer) { clearInterval(_scPollTimer); _scPollTimer = null; }
+  const el = document.getElementById('tour-chat-screen');
+  if (el) el.remove();
+  _sc = null;
+  scRefreshBadge();
+}
+
+async function scFetchLatest(sessionId, asGuide) {
+  const { data, error } = await supabaseClient.rpc('session_chat_latest',
+    Object.assign({ p_session_id: sessionId }, scCreds(asGuide)));
+  if (error) { console.warn('[tourchat] latest failed', error); return null; }
+  return data || null;
+}
+
+// Unread dots: on the map chat button, the menu row, and the in-screen tabs.
+let _scLatest = null;   // last session_chat_latest result for the live SESSION
+function scRefreshBadge() {
+  if (!SESSION) return;
+  const seen = scSeenGet(SESSION.id);
+  const l = _scLatest || { group_last_id: 0, private_last_id: 0 };
+  const g = l.group_last_id > (Number(seen.g) || 0);
+  const p = l.private_last_id > (Number(seen.p) || 0);
+  const any = g || p;
+  const mapBtn = document.getElementById('map-chat-btn');
+  if (mapBtn) mapBtn.classList.toggle('has-unread', any);
+  const menuItem = document.getElementById('menu-group-chat');
+  if (menuItem) menuItem.classList.toggle('has-unread', any);
+  if (_sc && _sc.session.id === SESSION.id) {
+    const dg = document.getElementById('sc-dot-group');
+    const dp = document.getElementById('sc-dot-private');
+    if (dg) dg.classList.toggle('on', g && _sc.view !== 'group');
+    if (dp) dp.classList.toggle('on', p && _sc.view === 'group');
+  }
+}
+
+async function scBadgeTick() {
+  if (!SESSION || document.hidden) return;
+  const asGuide = ROLE === 'guide' && !!getStoredGuideToken();
+  if (!asGuide && !(await scEnsureKey(SESSION.id))) return;
+  const l = await scFetchLatest(SESSION.id, asGuide);
+  if (!l) return;
+  _scLatest = l;
+  scRefreshBadge();
+  // An ended tour gets no new messages — stop polling.
+  if (l.ended && _scBadgeTimer) { clearInterval(_scBadgeTimer); _scBadgeTimer = null; }
+}
+
+function startTourChatBadge() {
+  if (!SESSION || _scBadgeTimer) return;
+  scBadgeTick();
+  _scBadgeTimer = setInterval(scBadgeTick, 20000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) scBadgeTick(); });
+}
+
 async function showSessionManager() {
   hideLoading();
   let el = document.getElementById('session-manager');
@@ -6142,16 +6630,8 @@ function renderSmList() {
     actions.className = 'sm-actions';
     actions.appendChild(smMakeBtn('Resume', 'primary', () => resumeSession(s.id)));
     actions.appendChild(smMakeBtn('Rename', '', () => { _smRenamingId = s.id; _smConfirmEndId = null; _smConfirmDeleteId = null; renderSmList(); }));
-    // Per-session group chat — open it (even after the session ended) or set/edit.
-    if (s.chat_url) {
-      actions.appendChild(smMakeBtn('Open chat', '', () => {
-        const u = normalizeChatUrl(s.chat_url);
-        if (u) window.open(u, '_blank', 'noopener,noreferrer');
-      }));
-      actions.appendChild(smMakeBtn('Edit chat', '', () => smChatEditor(s)));
-    } else {
-      actions.appendChild(smMakeBtn('Add chat', '', () => smChatEditor(s)));
-    }
+    // Tour chat — readable even after the session ended (read-only then).
+    actions.appendChild(smMakeBtn('Chat', '', () => openTourChat(s, { asGuide: true })));
     if (active) {
       if (_smConfirmEndId === s.id) {
         actions.appendChild(smMakeBtn('Tap to confirm', 'danger', async () => {
@@ -7511,13 +7991,6 @@ function showCreateSessionForm() {
         <option value="" disabled selected>Loading tours…</option>
       </select>
     </div>
-    <input
-      id="chat-link-input"
-      type="url"
-      inputmode="url"
-      placeholder="Group chat link (WhatsApp, optional)"
-      style="font-family:'JetBrains Mono',monospace; font-size:12px; padding:11px 14px; border:1px solid var(--rule); background:var(--paper-2); color:var(--ink); width:272px; border-radius:6px; text-align:center;"
-    />
     <button
       id="create-session-btn"
       style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
@@ -7545,8 +8018,7 @@ function showCreateSessionForm() {
     const sel = document.getElementById('tour-select');
     const tourSlug = sel && sel.value;
     if (!tourSlug) { if (sel) sel.style.borderColor = 'var(--mark)'; return; }
-    const chatInput = document.getElementById('chat-link-input');
-    await createSession(tourSlug, guideName, chatInput ? chatInput.value : '');
+    await createSession(tourSlug, guideName);
   });
 }
 
@@ -7577,7 +8049,7 @@ async function populateTourPicker() {
 }
 
 // Insert a new session row, then redirect the page to ?session=<newId>.
-async function createSession(tourSlug, guideName, chatUrl) {
+async function createSession(tourSlug, guideName) {
   showLoading('Creating session…');
 
   const id = nanoid8();
@@ -7589,7 +8061,6 @@ async function createSession(tourSlug, guideName, chatUrl) {
   const insertPayload = {
     id, label, tour_slug: tourSlug, guide_name: guideName,
     owner_guide_id: (GUIDE && GUIDE.id) ? GUIDE.id : null,
-    chat_url: chatUrl ? (normalizeChatUrl(chatUrl) || null) : null,
   };
 
   const { data, error } = await supabaseClient
@@ -7619,71 +8090,6 @@ function normalizeChatUrl(raw) {
   if (/^https?:\/\//i.test(s)) return s;
   if (/^[\w.-]+\.[a-z]{2,}(?:[/?#].*)?$/i.test(s)) return 'https://' + s;  // bare domain
   return '';
-}
-
-async function setSessionChatUrl(url, sessionId) {
-  const token = getStoredGuideToken();
-  const sid = sessionId || (SESSION && SESSION.id);
-  if (!token || !sid) return { error: 'Not in a session.' };
-  const { error } = await supabaseClient.rpc('set_session_chat_url',
-    { p_session_id: sid, p_guide_token: token, p_chat_url: url });
-  return error ? { error: error.message } : { ok: true };
-}
-
-// Per-session group-chat editor used from the My Sessions list (works on any
-// session the guide owns, active or ended).
-function smChatEditor(s) {
-  tbShowForm({
-    title: 'Group chat link',
-    fields: [{ key: 'url', label: 'WhatsApp / chat invite link', type: 'text', value: s.chat_url || '' }],
-    note: 'Per-session group chat. Passengers in this session get a "Group chat" button. Leave blank to remove.',
-    onSave: async (v, err) => {
-      const raw = (v.url || '').trim();
-      const norm = raw ? normalizeChatUrl(raw) : '';
-      if (raw && !norm) { err('Enter a valid http(s) link.'); return false; }
-      const r = await setSessionChatUrl(norm, s.id);
-      if (r.error) { err(r.error); return false; }
-      s.chat_url = norm || null;
-      if (SESSION && SESSION.id === s.id) { SESSION.chat_url = norm || null; refreshGroupChatButton(); }
-      tbCloseForm(); renderSmList(); return true;
-    },
-  });
-}
-
-// Gentle reminder: if a guide is in a session with no group chat set, nudge
-// them to add one (so passengers can reach the group). Once per session —
-// "Not now" remembers the dismissal; setting a chat makes it moot.
-function maybeRemindChatSetup() {
-  if (ROLE !== 'guide' || !SESSION || SESSION.chat_url) return;
-  if (document.getElementById('chat-reminder')) return;
-  let dismissed = false;
-  try { dismissed = localStorage.getItem('fieldnote_chatreminder_' + SESSION.id) === '1'; } catch (_e) {}
-  if (dismissed) return;
-  const el = document.createElement('div');
-  el.id = 'chat-reminder';
-  el.style.cssText =
-    'position:absolute; left:14px; right:14px; z-index:18;' +
-    'top:calc(max(env(safe-area-inset-top,0px),30px) + 96px);' +
-    'background:var(--ink); color:var(--paper); border-radius:14px; padding:14px 16px;' +
-    'box-shadow:0 8px 28px rgba(0,0,0,0.34);';
-  el.innerHTML = `
-    <div style="display:flex; align-items:flex-start; gap:10px;">
-      <span style="font-size:18px; line-height:1;">💬</span>
-      <div style="font-family:'Fraunces',serif; font-size:14px; line-height:1.35;">No group chat set for this tour. Add a WhatsApp link so passengers can reach you and each other.</div>
-    </div>
-    <div style="display:flex; gap:10px; margin-top:12px; justify-content:flex-end;">
-      <button id="chat-reminder-dismiss" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; padding:9px 14px; background:transparent; color:var(--paper); border:1px solid rgba(255,255,255,0.4); border-radius:8px; cursor:pointer;">Not now</button>
-      <button id="chat-reminder-add" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; padding:9px 14px; background:#25d366; color:#fff; border:none; border-radius:8px; cursor:pointer;">Add group chat</button>
-    </div>`;
-  document.getElementById('phone').appendChild(el);
-  document.getElementById('chat-reminder-dismiss').addEventListener('click', () => {
-    try { localStorage.setItem('fieldnote_chatreminder_' + SESSION.id, '1'); } catch (_e) {}
-    el.remove();
-  });
-  document.getElementById('chat-reminder-add').addEventListener('click', () => {
-    el.remove();
-    smChatEditor(SESSION);
-  });
 }
 
 // Per-guide card link (website / Linktree / contact).
@@ -7717,34 +8123,16 @@ function showGuideCardEditor() {
   });
 }
 
-// Guide-side editor for the per-session group-chat link (reuses the builder's
-// generic form modal). Saving writes via set_session_chat_url + updates SESSION.
-function showGroupChatEditor() {
-  tbShowForm({
-    title: 'Group chat link',
-    fields: [{ key: 'url', label: 'WhatsApp / chat invite link', type: 'text', value: (SESSION && SESSION.chat_url) || '' }],
-    note: 'Paste a WhatsApp group invite (or any chat link). Passengers get a "Group chat" button that opens it. Leave blank to remove.',
-    onSave: async (v, err) => {
-      const raw = (v.url || '').trim();
-      const norm = raw ? normalizeChatUrl(raw) : '';
-      if (raw && !norm) { err('Enter a valid http(s) link.'); return false; }
-      const r = await setSessionChatUrl(norm);
-      if (r.error) { err(r.error); return false; }
-      if (SESSION) SESSION.chat_url = norm || null;
-      tbCloseForm();
-      refreshGroupChatButton();
-      return true;
-    },
-  });
-}
-
-// Show/hide the on-map "Group chat" button (passengers, when a link is set).
+// Show the on-map tour-chat button whenever we're in a session (guide +
+// passenger), and start the unread-dot poll.
 function refreshGroupChatButton() {
   const btn = document.getElementById('map-chat-btn');
   if (!btn) return;
-  const url = (SESSION && SESSION.chat_url) ? normalizeChatUrl(SESSION.chat_url) : '';
-  btn.dataset.url = url || '';
-  btn.style.display = url ? '' : 'none';   // '' → falls back to .zoom-btn's flex; shown for guide + passenger
+  btn.style.display = SESSION ? '' : 'none';   // '' → falls back to .zoom-btn's flex
+  const cap = document.getElementById('map-chat-cap');
+  if (cap) cap.textContent = t('chat_btn');
+  btn.setAttribute('aria-label', t('chat_title')); btn.title = t('chat_title');
+  if (SESSION) startTourChatBadge();
 }
 
 // Dev-only tools (force-arrival, clear-acks) must not be
@@ -8100,10 +8488,6 @@ function startRoleShell() {
     // Boarding/headcount first: until the guide taps "Start tour", show the
     // boarding screen over the control center (#1).
     if (!(SESSION && SESSION.tour_started_at)) showBoarding();
-    // Chat-setup nudge: not before 10 min into the session (8s floor on resume).
-    const _startedMs = (SESSION && SESSION.started_at) ? Date.parse(SESSION.started_at) : Date.now();
-    const _chatWait = Math.max(8000, 10 * 60 * 1000 - (Date.now() - _startedMs));
-    setTimeout(() => { try { maybeRemindChatSetup(); } catch (_e) {} }, _chatWait);
   } else {
     startPassengerGuideListening();
     if (introNeeded()) {
@@ -11236,10 +11620,7 @@ document.querySelectorAll('[data-close-screen]').forEach(b => b.addEventListener
 
 {
   const mapChatBtn = document.getElementById('map-chat-btn');
-  if (mapChatBtn) mapChatBtn.addEventListener('click', () => {
-    const u = mapChatBtn.dataset.url;
-    if (u) window.open(u, '_blank', 'noopener,noreferrer');
-  });
+  if (mapChatBtn) mapChatBtn.addEventListener('click', () => openTourChat());
   // Discreet "Guide login" link at the bottom of the menu (not a .menu-item).
   const guideLoginLink = document.getElementById('menu-guide-login');
   if (guideLoginLink) guideLoginLink.addEventListener('click', () => {
@@ -11267,22 +11648,12 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   if (shareItem) {
     shareItem.style.display = SESSION ? '' : 'none';
   }
-  // "Group chat" — guides see it in a session (to set/edit the link);
-  // passengers see it only once a link is set (to open it).
+  // "Chat" — the in-app tour chat, for everyone in a session.
   const groupChatItem = document.getElementById('menu-group-chat');
   if (groupChatItem) {
     const gcLabel = document.getElementById('menu-group-chat-label');
-    if (SESSION && ROLE === 'guide') {
-      // Guides manage the per-session chat from My Sessions now (logged +
-      // reopenable). Hidden here so it doesn't read as a permanent setting
-      // sitting above "Your link".
-      groupChatItem.style.display = 'none';
-    } else if (SESSION && SESSION.chat_url) {
-      groupChatItem.style.display = '';
-      if (gcLabel) gcLabel.textContent = t('menu_group_chat');
-    } else {
-      groupChatItem.style.display = 'none';
-    }
+    groupChatItem.style.display = SESSION ? '' : 'none';
+    if (gcLabel) gcLabel.textContent = t('menu_group_chat');
   }
   // (Guide card link now renders as a small button under the guide name —
   // see renderMenuGuideName — not as a full menu row.)
@@ -11415,13 +11786,8 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
     } else if (action === 'share-invite') {
       openShareScreen();
     } else if (action === 'group-chat') {
-      if (ROLE === 'guide') {
-        while (screenStack.length) closeScreen();
-        showGroupChatEditor();
-      } else {
-        const u = SESSION && SESSION.chat_url ? normalizeChatUrl(SESSION.chat_url) : '';
-        if (u) window.open(u, '_blank', 'noopener,noreferrer');
-      }
+      while (screenStack.length) closeScreen();
+      openTourChat();
     } else if (action === 'my-sessions') {
       // Close the menu + any open screens, then show the session manager
       // over the current view so the guide can switch/manage sessions.
@@ -13253,10 +13619,6 @@ function renderMenuGuideName() {
   } else if (GUIDE_CARD_URL) {
     extra += `<button type="button" class="menu-guidecard-btn" id="menu-guidecard-btn">🔗 Contact &amp; links</button>`;
   }
-  // Small red reminder for the guide when no group chat is set.
-  if (ROLE === 'guide' && SESSION && !SESSION.chat_url) {
-    extra += `<span class="menu-chat-note" id="menu-chat-note">⚠ No group chat set — tap to add</span>`;
-  }
   el.innerHTML = `<span class="menu-session-guide-label">${label}</span>${safeName}${extra}`;
   el.classList.add('show');
   const cardBtn = document.getElementById('menu-guidecard-btn');
@@ -13264,8 +13626,6 @@ function renderMenuGuideName() {
     if (ROLE === 'guide') { while (screenStack.length) closeScreen(); showGuideCardEditor(); }
     else { const u = GUIDE_CARD_URL ? normalizeChatUrl(GUIDE_CARD_URL) : ''; if (u) window.open(u, '_blank', 'noopener,noreferrer'); }
   });
-  const noteEl = document.getElementById('menu-chat-note');
-  if (noteEl) noteEl.addEventListener('click', () => { while (screenStack.length) closeScreen(); smChatEditor(SESSION); });
 }
 
 function renderMenuActiveStop() {
