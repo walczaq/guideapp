@@ -1868,6 +1868,9 @@
   .gc-msg.sc-from-guide .gc-bubble { border-color: var(--ink); border-width: 1.5px; }
   .sc-ended { text-align: center; padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px); font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--rule); border-top: 1px solid var(--rule-soft); }
   .sc-photo { padding: 0 10px; font-size: 16px; align-self: stretch; }
+  .sc-notify { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--rule-soft); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--ink); background: var(--paper-2); }
+  .sc-notify-btn { flex: none; cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 6px 10px; border-radius: 999px; background: transparent; color: var(--ink); border: 1px solid var(--rule); }
+  .sc-notify-btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   .zoom-btn.chat { position: relative; }
   .zoom-btn.chat.has-unread::after, .menu-item.has-unread .menu-label::after {
     content: ''; position: absolute; width: 9px; height: 9px; border-radius: 50%;
@@ -6299,6 +6302,7 @@ function scRenderChrome() {
     b.setAttribute('aria-selected', on ? 'true' : 'false');
   });
   tabsRow.style.display = _sc.view === 'thread' ? 'none' : '';
+  scRenderNotifyBar();
   threadHead.style.display = _sc.view === 'thread' ? '' : 'none';
   if (_sc.view === 'thread') {
     document.getElementById('sc-thread-name').textContent = (_sc.thread && _sc.thread.passenger_name) || 'Passenger';
@@ -6360,6 +6364,7 @@ async function openTourChat(sessionObj, opts) {
       <button class="sc-tab" data-tab="group" role="tab" type="button">${t('chat_tab_group')}<span class="sc-dot" id="sc-dot-group"></span></button>
       <button class="sc-tab" data-tab="private" role="tab" type="button">${asGuide ? 'Passengers' : t('chat_tab_guide')}<span class="sc-dot" id="sc-dot-private"></span></button>
     </div>
+    <div class="sc-notify" id="sc-notify" style="display:none;"></div>
     <div class="sc-thread-head" id="sc-thread-head" style="display:none;">
       <button class="sc-thread-back" id="sc-thread-back" type="button">‹ All passengers</button>
       <span class="sc-thread-title" id="sc-thread-name"></span>
@@ -6525,6 +6530,117 @@ function startTourChatBadge() {
   scBadgeTick();
   _scBadgeTimer = setInterval(scBadgeTick, 20000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) scBadgeTick(); });
+}
+
+// ── Guide chat notifications (v0.7) ───────────────────────────────────────
+// Push to the GUIDE when a passenger writes in the tour chat (migration 048 +
+// send_chat_push edge function). Guide devices live in guide_push_targets,
+// per guide (not per session), so one opt-in covers every tour they run and
+// they never land in the passenger lists the stop pushes fan out to.
+// Opt-in from the chat screen; refreshed silently on each guide boot because
+// web endpoints / FCM tokens can rotate.
+const GUIDE_PUSH_KEY = 'fieldnote_guide_push';            // '1' = opted in
+const GUIDE_PUSH_ENDPOINT_KEY = 'fieldnote_guide_push_ep'; // what we saved
+
+function guidePushOn() { try { return localStorage.getItem(GUIDE_PUSH_KEY) === '1'; } catch (_e) { return false; } }
+function guidePushPossible() { return isNativeApp() ? !!nativePushPlugin() : pushSupported(); }
+
+async function guidePushSave(kind, endpoint, p256dh, auth) {
+  const { error } = await supabaseClient.rpc('save_guide_push_target', {
+    p_guide_token: getStoredGuideToken(), p_kind: kind, p_endpoint: endpoint,
+    p_p256dh: p256dh || null, p_auth: auth || null,
+  });
+  if (error) return { error: error.message };
+  try {
+    localStorage.setItem(GUIDE_PUSH_KEY, '1');
+    localStorage.setItem(GUIDE_PUSH_ENDPOINT_KEY, endpoint);
+  } catch (_e) {}
+  return { ok: true };
+}
+
+// Turn notifications on for this device. silent=true never prompts (boot
+// refresh): it only re-saves when permission is already granted.
+async function guidePushEnable(silent) {
+  if (!getStoredGuideToken()) return { error: 'Not signed in as a guide.' };
+  if (isNativeApp()) {
+    const P = nativePushPlugin();
+    if (!P) return { error: 'Notifications are not available in this app version.' };
+    wireNativePushListeners();
+    const perm = silent ? await P.checkPermissions() : await P.requestPermissions();
+    if (perm.receive !== 'granted') return { error: 'Notifications are blocked for Fieldnote in your phone settings.' };
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (r) => { if (!done) { done = true; resolve(r); } };
+      P.addListener('registration', async ({ value: token }) => {
+        finish(await guidePushSave(window.Capacitor.getPlatform(), token));
+      });
+      P.addListener('registrationError', (e) => finish({ error: (e && e.error) || 'Registration failed.' }));
+      P.register();
+      setTimeout(() => finish({ error: 'Registration timed out — try again.' }), 15000);
+    });
+  }
+  if (!pushSupported()) return { error: 'This browser can’t show notifications. On iPhone, add Fieldnote to your Home Screen first.' };
+  if (Notification.permission === 'default') {
+    if (silent) return { error: 'Permission not granted.' };
+    const r = await Notification.requestPermission();
+    if (r !== 'granted') return { error: r === 'denied' ? 'Notifications are blocked for this site in your browser settings.' : 'Permission dismissed.' };
+  }
+  if (Notification.permission !== 'granted') return { error: 'Notifications are blocked for this site in your browser settings.' };
+  const reg = _swRegistration || await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) });
+  const j = sub.toJSON();
+  if (!j.endpoint || !j.keys || !j.keys.p256dh || !j.keys.auth) return { error: 'Subscription missing fields.' };
+  return guidePushSave('web', j.endpoint, j.keys.p256dh, j.keys.auth);
+}
+
+async function guidePushDisable() {
+  let ep = null;
+  try { ep = localStorage.getItem(GUIDE_PUSH_ENDPOINT_KEY); localStorage.removeItem(GUIDE_PUSH_KEY); } catch (_e) {}
+  if (ep && getStoredGuideToken()) {
+    const { error } = await supabaseClient.rpc('delete_guide_push_target', { p_guide_token: getStoredGuideToken(), p_endpoint: ep });
+    if (error) console.warn('[guidepush] delete failed', error);
+  }
+  return { ok: true };
+}
+
+// The opt-in row in the guide's chat screen.
+function scRenderNotifyBar() {
+  const bar = document.getElementById('sc-notify');
+  if (!bar || !_sc) return;
+  if (!_sc.asGuide || _sc.ended || !guidePushPossible()) { bar.style.display = 'none'; return; }
+  bar.style.display = '';
+  bar.innerHTML = '';
+  const txt = document.createElement('span');
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'sc-notify-btn';
+  if (guidePushOn()) {
+    txt.textContent = '🔔 You get a notification when a passenger writes.';
+    btn.textContent = 'Turn off';
+    btn.onclick = async () => { btn.disabled = true; await guidePushDisable(); scRenderNotifyBar(); };
+  } else {
+    txt.textContent = '🔕 Get a notification when a passenger writes?';
+    btn.textContent = 'Turn on'; btn.classList.add('primary');
+    btn.onclick = async () => {
+      btn.disabled = true; btn.textContent = '…';
+      const r = await guidePushEnable(false);
+      if (r && r.error) { txt.textContent = '⚠ ' + r.error; btn.disabled = false; btn.textContent = 'Try again'; return; }
+      scRenderNotifyBar();
+    };
+  }
+  bar.appendChild(txt); bar.appendChild(btn);
+}
+
+// Notification taps (web: the SW posts 'open-chat' to an open tab; native:
+// see wireNativePushListeners) and the ?chat=1 deep link both land here.
+function openChatFromNotification(sessionId) {
+  if (SESSION && (!sessionId || SESSION.id === sessionId)) { while (screenStack.length) closeScreen(); openTourChat(); return; }
+  if (sessionId) window.location.href = '/v0.5?session=' + encodeURIComponent(sessionId) + '&role=guide&chat=1';
+}
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'open-chat') openChatFromNotification(event.data.session_id);
+  });
 }
 
 async function showSessionManager() {
@@ -8479,6 +8595,13 @@ async function startTour() {
 function startRoleShell() {
   if (_roleShellStarted) return;
   _roleShellStarted = true;
+  // Deep link from a chat notification (?chat=1) → open the chat once the
+  // role shell (boarding etc.) has mounted underneath.
+  try {
+    if (SESSION && new URLSearchParams(window.location.search).get('chat') === '1') {
+      setTimeout(() => { try { openTourChat(); } catch (_e) {} }, 700);
+    }
+  } catch (_e) {}
   // GPS runs for everyone — guides need their own location too; what differs is
   // what gets broadcast. First-time passengers DEFER GPS to the intro wizard's
   // "Allow location" step so the explanation precedes the OS prompt.
@@ -8488,6 +8611,8 @@ function startRoleShell() {
     // Boarding/headcount first: until the guide taps "Start tour", show the
     // boarding screen over the control center (#1).
     if (!(SESSION && SESSION.tour_started_at)) showBoarding();
+    // Chat notifications: re-save this device's push target (tokens rotate).
+    if (guidePushOn()) guidePushEnable(true).then(r => { if (r && r.error) console.warn('[guidepush] refresh', r.error); }).catch(() => {});
   } else {
     startPassengerGuideListening();
     if (introNeeded()) {
@@ -11402,7 +11527,11 @@ function showPopup(pin) {
   popupBodyEl.textContent = i18nText(pin.bodyI18n, pin.body);
   // Passenger spot check-in (#4): offer "✓ I'm here" → logs arrival to the
   // guide; relabel the dark button to "Close" so the pair reads Arrived/Close.
-  setPopupArrived(ROLE === 'passenger' && pin && pin.id != null);
+  // Only for a manual (tap-to-open) check-in: when GPS fired this popup the
+  // passenger is obviously there, and a pin they already reached by GPS
+  // (firedPinIds) needs no check-in either — GPS passengers already show on
+  // the guide's map.
+  setPopupArrived(ROLE === 'passenger' && pin && pin.id != null && !state.firedPinIds.has(pin.id));
   popup.classList.add('show');
 }
 
@@ -13779,6 +13908,7 @@ function wireNativePushListeners() {
     try {
       const data = (action && action.notification && action.notification.data) || {};
       const target = data.sessionId;
+      if (data.kind === 'chat') { openChatFromNotification(target); return; }
       if (target && (!SESSION || SESSION.id !== target)) {
         window.location.href = '/v0.5?session=' + encodeURIComponent(target);
       }

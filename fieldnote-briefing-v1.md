@@ -752,7 +752,7 @@ These are things that *seem* like they belong in Fieldnote but on examination sh
 
 ### Native in-app chat (passenger-passenger or guide-passenger)
 
-> **REVERSED — Filip's decision, 2026-11-06.** Requiring WhatsApp shut out passengers who don't use it, so v0.7 ships an in-app tour chat (migration 047): a group room per session plus a private passenger↔guide thread, text + photos. The external chat-link option was removed. To limit the cognitive-load concern below, the guide gets only an unread dot (no push, no sound). The original reasoning is kept for context.
+> **REVERSED — Filip's decision, 2026-11-06.** Requiring WhatsApp shut out passengers who don't use it, so v0.7 ships an in-app tour chat (migration 047): a group room per session plus a private passenger↔guide thread, text + photos. The external chat-link option was removed. To limit the cognitive-load concern below, guide push notifications are opt-in (chat screen → Turn on), private messages always notify, and group messages notify at most once per 2 minutes (migration 048). The original reasoning is kept for context.
 
 **Why not:** three reasons compounding.
 

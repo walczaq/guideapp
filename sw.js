@@ -238,6 +238,7 @@ self.addEventListener('push', (event) => {
       url: data.url || '/v0.5',
       stop_id: data.stop_id ?? null,
       session_id: data.session_id ?? null,
+      kind: data.kind ?? null,
     },
   };
   event.waitUntil(self.registration.showNotification(title, options));
@@ -262,6 +263,8 @@ self.addEventListener('notificationclick', (event) => {
         const sameOrigin = new URL(client.url).origin === self.location.origin;
         if (sameOrigin && 'focus' in client) {
           await client.focus();
+          // Chat notification → ask the open tab to show the chat.
+          if (data.kind === 'chat') client.postMessage({ type: 'open-chat', session_id: data.session_id });
           return;
         }
       } catch (_err) { /* malformed URL — ignore */ }
