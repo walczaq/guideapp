@@ -15442,6 +15442,21 @@ let _joyWired = false;
 const JOY_MAX_SPEED_MPS = 18;  // meters per second at full knob deflection (~bike pace; 3× the original jog rate)
 const JOY_MAX_R_PX = 36;        // knob travel radius in px (matches widget visuals)
 
+// Upload the simulated position like a real GPS fix would be (passengers in a
+// session only, respecting "Stop sharing my location"). force=true skips the
+// 5s throttle — used for the first fix, teleports and knob release so the
+// guide always gets the passenger's latest spot, not one from mid-drag.
+let _joyHeartbeat = null;
+function simQueueNow(force) {
+  if (!JOYSTICK_MODE || !SESSION || ROLE !== 'passenger' || _locationSharingOff) return;
+  if (state.youLng == null || state.youLat == null) return;
+  const nowMs = Date.now();
+  if (!force && nowMs - _lastQueuedAt < QUEUE_INTERVAL_MS) return;
+  _lastQueuedAt = nowMs;
+  queueLocation({ lng: state.youLng, lat: state.youLat, accuracy: 5, client_recorded_at: new Date(nowMs).toISOString() })
+    .catch(err => console.warn('queueLocation (joystick) failed', err));
+}
+
 // Turn the simulator on. If we have no fix yet, seed the walker at the tour
 // home so there's somewhere visible to start from. Set the GPS state to
 // 'simulated' so the signal indicator reflects what's happening.
@@ -15462,11 +15477,17 @@ function enableJoystick() {
   renderYou();
   const joy = document.getElementById('joystick');
   if (joy) joy.classList.add('on');
+  // Real GPS keeps reporting while you stand still; so must the simulator,
+  // or the guide marks the passenger disconnected after 60s without a fix.
+  simQueueNow(true);
+  if (_joyHeartbeat) clearInterval(_joyHeartbeat);
+  _joyHeartbeat = setInterval(() => simQueueNow(false), QUEUE_INTERVAL_MS);
 }
 
 // Turn the simulator off. The next real GPS fix will repopulate state.
 function disableJoystick() {
   JOYSTICK_MODE = false;
+  if (_joyHeartbeat) { clearInterval(_joyHeartbeat); _joyHeartbeat = null; }
   _joyVecX = 0;
   _joyVecY = 0;
   const knob = document.getElementById('joystick-knob');
@@ -15487,12 +15508,7 @@ function teleportSimTo(lng, lat) {
   if (ROLE === 'guide' && SESSION) checkStopGeofences();
   updateSignal();
   renderAll();
-  const nowMs = Date.now();
-  if (SESSION && ROLE === 'passenger' && nowMs - _lastQueuedAt >= QUEUE_INTERVAL_MS) {
-    _lastQueuedAt = nowMs;
-    queueLocation({ lng, lat, accuracy: 5, client_recorded_at: new Date(nowMs).toISOString() })
-      .catch(err => console.warn('queueLocation (teleport) failed', err));
-  }
+  simQueueNow(true);
 }
 
 // Drive the walker each animation frame while the knob is deflected. Same
@@ -15537,16 +15553,7 @@ function startJoystickLoop() {
     // Throttled queue write — same shape onGpsSuccess uses, so simulated
     // movement also flows through v0.3's offline-queue + sync worker. Lets
     // a second device (real or sim) see this passenger walking.
-    const nowMs = Date.now();
-    if (SESSION && ROLE === 'passenger' && nowMs - _lastQueuedAt >= QUEUE_INTERVAL_MS) {
-      _lastQueuedAt = nowMs;
-      queueLocation({
-        lng: state.youLng,
-        lat: state.youLat,
-        accuracy: 5,
-        client_recorded_at: new Date(nowMs).toISOString(),
-      }).catch(err => console.warn('queueLocation (joystick) failed', err));
-    }
+    simQueueNow(false);
 
     requestAnimationFrame(step);
   }
@@ -15605,6 +15612,7 @@ function wireJoystick() {
     dragging = false;
     try { knob.releasePointerCapture(e.pointerId); } catch {}
     applyKnob(0, 0);
+    simQueueNow(true);   // where the passenger stopped, not a mid-drag spot
   }
 
   knob.addEventListener('pointerdown', onDown);
