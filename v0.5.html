@@ -11527,7 +11527,11 @@ function showPopup(pin) {
   popupBodyEl.textContent = i18nText(pin.bodyI18n, pin.body);
   // Passenger spot check-in (#4): offer "✓ I'm here" → logs arrival to the
   // guide; relabel the dark button to "Close" so the pair reads Arrived/Close.
-  setPopupArrived(ROLE === 'passenger' && pin && pin.id != null);
+  // Only for a manual (tap-to-open) check-in: when GPS fired this popup the
+  // passenger is obviously there, and a pin they already reached by GPS
+  // (firedPinIds) needs no check-in either — GPS passengers already show on
+  // the guide's map.
+  setPopupArrived(ROLE === 'passenger' && pin && pin.id != null && !state.firedPinIds.has(pin.id));
   popup.classList.add('show');
 }
 
