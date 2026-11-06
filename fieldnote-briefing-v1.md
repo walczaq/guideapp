@@ -752,6 +752,8 @@ These are things that *seem* like they belong in Fieldnote but on examination sh
 
 ### Native in-app chat (passenger-passenger or guide-passenger)
 
+> **REVERSED — Filip's decision, 2026-11-06.** Requiring WhatsApp shut out passengers who don't use it, so v0.7 ships an in-app tour chat (migration 047): a group room per session plus a private passenger↔guide thread, text + photos. The external chat-link option was removed. To limit the cognitive-load concern below, the guide gets only an unread dot (no push, no sound). The original reasoning is kept for context.
+
 **Why not:** three reasons compounding.
 
 1. **Cognitive load.** A core design principle of Fieldnote is that the guide shouldn't have to monitor a chat stream while leading a tour. Adding chat inverts that — every passenger message becomes something the guide feels pressure to read while walking, talking, navigating, counting heads.
