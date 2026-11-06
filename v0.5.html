@@ -9298,6 +9298,7 @@ async function catchUpPassengers({ merge = false } = {}) {
     if (!p.lastUpdate || row.client_recorded_at > p.lastUpdate) {
       p.lng = row.lng;
       p.lat = row.lat;
+      p.dispLng = row.lng; p.dispLat = row.lat; p._tw = null;   // catch-up snaps, no glide
       p.accuracy = row.accuracy;
       p.lastUpdate = row.client_recorded_at;
     }
@@ -9461,7 +9462,11 @@ function renderPassengers() {
     // aborts the dot loop so later passengers' dots vanish. They show in the
     // Control Center list ("no fix yet") but have no map dot until a fix lands.
     if (!Number.isFinite(p.lng) || !Number.isFinite(p.lat)) continue;
-    const { x, y } = project(p.lng, p.lat);
+    // Draw at the DISPLAYED position — mid-glide between fixes while a tween
+    // runs (tweenPassengerTo), else the latest fix.
+    const dLng = Number.isFinite(p.dispLng) ? p.dispLng : p.lng;
+    const dLat = Number.isFinite(p.dispLat) ? p.dispLat : p.lat;
+    const { x, y } = project(dLng, dLat);
     const [colorA, colorB] = colorsForPassenger(passengerId);
     const isSelected = SELECTED_PASSENGER === passengerId;
     const noneSelected = SELECTED_PASSENGER === null;
@@ -9478,7 +9483,7 @@ function renderPassengers() {
     g.setAttribute('data-passenger-id', passengerId);
     g.setAttribute('data-state', state || 'default');
     g.setAttribute('transform', `translate(${x}, ${y})`);
-    geoStamp(g, p.lng, p.lat);
+    geoStamp(g, dLng, dLat);
     g.setAttribute('opacity', String(dotOpacity));
     g.style.cursor = 'pointer';
 
@@ -10294,6 +10299,8 @@ function applyIncomingLocationRow(row) {
   // Update "current" only if this row is newer than what we have. Out-of-order
   // events (rare but possible during reconnection) shouldn't move the dot back.
   if (!p.lastUpdate || ts > p.lastUpdate) {
+    const prevTs = p.lastUpdate;
+    tweenPassengerTo(p, row.lng, row.lat, prevTs ? Date.parse(ts) - Date.parse(prevTs) : null);
     p.lng = row.lng;
     p.lat = row.lat;
     p.accuracy = row.accuracy;
@@ -10302,6 +10309,49 @@ function applyIncomingLocationRow(row) {
 
   renderPassengers();
   updatePassengerCount();
+}
+
+// ── Smooth passenger motion (guide view) ──
+// Instead of jumping to each new fix, a dot glides from where it is drawn
+// now to the new fix over roughly the time between the two fixes, so a
+// walking passenger moves continuously (≈ one fix interval behind real time).
+// Only the dot group's transform is touched per frame — no re-render, no
+// trail rebuild. Big jumps (teleport, first fix after a long gap) snap.
+const TWEEN_MIN_MS = 300, TWEEN_MAX_MS = 2500, TWEEN_SNAP_M = 400;
+let _tweenRaf = null;
+function tweenPassengerTo(p, lng, lat, gapMs) {
+  const fromLng = Number.isFinite(p.dispLng) ? p.dispLng : p.lng;
+  const fromLat = Number.isFinite(p.dispLat) ? p.dispLat : p.lat;
+  const far = !Number.isFinite(fromLng) || metersBetween(fromLng, fromLat, lng, lat) > TWEEN_SNAP_M;
+  if (far || !Number.isFinite(gapMs) || gapMs <= 0 || gapMs > 30000) {
+    p.dispLng = lng; p.dispLat = lat; p._tw = null;
+    return;
+  }
+  // Pin the drawn position at the start point now, so the re-render that
+  // follows this call doesn't flash the dot at the destination first.
+  p.dispLng = fromLng; p.dispLat = fromLat;
+  p._tw = { fromLng, fromLat, toLng: lng, toLat: lat, start: performance.now(),
+            dur: Math.max(TWEEN_MIN_MS, Math.min(TWEEN_MAX_MS, gapMs)) };
+  if (!_tweenRaf) _tweenRaf = requestAnimationFrame(tweenFrame);
+}
+function tweenFrame(now) {
+  _tweenRaf = null;
+  let running = false;
+  for (const [pid, p] of PASSENGERS) {
+    const tw = p._tw;
+    if (!tw) continue;
+    const k = Math.min(1, (now - tw.start) / tw.dur);   // linear: steady walking pace
+    p.dispLng = tw.fromLng + (tw.toLng - tw.fromLng) * k;
+    p.dispLat = tw.fromLat + (tw.toLat - tw.fromLat) * k;
+    if (k >= 1) p._tw = null; else running = true;
+    const g = passengersLayer && passengersLayer.querySelector(`g.passenger-group[data-passenger-id="${CSS.escape(pid)}"]`);
+    if (g) {
+      geoStamp(g, p.dispLng, p.dispLat);
+      const { x, y } = project(p.dispLng, p.dispLat);
+      if (Number.isFinite(x) && Number.isFinite(y)) g.setAttribute('transform', `translate(${x}, ${y})`);
+    }
+  }
+  if (running) _tweenRaf = requestAnimationFrame(tweenFrame);
 }
 
 // ── PASSENGER VIEW: GUIDE MARKERS (chunk F pass 2) ──
@@ -10801,10 +10851,12 @@ function requestLocationOnTap() {
   } catch (_e) { startGeolocation(); }
 }
 
-// 5-second throttle for queueing fixes. The browser may give us 1-3 fixes per
-// second; we only persist one every 5s to keep DB size + bandwidth sane.
+// 2-second throttle for queueing fixes during an active stop (and for the
+// joystick). The browser may give us 1-3 fixes per second; one every 2s keeps
+// the guide's view fluid (dots glide between fixes, see tweenPassengerTo)
+// while DB size + bandwidth stay sane. Was 5s — motion read as jumps.
 // State is held in module scope so it survives between handler calls.
-const QUEUE_INTERVAL_MS = 5000;
+const QUEUE_INTERVAL_MS = 2000;
 // R2-C: during transit (no active stop) we only persist a sparse heartbeat
 // instead of the dense 5s stream — enough for a live bus-following dot, but it
 // cuts the ~630-fix/session waste and the battery drain that itself drives the
