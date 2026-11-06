@@ -4178,9 +4178,38 @@ async function syncOnce() {
     }
     const { error } = await insertQuery;
 
+    if (error && error.code === '42501') {
+      // RLS refusal (migration 046: no rows for a session that ended more
+      // than an hour ago). One such "poison" row fails the WHOLE batch, and
+      // since the oldest rows go first, an old ended tour's leftovers would
+      // block every newer fix forever. Retry row by row: keep what the
+      // server accepts, drop what it will never accept, stop on anything
+      // else (network) and retry later.
+      let kept = 0, dropped = 0;
+      for (let i = 0; i < rows.length; i++) {
+        const { error: e1 } = await supabaseClient.from('passenger_locations').insert([payload[i]]);
+        if (!e1 || e1.code === '42501') {
+          try { await deleteQueuedLocation(rows[i].id); } catch (_e) {}
+          if (e1) dropped++; else kept++;
+        } else {
+          _syncStats.lastError = e1.message;
+          console.warn('[sync] row insert failed', e1);
+          break;
+        }
+      }
+      if (dropped) console.warn('[sync] dropped', dropped, 'queued fixes the server refuses (ended tour)');
+      _syncStats.totalSynced += kept;
+      if (kept + dropped === rows.length) {
+        _syncStats.lastSuccessAt = Date.now();
+        _syncStats.lastError = null;
+        setTimeout(() => { syncOnce().catch(() => {}); }, 0);   // more may be queued
+      }
+      return;
+    }
+
     if (error) {
-      // Could be RLS, schema mismatch, network blip, server outage. We don't
-      // distinguish — leave rows in place and try again later.
+      // Schema mismatch, network blip, server outage. We don't distinguish —
+      // leave rows in place and try again later.
       _syncStats.lastError = error.message;
       console.warn('[sync] insert failed', error);
       return;
