@@ -7747,8 +7747,9 @@ function refreshGroupChatButton() {
   btn.style.display = url ? '' : 'none';   // '' → falls back to .zoom-btn's flex; shown for guide + passenger
 }
 
-// Dev-only tools (joystick simulator, force-arrival, clear-acks) must not be
-// offered to regular passengers — Developer info is a public menu link.
+// Dev-only tools (force-arrival, clear-acks) must not be
+// offered to regular passengers — Developer info is a public menu link. (The
+// joystick simulator is deliberately open to everyone.)
 // Shown only with ?dev=1 (persisted so it survives reloads; ?dev=0 clears it)
 // or for a logged-in guide.
 function isDevMode() {
@@ -7788,14 +7789,14 @@ function applyTourMetadata() {
     const newSessionLine = (GUIDE && SESSION)
       ? `<button id="debug-new-session" style="font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">start new session</button>`
       : '';
-    // Simulator + diagnostics are dev/guide-only (see isDevMode) — a regular
-    // passenger should not be offered teleport/force-modal controls.
-    const simBlock = isDevMode() ? `
+    // Joystick simulator is available to everyone (passengers included).
+    // The arrival-modal diagnostics stay dev/guide-only (see isDevMode).
+    const simBlock = `
       <span style="display:inline-block; margin-top:10px;">Simulator (joystick):</span>
-      <button id="joystick-toggle-btn" style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Enable</button>
+      <button id="joystick-toggle-btn" style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Enable</button>` + (isDevMode() ? `
       <br>
       <button id="debug-force-arrival" style="margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Force arrival modal</button>
-      <button id="debug-clear-acks" style="margin-top:6px; margin-left:4px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Clear acks</button>` : '';
+      <button id="debug-clear-acks" style="margin-top:6px; margin-left:4px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Clear acks</button>` : '');
     debug.innerHTML = `
       <div style="opacity:0.5; font-size:10px; margin-bottom:6px;">Build: <code>${BUILD_VERSION}</code></div>
       ${guideLine}<br>
