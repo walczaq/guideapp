@@ -6943,6 +6943,24 @@ async function tbUpdatePin(id, f) {
       p_lng: f.lng ?? null, p_lat: f.lat ?? null, p_trigger_radius_m: f.radius ?? null });
   return error ? { error: error.message } : { ok: true, row: data };
 }
+// Switch a walking-sequence spot between main route pin ('pin') and extra ('side').
+async function tbSetPinCategory(id, category) {
+  const token = getStoredGuideToken();
+  const { error } = await supabaseClient.rpc('set_pin_category', { p_guide_token: token, p_pin_id: id, p_category: category });
+  return error ? { error: error.message } : { ok: true };
+}
+async function tbTogglePinKind(p) {
+  const prev = p.category || 'pin';
+  const next = isSideCat(prev) ? 'pin' : 'side';
+  p.category = next;                       // optimistic: labels/colours re-derive from category
+  renderTbMarkers(); renderTbEditorPanel();
+  const r = await tbSetPinCategory(p.id, next);
+  if (r.error) {
+    console.warn('[tb] set pin category failed', r.error);
+    p.category = prev;
+    renderTbMarkers(); renderTbEditorPanel();
+  }
+}
 async function tbReorderPins(stopId, pinIds) {
   const token = getStoredGuideToken();
   const { error } = await supabaseClient.rpc('reorder_pins', { p_guide_token: token, p_stop_id: stopId, p_pin_ids: pinIds });
@@ -7176,9 +7194,9 @@ const TB_CATEGORIES = [
   { key: 'side',     label: 'Side quest',          emoji: '⭐', color: '#d97706', radius: 25, trigger: true,  numbered: false, form: 'note' },
   { key: 'danger',   label: 'Dangerous Zone',      emoji: '⚠️', color: '#dc2626', radius: 40, trigger: true,  numbered: false, form: 'note' },
   { key: 'border',   label: "Border / Don't go",   emoji: '🚫', color: '#7f1d1d', radius: 30, trigger: true,  numbered: false, form: 'note' },
-  { key: 'toilet',   label: 'Toilet',              emoji: '🚻', color: '#0891b2', radius: 20, trigger: false, numbered: false, form: 'toilet' },
+  { key: 'toilet',   label: 'Toilet',              emoji: '🚾', color: '#0891b2', radius: 20, trigger: false, numbered: false, form: 'toilet' },
   { key: 'cafe',     label: 'Café / Restaurant',   emoji: '🍽️', color: '#b45309', radius: 20, trigger: false, numbered: false, form: 'name' },
-  { key: 'souvenir', label: 'Souvenirs',           emoji: '🛍️', color: '#7c3aed', radius: 20, trigger: false, numbered: false, form: 'name' },
+  { key: 'souvenir', label: 'Souvenirs',           emoji: '🛒', color: '#7c3aed', radius: 20, trigger: false, numbered: false, form: 'name' },
 ];
 function tbCat(key) { return TB_CATEGORIES.find(c => c.key === key) || TB_CATEGORIES[0]; }
 
@@ -7744,6 +7762,8 @@ function tbAppendPinRow(panel, s, p, seqList, seqLabels) {
     if (idx < seqList.length - 1) pa.appendChild(smMakeBtn('↓', '', () => tbMovePin(s, p, +1)));
     // "+ Extra" — add a side quest (extra spot) right after this one.
     pa.appendChild(smMakeBtn('＋ Extra', '', () => { tbArmPlace('pin', null, 'side'); _tbInsertAfter = p.id; }));
+    // Toggle this spot between main route pin and extra (side quest).
+    pa.appendChild(smMakeBtn(isSideCat(p.category) ? 'Make main' : 'Make extra', '', () => tbTogglePinKind(p)));
   }
   pa.appendChild(smMakeBtn('Edit', '', () => tbEditPinForm(p)));
   pa.appendChild(smMakeBtn('Move', '', () => tbArmPlace('move-pin', p.id)));
