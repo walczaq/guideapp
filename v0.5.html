@@ -13094,6 +13094,7 @@ function subscribeStopActivations() {
       // disconnect get applied. The catch-up uses ACTIVE_STOP_IDS, which is
       // append-only, so re-running is safe even when we have nothing missed.
       dlog('[realtime] stop_activations channel status:', status);
+      _stopActivationChannelStatus = status;
       if (status === 'SUBSCRIBED' && _stopActivationSubscribed) {
         catchUpStopActivations().then(() => {
           renderPins();
@@ -13342,7 +13343,7 @@ function subscribeSession() {
       },
       (payload) => onSessionUpdated(payload.new)
     )
-    .subscribe();
+    .subscribe((status) => { _sessionChannelStatus = status; });
 }
 
 function onSessionUpdated(row) {
@@ -13401,8 +13402,24 @@ function showSessionEnded() {
 // The polling also reconciles ACTIVE_STOP_IDS — catches any activation or
 // deactivation realtime missed — and (passenger only) re-prompts any
 // arrival modal the user hasn't acknowledged yet.
+//
+// Cadence: every SESSION_POLL_MS while either realtime channel (session row,
+// stop activations) is NOT subscribed — that is when events are being
+// missed. While both are subscribed the poll is only insurance against a
+// silently dropped event, so it backs off to SESSION_POLL_IDLE_MS: two
+// requests per passenger every 15 s for a whole tour was the app's largest
+// steady background load. A missed activation therefore surfaces within
+// SESSION_POLL_IDLE_MS at worst (and at once on returning to the app).
 const SESSION_POLL_MS = 15000;
+const SESSION_POLL_IDLE_MS = 45000;
 let _sessionPollTimer = null;
+let _sessionPollAt = 0;
+let _sessionChannelStatus = '';          // last status of the sessions channel
+let _stopActivationChannelStatus = '';   // …and of the stop_activations channel
+function sessionPollDue() {
+  if (_sessionChannelStatus !== 'SUBSCRIBED' || _stopActivationChannelStatus !== 'SUBSCRIBED') return true;
+  return Date.now() - _sessionPollAt >= SESSION_POLL_IDLE_MS - 1000;   // -1 s: timer jitter
+}
 
 async function refetchSessionState() {
   if (!SESSION) return;
@@ -13453,7 +13470,10 @@ async function refetchSessionState() {
 
 function startSessionPoll() {
   if (_sessionPollTimer) return;
+  _sessionPollAt = Date.now();
   _sessionPollTimer = setInterval(() => {
+    if (!sessionPollDue()) return;
+    _sessionPollAt = Date.now();
     refetchSessionState().catch(err => console.warn('[poll] refetch failed', err));
   }, SESSION_POLL_MS);
   // Visibilitychange: when the tab/PWA returns to foreground (passenger
@@ -13461,6 +13481,7 @@ function startSessionPoll() {
   // refetch. This is the trigger for "re-show pop-up after lock screen."
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
+      _sessionPollAt = Date.now();
       refetchSessionState().catch(err => console.warn('[visibilitychange] refetch failed', err));
     }
   });
