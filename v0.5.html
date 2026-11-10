@@ -9213,14 +9213,20 @@ function startGuideShell() {
   // the passenger list rows so "no signal" status flips correctly.
   if (_stateTickHandle) clearInterval(_stateTickHandle);
   _stateTickHandle = setInterval(() => {
-    // Reconcile names from session_passengers every tick. Names are otherwise
-    // merged only once at startup + via individual realtime events; a single
-    // missed/late event (mobile backgrounding, mid-tour join) would otherwise
-    // leave that passenger showing the id.slice(-4) fallback for the whole tour.
-    // This cheap re-pull (one row per passenger) self-heals it within 5s and
-    // makes session_passengers the authoritative name source. catchUpPassengerNames
+    // Reconcile names / in-bus / presence / 🔔 status from session_passengers.
+    // Realtime (startPassengerNamesSubscription) is the live path; this
+    // re-pull is the self-heal for a missed/late event (mobile backgrounding,
+    // mid-tour join), which would otherwise leave e.g. the id.slice(-4) name
+    // fallback up for the whole tour. It used to run on EVERY 5 s tick — two
+    // requests (this + list_push_passengers) × 720/hour on the guide's data
+    // and battery, nearly all of them returning nothing new. Now it keeps the
+    // 5 s pace only while there is something to heal (see namesRepullDue) and
+    // otherwise backs off to NAMES_REPULL_IDLE_MS. catchUpPassengerNames
     // re-renders the dots + list itself.
-    catchUpPassengerNames().catch(() => {});
+    if (namesRepullDue()) {
+      _namesRepullAt = Date.now();
+      catchUpPassengerNames().catch(() => {});
+    }
     if (PASSENGERS.size > 0) {
       renderPassengers();
       renderPassengerList();
@@ -10055,6 +10061,28 @@ function updatePassengerCount() {
 let NAMES_VISIBLE = true;
 let _namesChannel = null;
 let _namesSubscribeStarted = false;
+let _namesChannelStatus = '';        // last status from the realtime channel
+
+// Cadence of the periodic session_passengers re-pull (driven by the guide's
+// 5 s state tick). Every tick while a miss is likely or would hurt:
+//   - the realtime channel isn't SUBSCRIBED (events ARE being missed),
+//   - a passenger is on the map without a name (the miss already happened),
+//   - boarding, before "Start tour" (the headcount is what the guide is
+//     watching, so in_bus must not lag).
+// Otherwise once per NAMES_REPULL_IDLE_MS — well inside PRESENCE_FRESH_MS, so
+// "present / away" can't go stale from the slower pace. Never while the app
+// is backgrounded; coming back to the foreground re-pulls at once.
+const NAMES_REPULL_IDLE_MS = 30000;
+let _namesRepullAt = 0;
+function namesRepullDue() {
+  if (document.hidden) return false;
+  if (_namesChannelStatus !== 'SUBSCRIBED') return true;
+  if (!(SESSION && SESSION.tour_started_at)) return true;
+  for (const [, p] of PASSENGERS) {
+    if (!p.name && p.lng != null) return true;
+  }
+  return Date.now() - _namesRepullAt >= NAMES_REPULL_IDLE_MS;
+}
 
 async function catchUpPassengerNames() {
   if (!SESSION) return;
@@ -10192,6 +10220,7 @@ function startPassengerNamesSubscription() {
       }
     )
     .subscribe((status) => {
+      _namesChannelStatus = status;
       if (status === 'SUBSCRIBED') {
         catchUpPassengerNames().catch(err => console.warn('names reconcile failed', err));
       }
@@ -10656,6 +10685,9 @@ function bindVisibilityCatchUp() {
     // logic — running it on top of live data costs at most one round-trip.
     if (ROLE === 'guide' && typeof catchUpPassengers === 'function') {
       catchUpPassengers({ merge: true }).catch(err => console.warn('visibility-catchup passengers failed', err));
+      // The periodic names re-pull pauses while hidden — catch up right away.
+      _namesRepullAt = Date.now();
+      catchUpPassengerNames().catch(err => console.warn('visibility-catchup names failed', err));
     }
     // guide_locations feeds the passenger's guide/bus markers only — the
     // guide's own map renders local state (see renderGuideMarkers note).
