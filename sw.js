@@ -16,16 +16,17 @@
 //     same-origin under /vendor (versioned filenames) and precached as part
 //     of the app shell — a successful first HTML load now guarantees the
 //     libs are cached too, with no third-party CDN in the boot path.
-//   - Fonts CSS (Google Fonts): CACHE-FIRST best-effort. Graceful
-//     degradation only — a miss falls typography back to Georgia/monospace,
-//     never blocks boot.
-//   - Everything else (Supabase REST/realtime, Mapbox tiles, font binaries):
+//   - Fonts: SELF-HOSTED under /vendor/fonts-v1, precached best-effort and
+//     served cache-first like the rest of /vendor. Graceful degradation
+//     only — a miss falls typography back to Georgia/monospace, never
+//     blocks boot.
+//   - Everything else (Supabase REST/realtime):
 //     PASSTHROUGH — never cached; they just fail offline and the app copes.
 //
 // /sw.js itself is served no-cache (see /_headers), so SW updates propagate
 // on next app open; bumping SHELL_CACHE purges the old shell on activate.
 
-const SHELL_CACHE = 'fieldnote-shell-v9';   // bumped: supabase-js 2.118.0 + idb 8.0.4 (new /vendor filenames)
+const SHELL_CACHE = 'fieldnote-shell-v10';   // bumped: self-hosted fonts (/vendor/fonts-v1)
 
 // Same-origin shell assets — these MUST cache for the app to boot offline.
 // Includes the /vendor libs: same origin as the HTML, so if the first page
@@ -47,12 +48,18 @@ const SHELL_URLS = [
   '/vendor/qrcode-generator-1.4.4.min.js',
 ];
 
-// Cross-origin extras — cached best-effort (a failure must not abort
-// install). Only the fonts CSS remains since the libs moved to /vendor;
-// fonts are pure graceful degradation (typography, never boot).
-const CDN_URLS = [
-  'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap',
+// Fonts — cached best-effort (a failure must not abort install): the
+// stylesheet plus the Latin files nearly every screen needs. Other subsets
+// are cached cache-first the first time a page actually uses them.
+const FONT_URLS = [
+  '/vendor/fonts-v1/fonts.css',
+  '/vendor/fonts-v1/fraunces-latin.woff2',
+  '/vendor/fonts-v1/jetbrains-mono-latin.woff2',
 ];
+
+// The Google Fonts stylesheet older cached shells still link to. No longer
+// precached; kept cache-first for the transition (see isCdnAsset).
+const LEGACY_FONTS_CSS = 'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap';
 
 const NAV_FALLBACK = '/v0.5';
 
@@ -93,10 +100,9 @@ self.addEventListener('install', (event) => {
     // Same-origin shell must succeed.
     try { await cache.addAll(SHELL_URLS); }
     catch (err) { console.warn('[sw] shell precache failed', err); }
-    // Cross-origin extras (fonts CSS) best-effort, individually so one
-    // failure doesn't abort.
-    await Promise.allSettled(CDN_URLS.map((u) => cache.add(u).catch((e) => {
-      console.warn('[sw] cdn precache failed', u, e);
+    // Fonts best-effort, individually so one failure doesn't abort.
+    await Promise.allSettled(FONT_URLS.map((u) => cache.add(u).catch((e) => {
+      console.warn('[sw] font precache failed', u, e);
     })));
     // Take over on next page load without requiring all tabs to close.
     self.skipWaiting();
@@ -115,13 +121,13 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
-// Fonts CSS, plus the OLD CDN lib URLs (api.mapbox.com/mapbox-gl-js/*,
+// The old Google Fonts CSS, plus the OLD CDN lib URLs (api.mapbox.com/mapbox-gl-js/*,
 // cdn.jsdelivr.net/npm/*). The lib prefixes are kept for the transition
 // window: a client whose cached shell is still the pre-/vendor HTML keeps
 // its CDN <script> tags served cache-first until the next online navigation
 // replaces the shell.
 function isCdnAsset(url) {
-  return CDN_URLS.includes(url) ||
+  return url === LEGACY_FONTS_CSS ||
     url.startsWith('https://api.mapbox.com/mapbox-gl-js/') ||
     url.startsWith('https://cdn.jsdelivr.net/npm/');
 }
@@ -167,7 +173,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Fonts CSS + legacy CDN lib URLs → cache-first on versioned URLs.
+  // 3. Legacy fonts CSS + legacy CDN lib URLs → cache-first on versioned URLs.
   if (isCdnAsset(url.href.split('#')[0]) || isCdnAsset(url.origin + url.pathname)) {
     event.respondWith(cacheFirst(req));
     return;

@@ -88,10 +88,6 @@ window.__FN_SB = {
   } catch (e) { /* no head start — the app fetches as usual */ }
 })();
 </script>
-<!-- Fonts: only the preconnects live here; the stylesheet link is at the end
-     of <body>, after the lib scripts (see the note there). -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
   :root {
     --ink: #1a1d1a;
@@ -3358,17 +3354,18 @@ window.__FN_SB = {
 <script src="/vendor/supabase-js-2.118.0.umd.js"></script>
 <script src="/vendor/idb-8.0.4.umd.js"></script>
 <script src="/vendor/qrcode-generator-1.4.4.min.js"></script>
-<!-- Fonts stay on Google's CDN as graceful degradation: a failed font fetch on
-     weak signal only falls typography back to Georgia/monospace — it never
-     blocks boot (unlike the libs above, which the app cannot run without).
-     Two things keep that promise true:
+<!-- Fonts: SELF-HOSTED under /vendor/fonts-v1 (same files Google Fonts
+     serves) — no third-party request, and the service worker caches them
+     with the rest of the app. Still pure graceful degradation: a failed font
+     fetch only falls typography back to Georgia/monospace, it never blocks
+     boot. Two things keep that promise true:
        - NON-BLOCKING (media=print, flipped to all on load): as a plain
-         stylesheet a slow/stalled fonts.googleapis.com held back first paint
-         AND every script after it.
+         stylesheet a slow fetch held back first paint AND every script
+         after it.
        - AFTER the lib scripts: the parser only gets here once they have run,
          so the font files never compete with the libs for a thin connection
          (in <head> they cost ~0.5 s of boot on a weak signal — measured). -->
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link href="/vendor/fonts-v1/fonts.css" rel="stylesheet" media="print" onload="this.media='all'">
 <script>
 // Old-browser blank-page guard. This single inline script uses modern JS
 // (e.g. `??` nullish coalescing). A browser too old to PARSE it (iOS Safari
