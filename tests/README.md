@@ -10,7 +10,8 @@ mocks, so they need no credentials and never touch the real backend.
     npm test
 
 What they cover: every boot path, the background-timer cadences, chat
-pokes, the service worker's tile cache, and the build-stamp script.
+pokes, the service worker's tile cache, the build-stamp script, and that the
+deploy-time comment stripper leaves the page's code and styles unchanged.
 
 What they cannot cover: anything that depends on the real services — live
 realtime delivery, real map rendering, push notifications, the native shell.
