@@ -32,16 +32,66 @@
        - idb        8.0.3    (cdn.jsdelivr.net/npm/idb@8/build/umd.js)
        - qrcode-generator 1.4.4 (cdn.jsdelivr.net/npm/qrcode-generator@1.4.4) -->
 <link href="/vendor/mapbox-gl-v3.8.0.css" rel="stylesheet">
-<script src="/vendor/mapbox-gl-v3.8.0.js"></script>
-<script src="/vendor/supabase-js-2.108.1.umd.js"></script>
-<script src="/vendor/idb-8.0.3.umd.js"></script>
-<script src="/vendor/qrcode-generator-1.4.4.min.js"></script>
-<!-- Fonts stay on Google's CDN as graceful degradation: a failed font fetch on
-     weak signal only falls typography back to Georgia/monospace — it never
-     blocks boot (unlike the libs above, which the app cannot run without). -->
+<!-- The lib <script> tags themselves sit at the END of <body>, right before
+     the app script (same order, same guarantees) — in <head> they held the
+     first paint hostage to ~1.6 MB of JS (≈5 s of blank white page on a weak
+     signal). No preload hints on purpose: the browser's preload scanner finds
+     them anyway, and hints only took bandwidth from the HTML (later paint,
+     no earlier boot — measured). -->
+<script>
+/* Backend config + boot-data head start. ES5 only (must parse everywhere).
+   The app script can't run until the libs above have downloaded, so on a slow
+   first open the session → tour → activations round trips used to START only
+   after that. For a session link we fire the same three reads right now, with
+   plain fetch, so they overlap the lib download. Purely an accelerator: the
+   app (loadSessionAndTour / catchUpStopActivations) uses a result only when it
+   came back clean for the same session id, and otherwise runs its normal
+   supabase-js query — so any failure here changes nothing but timing.
+   The select lists live here so both paths always ask for the same columns. */
+window.__FN_SB = {
+  url: 'https://xgelrfdrdvrlltcsquqh.supabase.co',
+  key: 'sb_publishable_56-3xMMvHZFtw2LGKkcqew_09NhbiB0',
+  sessionSelect: 'id, label, tour_slug, guide_name, started_at, ended_at, chat_url, next_stop_id, tour_started_at, home_lng, home_lat',
+  tourSelect: 'id, slug, name, subtitle, home_lng, home_lat, ' +
+    'stops ( id, ordinal, name, subtitle, lng, lat, activation_radius_m, drive_secs_from_prev, name_i18n, subtitle_i18n, ' +
+    'pins ( id, ordinal, title, body, lng, lat, trigger_radius_m, category, title_i18n, body_i18n ) )',
+  activationSelect: 'stop_id, activated_at, duration_minutes, notes, warning_level, notes_i18n',
+  pre: null
+};
+(function () {
+  try {
+    if (!window.fetch || !window.Promise) return;
+    var SB = window.__FN_SB;
+    var m = /[?&]session=([A-Za-z0-9_-]+)(?:&|$)/.exec(location.search) ||
+            /^\/j\/([A-Za-z0-9_-]+)/.exec(location.pathname);
+    if (!m) return;
+    var sid = m[1];
+    var get = function (table, select, filter) {
+      return fetch(SB.url + '/rest/v1/' + table + '?select=' + encodeURIComponent(select.replace(/\s+/g, '')) + '&' + filter, {
+        headers: { apikey: SB.key, Authorization: 'Bearer ' + SB.key }
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (rows) { return Object.prototype.toString.call(rows) === '[object Array]' ? rows : null; })
+        ['catch'](function () { return null; });
+    };
+    var one = function (rows) { return rows && rows.length === 1 ? rows[0] : null; };
+    var session = get('sessions', SB.sessionSelect, 'id=eq.' + sid).then(one);
+    SB.pre = {
+      id: sid,
+      session: session,
+      tour: session.then(function (s) {
+        return s && s.tour_slug
+          ? get('tours', SB.tourSelect, 'slug=eq.' + encodeURIComponent(s.tour_slug)).then(one)
+          : null;
+      }),
+      activations: get('stop_activations', SB.activationSelect, 'session_id=eq.' + sid)
+    };
+  } catch (e) { /* no head start — the app fetches as usual */ }
+})();
+</script>
+<!-- Fonts: only the preconnects live here; the stylesheet link is at the end
+     of <body>, after the lib scripts (see the note there). -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --ink: #1a1d1a;
@@ -134,6 +184,11 @@
       gap: 14px; text-align: center; padding: 24px;
     }
   }
+  .boot-splash-dots { display: flex; gap: 8px; }
+  .boot-splash-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink); opacity: 0.25; animation: bootDot 1.2s ease-in-out infinite; }
+  .boot-splash-dots i:nth-child(2) { animation-delay: 0.2s; }
+  .boot-splash-dots i:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bootDot { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.9; } }
   .rotate-overlay .rotate-icon { font-size: 40px; animation: rotateHint 2s ease-in-out infinite; }
   @keyframes rotateHint { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-90deg); } }
 
@@ -3292,6 +3347,28 @@
 
 </div>
 
+<!-- Boot splash: static, so it paints with the first bytes of HTML while the
+     libs below are still downloading. Same look as showLoading()'s screen,
+     which replaces it; boot() removes it on every other path. -->
+<div id="boot-splash" style="position:fixed; inset:0; z-index:95; background:var(--paper); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; padding:40px; text-align:center;">
+  <div style="font-family:'Fraunces',Georgia,serif; font-style:italic; font-size:22px; color:var(--ink);">Fieldnote</div>
+  <div class="boot-splash-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+</div>
+<script src="/vendor/mapbox-gl-v3.8.0.js"></script>
+<script src="/vendor/supabase-js-2.108.1.umd.js"></script>
+<script src="/vendor/idb-8.0.3.umd.js"></script>
+<script src="/vendor/qrcode-generator-1.4.4.min.js"></script>
+<!-- Fonts stay on Google's CDN as graceful degradation: a failed font fetch on
+     weak signal only falls typography back to Georgia/monospace — it never
+     blocks boot (unlike the libs above, which the app cannot run without).
+     Two things keep that promise true:
+       - NON-BLOCKING (media=print, flipped to all on load): as a plain
+         stylesheet a slow/stalled fonts.googleapis.com held back first paint
+         AND every script after it.
+       - AFTER the lib scripts: the parser only gets here once they have run,
+         so the font files never compete with the libs for a thin connection
+         (in <head> they cost ~0.5 s of boot on a weak signal — measured). -->
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <script>
 // Old-browser blank-page guard. This single inline script uses modern JS
 // (e.g. `??` nullish coalescing). A browser too old to PARSE it (iOS Safari
@@ -3323,6 +3400,7 @@ window.__fnBootOk = false;
 function showBootError() {
   if (window.__fnBootOk) return;
   if (document.getElementById('fn-boot-error')) return;   // idempotent
+  try { var sp = document.getElementById('boot-splash'); if (sp) sp.parentNode.removeChild(sp); } catch (_e) {}
   try {
     var el = document.createElement('div');
     el.id = 'fn-boot-error';
@@ -3675,8 +3753,22 @@ function i18nText(map, fallback) {
   return fallback;
 }
 
-const SUPABASE_URL = 'https://xgelrfdrdvrlltcsquqh.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_56-3xMMvHZFtw2LGKkcqew_09NhbiB0';
+// Defined in the small <head> script (window.__FN_SB) so the boot-data head
+// start there and this app script share one copy.
+const SUPABASE_URL = window.__FN_SB.url;
+const SUPABASE_KEY = window.__FN_SB.key;
+// Hand over the head script's early reads for `sessionId` — once. Null when
+// there was no head start, or it was for a different session.
+function takeBootPrefetch(sessionId) {
+  const pre = window.__FN_SB.pre;
+  if (!pre || pre.id !== sessionId) return null;
+  window.__FN_SB.pre = null;
+  return pre;
+}
+function hideBootSplash() {
+  const el = document.getElementById('boot-splash');
+  if (el) el.remove();
+}
 
 // Canonical public origin for shareable invite links — always branded
 // (fieldnote.guide), regardless of which URL the guide actually opened the
@@ -4727,7 +4819,7 @@ async function boot() {
 
   // Easter egg: the self-styled "Attacker" guide must pinky-promise first.
   // See showAttackerGate — both buttons say yes, it's a wink, not real auth.
-  if (GUIDE && GUIDE.id === NYAN_GUIDE_ID) { await showAttackerGate(); }
+  if (GUIDE && GUIDE.id === NYAN_GUIDE_ID) { hideBootSplash(); await showAttackerGate(); }
 
   // Auth gate: ?role=guide requires a valid token. If missing or invalid,
   // show the invite-code form. After successful redemption the form reloads
@@ -5094,12 +5186,20 @@ function clearLastSession() {
 async function loadSessionAndTour(sessionId, opts) {
   showLoading(t('loading_joining'));
 
+  // Early reads started by the <head> script while the libs were still
+  // downloading (see window.__FN_SB). Each is used only if it came back
+  // clean; otherwise the regular query below runs exactly as before.
+  const pre = takeBootPrefetch(sessionId);
+
   // Fetch the session row.
-  const { data: session, error: sessionErr } = await supabaseClient
-    .from('sessions')
-    .select('id, label, tour_slug, guide_name, started_at, ended_at, chat_url, next_stop_id, tour_started_at, home_lng, home_lat')
-    .eq('id', sessionId)
-    .single();
+  const preSession = pre ? await pre.session : null;
+  const { data: session, error: sessionErr } = preSession
+    ? { data: preSession, error: null }
+    : await supabaseClient
+      .from('sessions')
+      .select(window.__FN_SB.sessionSelect)
+      .eq('id', sessionId)
+      .single();
 
   // Network trouble is not "the tour is gone": keep the memo (so the next
   // launch retries the same tour) and say so, instead of dropping the
@@ -5147,19 +5247,14 @@ async function loadSessionAndTour(sessionId, opts) {
   // The select syntax `stops ( ..., pins ( ... ) )` uses Supabase's automatic
   // foreign-key join — works because `stops.tour_id` and `pins.stop_id` are
   // declared as foreign keys in the schema.
-  const { data: tour, error: tourErr } = await supabaseClient
-    .from('tours')
-    .select(`
-      id, slug, name, subtitle, home_lng, home_lat,
-      stops (
-        id, ordinal, name, subtitle, lng, lat, activation_radius_m, drive_secs_from_prev, name_i18n, subtitle_i18n,
-        pins (
-          id, ordinal, title, body, lng, lat, trigger_radius_m, category, title_i18n, body_i18n
-        )
-      )
-    `)
-    .eq('slug', session.tour_slug)
-    .single();
+  const preTour = pre ? await pre.tour : null;
+  const { data: tour, error: tourErr } = (preTour && preTour.slug === session.tour_slug)
+    ? { data: preTour, error: null }
+    : await supabaseClient
+      .from('tours')
+      .select(window.__FN_SB.tourSelect)
+      .eq('slug', session.tour_slug)
+      .single();
 
   if (tourErr || !tour) {
     showFatalError(`Session "${sessionId}" references tour "${session.tour_slug}", which couldn't be loaded.`);
@@ -5176,7 +5271,7 @@ async function loadSessionAndTour(sessionId, opts) {
   // catch-up query. Pins of inactive stops stay hidden — the guide controls
   // reveal pace by activating stops. New activations during the session
   // arrive via subscribeStopActivations() below.
-  await catchUpStopActivations();
+  await catchUpStopActivations(pre ? await pre.activations : null);
 
   applyTourMetadata();
   hideLoading();
@@ -8419,7 +8514,7 @@ function applyTourMetadata() {
       };
       if (bgLine) {
         bgLine.textContent = fmtBg();
-        setInterval(() => { try { bgLine.textContent = fmtBg(); } catch (_e) {} }, 2000);
+        _debugBgTick = () => { try { bgLine.textContent = fmtBg(); } catch (_e) {} };
       }
     }
     if (GUIDE) {
@@ -8453,9 +8548,6 @@ function applyTourMetadata() {
       syncOnce().catch(() => {});
     });
     updateDebugQueueCount();
-    // Refresh the sync-stats line every couple seconds so it reflects activity.
-    setInterval(updateDebugSyncStats, 2000);
-    setInterval(updateDebugPassengers, 2000);
     updateDebugSyncStats();
     updateDebugPassengers();
     // Joystick toggle button in the same debug block (dev simulator).
@@ -8491,6 +8583,32 @@ function applyTourMetadata() {
 // Render a compact one-line passenger summary for the debug panel.
 // Helps tell at a glance whether catch-up returned data and whether trails
 // have enough points to render.
+// The About screen's live debug lines (sync stats, passenger counts, native
+// BG-share state) refresh every 2 s — but only WHILE that screen is open.
+// They used to tick for every user for the whole tour, on a screen almost
+// nobody opens. openScreen('screen-about') starts this; it stops itself as
+// soon as the screen is closed (screens hide via transform, so "open" means
+// the .visible class) and idles while the app is backgrounded.
+let _debugBgTick = null;      // set by applyTourMetadata in the native shell
+let _debugPanelTimer = null;
+function refreshDebugPanel() {
+  updateDebugSyncStats();
+  updateDebugPassengers();
+  if (_debugBgTick) _debugBgTick();
+}
+function startDebugPanelTicker() {
+  refreshDebugPanel();
+  if (_debugPanelTimer) return;
+  _debugPanelTimer = setInterval(() => {
+    const scr = document.getElementById('screen-about');
+    if (!scr || !scr.classList.contains('visible')) {
+      clearInterval(_debugPanelTimer); _debugPanelTimer = null;
+      return;
+    }
+    if (!document.hidden) refreshDebugPanel();
+  }, 2000);
+}
+
 function updateDebugPassengers() {
   const el = document.getElementById('debug-passengers');
   if (!el) return;
@@ -8547,6 +8665,7 @@ async function updateDebugQueueCount() {
 }
 
 function showLoading(msg) {
+  hideBootSplash();
   let el = document.getElementById('loading-screen');
   if (!el) {
     el = document.createElement('div');
@@ -8585,7 +8704,9 @@ function showFatalError(msg) {
     '</div>';
 }
 
-boot();
+// The static boot splash covers the page until boot has put a real screen up
+// (showLoading swaps it out earlier on the session path).
+boot().finally(hideBootSplash);
 
 // ── 5. MAP INIT ──
 // Make built-in amenity POIs (toilets, parking, cafés…) appear at a lower
@@ -9092,14 +9213,20 @@ function startGuideShell() {
   // the passenger list rows so "no signal" status flips correctly.
   if (_stateTickHandle) clearInterval(_stateTickHandle);
   _stateTickHandle = setInterval(() => {
-    // Reconcile names from session_passengers every tick. Names are otherwise
-    // merged only once at startup + via individual realtime events; a single
-    // missed/late event (mobile backgrounding, mid-tour join) would otherwise
-    // leave that passenger showing the id.slice(-4) fallback for the whole tour.
-    // This cheap re-pull (one row per passenger) self-heals it within 5s and
-    // makes session_passengers the authoritative name source. catchUpPassengerNames
+    // Reconcile names / in-bus / presence / 🔔 status from session_passengers.
+    // Realtime (startPassengerNamesSubscription) is the live path; this
+    // re-pull is the self-heal for a missed/late event (mobile backgrounding,
+    // mid-tour join), which would otherwise leave e.g. the id.slice(-4) name
+    // fallback up for the whole tour. It used to run on EVERY 5 s tick — two
+    // requests (this + list_push_passengers) × 720/hour on the guide's data
+    // and battery, nearly all of them returning nothing new. Now it keeps the
+    // 5 s pace only while there is something to heal (see namesRepullDue) and
+    // otherwise backs off to NAMES_REPULL_IDLE_MS. catchUpPassengerNames
     // re-renders the dots + list itself.
-    catchUpPassengerNames().catch(() => {});
+    if (namesRepullDue()) {
+      _namesRepullAt = Date.now();
+      catchUpPassengerNames().catch(() => {});
+    }
     if (PASSENGERS.size > 0) {
       renderPassengers();
       renderPassengerList();
@@ -9934,6 +10061,28 @@ function updatePassengerCount() {
 let NAMES_VISIBLE = true;
 let _namesChannel = null;
 let _namesSubscribeStarted = false;
+let _namesChannelStatus = '';        // last status from the realtime channel
+
+// Cadence of the periodic session_passengers re-pull (driven by the guide's
+// 5 s state tick). Every tick while a miss is likely or would hurt:
+//   - the realtime channel isn't SUBSCRIBED (events ARE being missed),
+//   - a passenger is on the map without a name (the miss already happened),
+//   - boarding, before "Start tour" (the headcount is what the guide is
+//     watching, so in_bus must not lag).
+// Otherwise once per NAMES_REPULL_IDLE_MS — well inside PRESENCE_FRESH_MS, so
+// "present / away" can't go stale from the slower pace. Never while the app
+// is backgrounded; coming back to the foreground re-pulls at once.
+const NAMES_REPULL_IDLE_MS = 30000;
+let _namesRepullAt = 0;
+function namesRepullDue() {
+  if (document.hidden) return false;
+  if (_namesChannelStatus !== 'SUBSCRIBED') return true;
+  if (!(SESSION && SESSION.tour_started_at)) return true;
+  for (const [, p] of PASSENGERS) {
+    if (!p.name && p.lng != null) return true;
+  }
+  return Date.now() - _namesRepullAt >= NAMES_REPULL_IDLE_MS;
+}
 
 async function catchUpPassengerNames() {
   if (!SESSION) return;
@@ -10071,6 +10220,7 @@ function startPassengerNamesSubscription() {
       }
     )
     .subscribe((status) => {
+      _namesChannelStatus = status;
       if (status === 'SUBSCRIBED') {
         catchUpPassengerNames().catch(err => console.warn('names reconcile failed', err));
       }
@@ -10535,6 +10685,9 @@ function bindVisibilityCatchUp() {
     // logic — running it on top of live data costs at most one round-trip.
     if (ROLE === 'guide' && typeof catchUpPassengers === 'function') {
       catchUpPassengers({ merge: true }).catch(err => console.warn('visibility-catchup passengers failed', err));
+      // The periodic names re-pull pauses while hidden — catch up right away.
+      _namesRepullAt = Date.now();
+      catchUpPassengerNames().catch(err => console.warn('visibility-catchup names failed', err));
     }
     // guide_locations feeds the passenger's guide/bus markers only — the
     // guide's own map renders local state (see renderGuideMarkers note).
@@ -11826,6 +11979,7 @@ if (_zoDe) _zoDe.addEventListener('click', () => applyZoomPreset('detail'));
 const screenStack = [];
 function openScreen(id) {
   document.getElementById(id).classList.add('visible');
+  if (id === 'screen-about') startDebugPanelTicker();
   screenStack.push(id);
 }
 function closeScreen() {
@@ -12236,12 +12390,16 @@ function openShareScreen() {
 // Catch-up: load already-activated stops for this session and seed
 // ACTIVE_STOP_IDS. Called from loadSessionAndTour for the guide role only
 // (passengers still get auto-activate-all until chunk C lands).
-async function catchUpStopActivations() {
+// `preRows` — boot only: rows already fetched by the <head> head start for
+// this session; skips the query. Every later catch-up re-queries.
+async function catchUpStopActivations(preRows) {
   if (!SESSION) return;
-  const { data, error } = await supabaseClient
-    .from('stop_activations')
-    .select('stop_id, activated_at, duration_minutes, notes, warning_level, notes_i18n')
-    .eq('session_id', SESSION.id);
+  const { data, error } = Array.isArray(preRows)
+    ? { data: preRows, error: null }
+    : await supabaseClient
+      .from('stop_activations')
+      .select(window.__FN_SB.activationSelect)
+      .eq('session_id', SESSION.id);
   if (error) {
     console.warn('[chunk B] stop_activations catch-up failed', error);
     return;
