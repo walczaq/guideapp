@@ -8514,7 +8514,7 @@ function applyTourMetadata() {
       };
       if (bgLine) {
         bgLine.textContent = fmtBg();
-        setInterval(() => { try { bgLine.textContent = fmtBg(); } catch (_e) {} }, 2000);
+        _debugBgTick = () => { try { bgLine.textContent = fmtBg(); } catch (_e) {} };
       }
     }
     if (GUIDE) {
@@ -8548,9 +8548,6 @@ function applyTourMetadata() {
       syncOnce().catch(() => {});
     });
     updateDebugQueueCount();
-    // Refresh the sync-stats line every couple seconds so it reflects activity.
-    setInterval(updateDebugSyncStats, 2000);
-    setInterval(updateDebugPassengers, 2000);
     updateDebugSyncStats();
     updateDebugPassengers();
     // Joystick toggle button in the same debug block (dev simulator).
@@ -8586,6 +8583,32 @@ function applyTourMetadata() {
 // Render a compact one-line passenger summary for the debug panel.
 // Helps tell at a glance whether catch-up returned data and whether trails
 // have enough points to render.
+// The About screen's live debug lines (sync stats, passenger counts, native
+// BG-share state) refresh every 2 s — but only WHILE that screen is open.
+// They used to tick for every user for the whole tour, on a screen almost
+// nobody opens. openScreen('screen-about') starts this; it stops itself as
+// soon as the screen is closed (screens hide via transform, so "open" means
+// the .visible class) and idles while the app is backgrounded.
+let _debugBgTick = null;      // set by applyTourMetadata in the native shell
+let _debugPanelTimer = null;
+function refreshDebugPanel() {
+  updateDebugSyncStats();
+  updateDebugPassengers();
+  if (_debugBgTick) _debugBgTick();
+}
+function startDebugPanelTicker() {
+  refreshDebugPanel();
+  if (_debugPanelTimer) return;
+  _debugPanelTimer = setInterval(() => {
+    const scr = document.getElementById('screen-about');
+    if (!scr || !scr.classList.contains('visible')) {
+      clearInterval(_debugPanelTimer); _debugPanelTimer = null;
+      return;
+    }
+    if (!document.hidden) refreshDebugPanel();
+  }, 2000);
+}
+
 function updateDebugPassengers() {
   const el = document.getElementById('debug-passengers');
   if (!el) return;
@@ -11924,6 +11947,7 @@ if (_zoDe) _zoDe.addEventListener('click', () => applyZoomPreset('detail'));
 const screenStack = [];
 function openScreen(id) {
   document.getElementById(id).classList.add('visible');
+  if (id === 'screen-about') startDebugPanelTicker();
   screenStack.push(id);
 }
 function closeScreen() {
