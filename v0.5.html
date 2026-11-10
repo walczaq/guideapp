@@ -502,6 +502,21 @@ window.__FN_SB = {
   .pk-send.done { border-color:var(--rule); color:var(--rule); }
   .pk-x { background:none; border:none; color:var(--rule); font-size:18px; line-height:1; padding:4px 6px; cursor:pointer; }
 
+  /* Company screen. Above the session manager (z 90) — it opens from there too. */
+  #screen-company { z-index: 95; }
+  .co-row { display:flex; align-items:center; gap:8px; padding:11px 2px; border-bottom:1px solid var(--rule-soft); font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--ink); }
+  .co-row-main { flex:1; min-width:0; }
+  .co-row-main > div { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .co-row-sub { font-size:11px; color:var(--rule); margin-top:3px; line-height:1.45; }
+  .co-row-main > .co-row-sub { white-space:normal; }
+  .co-tag { font-size:9px; letter-spacing:0.12em; text-transform:uppercase; border:1px solid var(--rule); border-radius:999px; padding:2px 7px; color:var(--rule); margin-left:6px; }
+  .co-tag.on { border-color:#15803d; color:#15803d; }
+  .co-mini { flex:none; background:none; border:1px solid var(--rule); border-radius:6px; color:var(--ink); font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:0.08em; text-transform:uppercase; padding:6px 8px; cursor:pointer; text-decoration:none; }
+  .co-mini.danger { color:#b91c1c; border-color:#b91c1c; }
+  .co-empty { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); padding:8px 2px; line-height:1.5; }
+  .co-title { font-family:'Fraunces',serif; font-size:26px; font-weight:700; color:var(--ink); margin-bottom:4px; }
+  .co-code { padding:10px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:10.5px; word-break:break-all; user-select:all; line-height:1.5; }
+
   /* Bus on the map, from the bus's own GPS tracker (passengers + guide). */
   .bus-gps-badge {
     width:34px; height:34px; border-radius:50%; background:var(--accent); color:var(--on-accent);
@@ -3000,6 +3015,18 @@ window.__FN_SB = {
           <div class="menu-label">My sessions</div>
           <span class="menu-chevron">›</span>
         </button>
+        <button class="menu-item" data-action="company" id="menu-company" style="display:none;">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="3" width="16" height="18" rx="1"/>
+              <line x1="9" y1="8" x2="9.01" y2="8"/><line x1="15" y1="8" x2="15.01" y2="8"/>
+              <line x1="9" y1="12" x2="9.01" y2="12"/><line x1="15" y1="12" x2="15.01" y2="12"/>
+              <path d="M10 21v-4h4v4"/>
+            </svg>
+          </div>
+          <div class="menu-label">Company</div>
+          <span class="menu-chevron">›</span>
+        </button>
         <button class="menu-item" data-action="build-tours" id="menu-build-tours" style="display:none;">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -3188,6 +3215,23 @@ window.__FN_SB = {
         <div class="pk-note" id="pk-result"></div>
       </div>
     </div>
+  </div>
+
+  <!-- COMPANY (logged-in guides) — the company's people, buses, text + GPS
+       settings and, for admins, every tour running right now. Body is built
+       by coRender(). -->
+  <div class="screen" id="screen-company">
+    <div class="status-bar"></div>
+    <div class="screen-header">
+      <button class="back-btn" data-close-screen>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </button>
+      <div class="screen-title">Company</div>
+    </div>
+    <div class="screen-body" id="co-body"></div>
   </div>
 
   <!-- SHARE INVITE -->
@@ -7043,6 +7087,7 @@ async function showSessionManager() {
     <div class="sm-footer">
       <button class="sm-newbtn" id="sm-new">+ Start new session</button>
       <button class="sm-btn" id="sm-build" style="width:100%; margin-top:8px;">Build / edit tours</button>
+      <button class="sm-btn" id="sm-company" style="width:100%; margin-top:8px;">Company</button>
       <button class="sm-btn" id="sm-chat" style="width:100%; margin-top:8px;">💬 Guides room</button>
     </div>
   `;
@@ -7059,6 +7104,7 @@ async function showSessionManager() {
     if (m) m.remove();
     showTourManager();
   });
+  document.getElementById('sm-company').addEventListener('click', () => { openCompanyScreen(); });
   document.getElementById('sm-chat').addEventListener('click', () => {
     showGuideChat();   // overlay; My Sessions stays underneath
   });
@@ -7377,35 +7423,43 @@ async function showTourManager() {
   });
   document.getElementById('tb-new').addEventListener('click', tbNewTourFlow);
   _tbTours = await tbListTours();
+  // Sharing needs a company; quiet if the server has no company level yet.
+  try { _tbInCompany = !!(await coFetchCompany()); } catch (_e) { _tbInCompany = false; }
   _tbTourDeleteConfirm = null;
   _tbTranslatedCache = {};
   renderTbTourList();
 }
 
+let _tbInCompany = false;
 function renderTbTourList() {
   const list = document.getElementById('tb-list');
   if (!list) return;
   if (!_tbTours.length) { list.innerHTML = '<div class="tb-empty">No tours yet.<br>Create one below.</div>'; return; }
   list.innerHTML = '';
   for (const t of _tbTours) {
-    const own = !!t.owner_guide_id;
+    // Three kinds: mine, a colleague's tour shared with our company (run or
+    // duplicate it, but only its builder edits it), and the base tours.
+    const own = !!t.owner_guide_id && (!GUIDE || t.owner_guide_id === GUIDE.id);
+    const colleague = !!t.owner_guide_id && !own;
     const row = document.createElement('div');
     row.className = 'tb-row' + (own ? '' : ' base');
     const name = document.createElement('div');
     name.className = 'tb-row-name';
     name.innerHTML = (t.name || '(untitled)').replace(/</g, '&lt;') +
-      `<span class="tb-tag ${own ? 'yours' : ''}">${own ? 'Yours' : 'Base'}</span>`;
+      `<span class="tb-tag ${own ? 'yours' : ''}">${own ? 'Yours' : colleague ? 'Company' : 'Base'}</span>` +
+      (own && t.company_id ? '<span class="tb-tag">Shared</span>' : '');
     row.appendChild(name);
+    if (colleague && t.owner_name) { const by = document.createElement('div'); by.className = 'tb-row-sub'; by.textContent = 'Built by ' + t.owner_name; row.appendChild(by); }
     if (t.subtitle) { const s = document.createElement('div'); s.className = 'tb-row-sub'; s.textContent = t.subtitle; row.appendChild(s); }
     const meta = document.createElement('div'); meta.className = 'tb-row-meta';
     meta.textContent = `${t.stop_count} stop${t.stop_count === 1 ? '' : 's'}`;
     row.appendChild(meta);
     const actions = document.createElement('div'); actions.className = 'tb-actions';
-    actions.appendChild(smMakeBtn('Edit', 'primary', () => openTourEditor(t.id)));
+    if (!colleague) actions.appendChild(smMakeBtn('Edit', 'primary', () => openTourEditor(t.id)));
     // Translate → ES + ZH via the edge function (DeepL). Lives here on the
     // list (not buried in the editor) so guides can translate without opening.
     // Only tours with stops can be translated.
-    if (Number(t.stop_count) > 0) {
+    if (Number(t.stop_count) > 0 && !colleague) {
       const trBtn = smMakeBtn('🌐 Translate', '', async (ev) => {
         ev.stopPropagation();
         const btn = ev.currentTarget;
@@ -7440,6 +7494,17 @@ function renderTbTourList() {
       openTourEditor(r.tour.id);
     });
     actions.appendChild(dupBtn);
+    // Share with the company: every guide in it can then run or duplicate it.
+    if (own && _tbInCompany) {
+      actions.appendChild(smMakeBtn(t.company_id ? 'Stop sharing' : 'Share with company', '', async (ev) => {
+        const btn = ev.currentTarget; btn.disabled = true;
+        const { error } = await supabaseClient.rpc('set_tour_shared',
+          { p_guide_token: getStoredGuideToken(), p_tour_id: t.id, p_shared: !t.company_id });
+        if (error) { showToast(error.message || 'Could not change sharing.'); btn.disabled = false; return; }
+        _tbTours = await tbListTours();
+        renderTbTourList();
+      }));
+    }
     if (own) {
       if (_tbTourDeleteConfirm === t.id) {
         actions.appendChild(smMakeBtn('Tap to confirm', 'danger', async () => {
@@ -8551,7 +8616,7 @@ async function populateTourPicker() {
   }
   if (startBtn) { startBtn.disabled = false; startBtn.style.opacity = ''; startBtn.style.cursor = 'pointer'; }
   sel.innerHTML = tours.map(t => {
-    const mine = t.owner_guide_id ? ' (yours)' : '';
+    const mine = !t.owner_guide_id ? '' : (!GUIDE || t.owner_guide_id === GUIDE.id) ? ' (yours)' : ' (company)';
     const n = Number(t.stop_count) || 0;
     const stops = `${n} stop${n === 1 ? '' : 's'}`;
     const slug = (t.slug || '').replace(/"/g, '&quot;');
@@ -9017,6 +9082,298 @@ async function startTour() {
   if (pk) pk.addEventListener('click', () => { try { openPickupScreen(); } catch (_e) {} });
 })();
 
+// ── Company ─────────────────────────────────────────────────────────────────
+// The level above a single guide (migration 051): a company's people, its bus
+// list, how its pickup texts are sent, its fleet GPS connection — and for
+// admins an overview of every tour the company is running right now.
+// Admins add guides by their Fieldnote name; members just see who's in it.
+const COMPANY = { loaded: false, data: null, live: [], error: '', timer: null, editBus: null, addingBus: false };
+
+async function coRpc(fn, args) {
+  const { data, error } = await supabaseClient.rpc(fn, Object.assign({ p_guide_token: getStoredGuideToken() }, args || {}));
+  if (error) throw new Error(error.message || 'Request failed');
+  return data;
+}
+async function coFetchCompany() { return await coRpc('get_company'); }
+
+async function coRefresh() {
+  try {
+    COMPANY.data = await coFetchCompany();
+    COMPANY.error = '';
+    COMPANY.live = (COMPANY.data && COMPANY.data.role === 'admin') ? (await coRpc('list_company_live_sessions') || []) : [];
+  } catch (e) {
+    const m = String(e.message || '');
+    COMPANY.error = /could not find|does not exist|schema cache/i.test(m)
+      ? 'Companies aren’t switched on for this server yet.' : m;
+  }
+  COMPANY.loaded = true;
+  coRender();
+}
+
+function openCompanyScreen() {
+  if (!GUIDE) return;
+  COMPANY.editBus = null; COMPANY.addingBus = false;
+  coRender();
+  openScreen('screen-company');
+  coRefresh();
+  // Keep the live overview current while the screen is open — but never
+  // redraw under someone who is typing into one of its forms.
+  if (COMPANY.timer) clearInterval(COMPANY.timer);
+  COMPANY.timer = setInterval(() => {
+    const scr = document.getElementById('screen-company');
+    if (!scr || !scr.classList.contains('visible')) { clearInterval(COMPANY.timer); COMPANY.timer = null; return; }
+    const a = document.activeElement;
+    const typing = a && scr.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+    if (!document.hidden && !typing) coRefresh();
+  }, 15000);
+}
+
+// Small DOM builders — everything on this screen is user-entered text, so
+// nothing goes through innerHTML.
+function coEl(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function coBtn(text, cls, fn) { const b = coEl('button', cls, text); b.type = 'button'; b.addEventListener('click', fn); return b; }
+function coInput(placeholder, value, opts) {
+  const i = coEl('input', 'pk-input');
+  i.placeholder = placeholder || ''; i.value = value || ''; i.autocomplete = 'off';
+  i.setAttribute('autocapitalize', 'off');
+  Object.assign(i, opts || {});
+  return i;
+}
+function coSection(title) { const s = coEl('div', 'pk-section'); s.appendChild(coEl('div', 'pk-h', title)); return s; }
+// Run an admin action, then reload; errors surface as a toast.
+async function coDo(fn) {
+  try { await fn(); } catch (e) { showToast(e.message || 'That didn’t work.'); }
+  await coRefresh();
+}
+function coAgo(iso) {
+  if (!iso) return null;
+  const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
+  return s < 90 ? s + ' s ago' : s < 5400 ? Math.round(s / 60) + ' min ago' : Math.round(s / 3600) + ' h ago';
+}
+function coClock(iso) { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+
+function coRender() {
+  const body = document.getElementById('co-body');
+  if (!body) return;
+  body.textContent = '';
+  if (COMPANY.error) { body.appendChild(coEl('div', 'pk-note bad', COMPANY.error)); return; }
+  if (!COMPANY.loaded) { body.appendChild(coEl('div', 'co-empty', 'Loading…')); return; }
+  const c = COMPANY.data;
+
+  // ── Not in a company ──
+  if (!c) {
+    body.appendChild(coEl('div', 'co-title', 'No company yet'));
+    body.appendChild(coEl('div', 'pk-note',
+      'A company shares one bus list, one way of texting passengers and its tours between all of its guides, and gives the office a live view of every tour.'));
+    const join = coSection('Joining your employer’s company');
+    join.style.marginTop = '22px';
+    join.appendChild(coEl('div', 'pk-note', 'Ask a company admin to add you. They need your Fieldnote name:'));
+    join.appendChild(coEl('div', 'co-code', GUIDE.name || ''));
+    body.appendChild(join);
+    const make = coSection('Starting a new company');
+    const name = coInput('Company name', '', { maxLength: 80 });
+    name.setAttribute('autocapitalize', 'words');
+    make.appendChild(name);
+    make.appendChild(coBtn('Create company', 'pk-btn', () => coDo(async () => {
+      if (!name.value.trim()) throw new Error('Give the company a name.');
+      await coRpc('create_company', { p_name: name.value.trim() });
+    })));
+    make.appendChild(coEl('div', 'pk-note', 'You become its first admin, and buses you already added become the company’s.'));
+    body.appendChild(make);
+    return;
+  }
+
+  const admin = c.role === 'admin';
+  body.appendChild(coEl('div', 'co-title', c.name));
+  body.appendChild(coEl('div', 'pk-note', admin ? 'You’re an admin of this company.'
+    : 'You’re a member. Admins manage the buses, text messages and bus GPS.'));
+  body.lastChild.style.marginBottom = '22px';
+
+  // ── Live overview (admins) ──
+  if (admin) {
+    const sec = coSection('Running now · ' + COMPANY.live.length);
+    if (!COMPANY.live.length) sec.appendChild(coEl('div', 'co-empty', 'No tours are running at the moment.'));
+    for (const s of COMPANY.live) {
+      const row = coEl('div', 'co-row');
+      const main = coEl('div', 'co-row-main');
+      const top = coEl('div', null, (s.tour || 'Tour') + ' · ' + (s.guide || ''));
+      const phase = s.tour_started_at ? 'On tour since ' + coClock(s.tour_started_at)
+        : s.pickup_started_at ? 'Pickup since ' + coClock(s.pickup_started_at)
+        : 'Boarding since ' + coClock(s.started_at);
+      const ago = coAgo(s.bus_last_fix_at);
+      const bits = [phase, s.joined + ' joined'];
+      if (s.contacts) bits.push(s.texted + '/' + s.contacts + ' texted');
+      bits.push(s.bus ? s.bus + (ago ? ' (GPS ' + ago + ')' : ' (no GPS yet)') : 'no bus');
+      main.appendChild(top);
+      main.appendChild(coEl('div', 'co-row-sub', bits.join(' · ')));
+      row.appendChild(main);
+      // Opens the tour the way a passenger sees it — look, don't drive.
+      const a = coEl('a', 'co-mini', 'Map');
+      a.href = window.location.pathname + '?session=' + encodeURIComponent(s.id) + '&role=passenger';
+      a.target = '_blank'; a.rel = 'noopener';
+      row.appendChild(a);
+      sec.appendChild(row);
+    }
+    body.appendChild(sec);
+  }
+
+  // ── People ──
+  {
+    const sec = coSection('People · ' + c.members.length);
+    for (const m of c.members) {
+      const row = coEl('div', 'co-row');
+      const main = coEl('div', 'co-row-main');
+      const line = coEl('div', null, m.name + (m.id === c.me ? ' (you)' : ''));
+      if (m.role === 'admin') line.appendChild(coEl('span', 'co-tag on', 'Admin'));
+      main.appendChild(line);
+      row.appendChild(main);
+      if (admin) {
+        row.appendChild(coBtn(m.role === 'admin' ? 'Make member' : 'Make admin', 'co-mini', () => coDo(() =>
+          coRpc('company_set_member', { p_guide_id: m.id, p_role: m.role === 'admin' ? 'member' : 'admin' }))));
+        row.appendChild(coBtn('Remove', 'co-mini danger', () => {
+          if (!confirm('Remove ' + m.name + ' from ' + c.name + '?')) return;
+          coDo(() => coRpc('company_set_member', { p_guide_id: m.id, p_role: null }));
+        }));
+      }
+      sec.appendChild(row);
+    }
+    if (admin) {
+      const name = coInput('Guide’s Fieldnote name');
+      name.style.marginTop = '10px';
+      sec.appendChild(name);
+      sec.appendChild(coBtn('Add to company', 'pk-btn', () => coDo(async () => {
+        if (!name.value.trim()) throw new Error('Type the name the guide logs in to Fieldnote with.');
+        await coRpc('company_add_member', { p_guide_name: name.value.trim() });
+      })));
+      sec.appendChild(coEl('div', 'pk-note', 'The guide needs a Fieldnote account first; use the exact name they log in with.'));
+    }
+    body.appendChild(sec);
+  }
+  if (!admin) return;
+
+  // ── Buses ──
+  {
+    const sec = coSection('Buses · ' + c.buses.length);
+    const form = (bus) => {
+      const box = coEl('div');
+      box.style.margin = '10px 0';
+      const name = coInput('Bus name, e.g. Bus 7', bus ? bus.name : '', { maxLength: 60 });
+      const tracker = coInput('Tracker ID in your fleet system', bus ? bus.tracker_id : '', { maxLength: 80 });
+      tracker.style.marginTop = '8px';
+      box.appendChild(name); box.appendChild(tracker);
+      const r = coEl('div', 'pk-row');
+      r.appendChild(coBtn('Cancel', 'pk-btn', () => { COMPANY.editBus = null; COMPANY.addingBus = false; coRender(); }));
+      r.appendChild(coBtn('Save bus', 'pk-btn', () => coDo(async () => {
+        if (!name.value.trim() || !tracker.value.trim()) throw new Error('Give the bus a name and its tracker ID.');
+        await coRpc('save_bus', { p_name: name.value.trim(), p_tracker_id: tracker.value.trim(), p_bus_id: bus ? bus.id : null });
+        COMPANY.editBus = null; COMPANY.addingBus = false;
+      })));
+      box.appendChild(r);
+      return box;
+    };
+    for (const b of c.buses) {
+      if (COMPANY.editBus === b.id) { sec.appendChild(form(b)); continue; }
+      const row = coEl('div', 'co-row');
+      const main = coEl('div', 'co-row-main');
+      main.appendChild(coEl('div', null, b.name));
+      const ago = coAgo(b.last_fix_at);
+      main.appendChild(coEl('div', 'co-row-sub', 'Tracker ' + b.tracker_id + ' · ' + (ago ? 'GPS ' + ago : 'no GPS received yet')));
+      row.appendChild(main);
+      row.appendChild(coBtn('Edit', 'co-mini', () => { COMPANY.editBus = b.id; COMPANY.addingBus = false; coRender(); }));
+      row.appendChild(coBtn('Remove', 'co-mini danger', () => {
+        if (!confirm('Remove ' + b.name + ' from the company’s buses?')) return;
+        coDo(() => coRpc('delete_bus', { p_bus_id: b.id }));
+      }));
+      sec.appendChild(row);
+    }
+    if (COMPANY.addingBus) sec.appendChild(form(null));
+    else sec.appendChild(coBtn('+ Add a bus', 'pk-btn', () => { COMPANY.addingBus = true; COMPANY.editBus = null; coRender(); }));
+    sec.appendChild(coEl('div', 'pk-note', 'The tracker ID is how your fleet GPS system identifies the bus — its vehicle ID, name or number plate, exactly as shown there.'));
+    body.appendChild(sec);
+  }
+
+  // ── Pickup texts ──
+  {
+    const sec = coSection('Pickup texts');
+    const sel = coEl('select', 'pk-select');
+    for (const [v, label] of [['', 'Not set up'], ['gateway', 'Company Android phone'], ['twilio', 'Twilio']]) {
+      const o = coEl('option', null, label); o.value = v; sel.appendChild(o);
+    }
+    sel.value = COMPANY.smsPick != null ? COMPANY.smsPick : (c.sms_provider || '');
+    sel.addEventListener('change', () => { COMPANY.smsPick = sel.value; coRender(); });
+    sec.appendChild(sel);
+    const kind = sel.value;
+    const saved = c.sms_provider === kind ? c.sms : {};
+    const fields = {};
+    const field = (key, placeholder, value, secretSet) => {
+      const i = coInput(secretSet ? 'Saved — leave empty to keep' : placeholder, value);
+      i.style.marginTop = '8px';
+      fields[key] = i; sec.appendChild(i);
+    };
+    if (kind === 'gateway') {
+      sec.appendChild(coEl('div', 'pk-note', 'Texts go out from a company Android phone running the “SMS Gateway for Android” app with Cloud Server switched on. Enter the username and password the app shows. The phone must be on and have signal when pickup starts.'));
+      field('user', 'Username from the app', saved.user);
+      field('pass', 'Password from the app', '', saved.pass_set);
+    } else if (kind === 'twilio') {
+      sec.appendChild(coEl('div', 'pk-note', 'Texts are sent by Twilio from your account.'));
+      field('sid', 'Account SID', saved.sid);
+      field('token', 'Auth token', '', saved.token_set);
+      field('from', 'Sender number or name', saved.from);
+    } else {
+      sec.appendChild(coEl('div', 'pk-note', 'Guides can still text passengers one by one from their own phone.'));
+    }
+    if (kind !== (c.sms_provider || '') || kind) {
+      sec.appendChild(coBtn(kind ? 'Save text settings' : 'Turn off', 'pk-btn', () => coDo(async () => {
+        const cfg = {};
+        for (const k in fields) cfg[k] = fields[k].value.trim();
+        await coRpc('set_company_sms', { p_provider: kind || null, p_config: cfg });
+        COMPANY.smsPick = null;
+        showToast('Saved.');
+      })));
+    }
+    body.appendChild(sec);
+  }
+
+  // ── Bus GPS ──
+  {
+    const sec = coSection('Bus GPS');
+    sec.appendChild(coEl('div', 'pk-note', 'Either your fleet system sends bus positions to this address:'));
+    sec.firstChild.nextSibling.style.marginTop = '0';
+    const pushUrl = `${SUPABASE_URL}/functions/v1/bus_gps?key=${c.bus_gps_key}`;
+    const code = coEl('div', 'co-code', pushUrl);
+    code.style.marginTop = '8px';
+    sec.appendChild(code);
+    const r = coEl('div', 'pk-row');
+    r.appendChild(coBtn('Copy address', 'pk-btn', async () => {
+      try { await navigator.clipboard.writeText(pushUrl); showToast('Copied.'); } catch (_e) { showToast('Select the address and copy it.'); }
+    }));
+    r.appendChild(coBtn('New key', 'pk-btn', () => {
+      if (!confirm('Issue a new key? The current address stops working straight away.')) return;
+      coDo(() => coRpc('set_company_bus_feed', { p_feed_url: null, p_headers: null, p_new_key: true }));
+    }));
+    sec.appendChild(r);
+    sec.appendChild(coEl('div', 'pk-note', 'Anyone with this address can move your buses on the map — treat it like a password.'));
+    const note2 = coEl('div', 'pk-note', 'Or Fieldnote fetches the positions from your fleet system’s API:');
+    note2.style.marginTop = '18px';
+    sec.appendChild(note2);
+    const feed = coInput('https://… address that returns current positions', c.bus_feed_url, { inputMode: 'url' });
+    feed.style.marginTop = '8px';
+    const hName = coInput('Header name, e.g. Authorization', '');
+    hName.style.marginTop = '8px';
+    const hVal = coInput(c.bus_feed_headers_set ? 'Saved — leave both empty to keep' : 'Header value, e.g. Bearer abc123', '');
+    hVal.style.marginTop = '8px';
+    sec.appendChild(feed); sec.appendChild(hName); sec.appendChild(hVal);
+    sec.appendChild(coBtn('Save fleet address', 'pk-btn', () => coDo(async () => {
+      const n = hName.value.trim(), v = hVal.value.trim();
+      if ((n && !v) || (!n && v)) throw new Error('Fill in both the header name and its value, or neither.');
+      const headers = n ? { [n]: v } : null;   // null = keep what's saved
+      await coRpc('set_company_bus_feed', { p_feed_url: feed.value.trim(), p_headers: headers, p_new_key: false });
+      showToast('Saved.');
+    })));
+    body.appendChild(sec);
+  }
+}
+
 // ── Pickup (guide) ──────────────────────────────────────────────────────────
 // Before the tour starts: pick today's bus, paste the passengers' phone
 // numbers, tap Start pickup. Everyone is texted the join link (send_pickup_sms
@@ -9122,7 +9479,8 @@ function pkRender() {
     const add = (value, label) => { const o = document.createElement('option'); o.value = value; o.textContent = label; sel.appendChild(o); };
     add('', st.buses.length ? 'No bus selected' : 'No buses yet');
     for (const b of st.buses) add(b.id, b.name);
-    add('__add', '+ Add a bus…');
+    // In a company the bus list is the admins' (Company screen); members pick.
+    if (st.can_manage_buses !== false) add('__add', '+ Add a bus…');
     sel.value = st.bus_id || '';
   }
   const bus = st.buses.find(b => b.id === st.bus_id) || null;
@@ -9130,7 +9488,8 @@ function pkRender() {
   if (bs) {
     bs.className = 'pk-note';
     if (!bus) {
-      bs.textContent = 'Pick the bus you’re on today — passengers see it on their map from its GPS tracker.';
+      bs.textContent = 'Pick the bus you’re on today — passengers see it on their map from its GPS tracker.' +
+        (st.can_manage_buses === false ? ' Missing a bus? Ask a ' + (st.company || 'company') + ' admin to add it.' : '');
     } else if (!bus.last_fix_at) {
       bs.textContent = 'No GPS position received for this bus yet. Check the tracker ID (' + bus.tracker_id + ') matches your fleet system.';
       bs.classList.add('bad');
@@ -9143,7 +9502,7 @@ function pkRender() {
     }
   }
   const edit = pkEl('pk-bus-edit');
-  if (edit) edit.style.display = (bus && pkEl('pk-bus-form').style.display === 'none') ? '' : 'none';
+  if (edit) edit.style.display = (bus && st.can_manage_buses !== false && pkEl('pk-bus-form').style.display === 'none') ? '' : 'none';
 
   const mode = pkMode();
   const modeNote = pkEl('pk-mode-note');
@@ -12705,6 +13064,8 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   if (mySessionsItem) {
     mySessionsItem.style.display = GUIDE ? '' : 'none';
   }
+  const companyItem = document.getElementById('menu-company');
+  if (companyItem) companyItem.style.display = GUIDE ? '' : 'none';
   const buildToursItem = document.getElementById('menu-build-tours');
   if (buildToursItem) {
     buildToursItem.style.display = GUIDE ? '' : 'none';
@@ -12829,6 +13190,8 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
       openShareScreen();
     } else if (action === 'pickup') {
       openPickupScreen();
+    } else if (action === 'company') {
+      openCompanyScreen();
     } else if (action === 'group-chat') {
       while (screenStack.length) closeScreen();
       openTourChat();

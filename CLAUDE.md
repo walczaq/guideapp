@@ -13,6 +13,17 @@
 - **Maggi** decides policy questions Gísli can't — e.g. whether the company
   may text passengers at the numbers from their bookings.
 
+## Company level (migration 051)
+
+- Fieldnote has a company level above individual guides: shared bus list,
+  per-company text + bus-GPS settings, tours shared with the company, and a
+  live overview for admins. Screen: menu / My sessions → Company.
+- Admins add each guide by their Fieldnote name (no join code); there can be
+  several admins. Only admins edit buses and settings; members pick a bus.
+- A guide in no company keeps personal buses and the server-wide settings.
+- Once a company exists, its buses only move with the **company's** GPS key
+  (shown on the Company screen), not the server-wide `BUS_GPS_KEY`.
+
 ## Pilot facts (Nov 2026)
 
 - The bus GPS system has an API (confirmed by Gísli); its name and access

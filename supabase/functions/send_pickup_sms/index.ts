@@ -24,7 +24,11 @@
 //      the phone", not "delivered".
 //   B. Twilio.
 //
-// Env (Supabase function secrets):
+// Which sender and which credentials: the COMPANY's, if the guide who owns
+// the session belongs to a company that has set up texting (Company screen →
+// Texts; migration 051). Otherwise the server-wide secrets below.
+//
+// Env (Supabase function secrets) — the server-wide fallback:
 //   SMS_GATEWAY_USER, SMS_GATEWAY_PASS — (A) the username / password the app
 //                                  shows under Cloud Server. Setting both
 //                                  selects the phone gateway.
@@ -54,15 +58,38 @@ const TWILIO_FROM = Deno.env.get('TWILIO_FROM') || '';
 const TWILIO_MSID = Deno.env.get('TWILIO_MESSAGING_SERVICE_SID') || '';
 const APP_URL = (Deno.env.get('APP_URL') || 'https://fieldnote.guide').replace(/\/+$/, '');
 
-const GATEWAY_USER = Deno.env.get('SMS_GATEWAY_USER') || '';
-const GATEWAY_PASS = Deno.env.get('SMS_GATEWAY_PASS') || '';
-const GATEWAY_URL = (Deno.env.get('SMS_GATEWAY_URL') || 'https://api.sms-gate.app/3rdparty/v1').replace(/\/+$/, '');
-const useGateway = () => !!(GATEWAY_USER && GATEWAY_PASS);
+const DEFAULT_GATEWAY_URL = 'https://api.sms-gate.app/3rdparty/v1';
+
+// One resolved way of sending — from a company's settings or from the env.
+type Sender =
+  | { kind: 'gateway'; user: string; pass: string; url: string }
+  | { kind: 'twilio'; sid: string; token: string; from: string; msid: string };
+
+function envSender(): Sender | null {
+  const user = Deno.env.get('SMS_GATEWAY_USER') || '';
+  const pass = Deno.env.get('SMS_GATEWAY_PASS') || '';
+  if (user && pass) {
+    return { kind: 'gateway', user, pass, url: (Deno.env.get('SMS_GATEWAY_URL') || DEFAULT_GATEWAY_URL).replace(/\/+$/, '') };
+  }
+  if (TWILIO_SID && TWILIO_TOKEN && (TWILIO_FROM || TWILIO_MSID)) {
+    return { kind: 'twilio', sid: TWILIO_SID, token: TWILIO_TOKEN, from: TWILIO_FROM, msid: TWILIO_MSID };
+  }
+  return null;
+}
+
+function companySender(provider: string | null, cfg: any): Sender | null {
+  const c = cfg && typeof cfg === 'object' ? cfg : {};
+  const s = (k: string) => String(c[k] || '').trim();
+  if (provider === 'gateway' && s('user') && s('pass')) {
+    return { kind: 'gateway', user: s('user'), pass: s('pass'), url: (s('url') || DEFAULT_GATEWAY_URL).replace(/\/+$/, '') };
+  }
+  if (provider === 'twilio' && s('sid') && s('token') && (s('from') || s('messaging_service_sid'))) {
+    return { kind: 'twilio', sid: s('sid'), token: s('token'), from: s('from'), msid: s('messaging_service_sid') };
+  }
+  return null;
+}
 
 const MAX_MESSAGE_CHARS = 300;
-// Parallel sends per round. The phone queues and paces its own sending, so
-// the gateway is fed gently; Twilio's limits are far above 8.
-const BATCH = useGateway() ? 3 : 8;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -76,16 +103,14 @@ function json(status: number, body: unknown) {
   });
 }
 
-const smsConfigured = () => useGateway() || !!(TWILIO_SID && TWILIO_TOKEN && (TWILIO_FROM || TWILIO_MSID));
-
 // One request per passenger (not one for the whole list) so each row in the
 // guide's list gets its own sent / failed status.
-async function sendViaGateway(to: string, text: string): Promise<{ ok: true } | { ok: false; error: string }> {
+async function sendViaGateway(g: Extract<Sender, { kind: 'gateway' }>, to: string, text: string): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    const res = await fetch(`${GATEWAY_URL}/message`, {
+    const res = await fetch(`${g.url}/message`, {
       method: 'POST',
       headers: {
-        authorization: 'Basic ' + btoa(`${GATEWAY_USER}:${GATEWAY_PASS}`),
+        authorization: 'Basic ' + btoa(`${g.user}:${g.pass}`),
         'content-type': 'application/json',
       },
       body: JSON.stringify({ textMessage: { text }, phoneNumbers: [to] }),
@@ -101,18 +126,18 @@ async function sendViaGateway(to: string, text: string): Promise<{ ok: true } | 
   }
 }
 
-async function sendSms(to: string, text: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (useGateway()) return sendViaGateway(to, text);
+async function sendSms(via: Sender, to: string, text: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (via.kind === 'gateway') return sendViaGateway(via, to, text);
   const form = new URLSearchParams({ To: to, Body: text });
-  if (TWILIO_MSID) form.set('MessagingServiceSid', TWILIO_MSID);
-  else form.set('From', TWILIO_FROM);
+  if (via.msid) form.set('MessagingServiceSid', via.msid);
+  else form.set('From', via.from);
   try {
     const res = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(TWILIO_SID)}/Messages.json`,
+      `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(via.sid)}/Messages.json`,
       {
         method: 'POST',
         headers: {
-          authorization: 'Basic ' + btoa(`${TWILIO_SID}:${TWILIO_TOKEN}`),
+          authorization: 'Basic ' + btoa(`${via.sid}:${via.token}`),
           'content-type': 'application/x-www-form-urlencoded',
         },
         body: form,
@@ -149,16 +174,30 @@ Deno.serve(async (req: Request) => {
   if (session.ended_at) return json(403, { error: 'this tour has ended' });
 
   const { data: guide, error: gErr } = await sb
-    .from('guides').select('id').eq('device_token', guideToken).maybeSingle();
+    .from('guides').select('*').eq('device_token', guideToken).maybeSingle();
   if (gErr) return json(500, { error: gErr.message });
   if (!guide) return json(401, { error: 'invalid guide token' });
   if (session.owner_guide_id && session.owner_guide_id !== guide.id) {
     return json(403, { error: 'not your session' });
   }
 
-  if (!smsConfigured()) {
-    return json(503, { code: 'sms_not_configured', error: 'Text messages are not set up on the server yet.' });
+  // The company that runs this tour decides how its texts go out. select('*')
+  // above + the tolerant lookup here keep this working before migration 051.
+  let via: Sender | null = null;
+  const companyId = (guide as any).company_id || null;
+  if (companyId) {
+    const { data: company } = await sb
+      .from('companies').select('sms_provider, sms_config').eq('id', companyId).maybeSingle();
+    if (company) via = companySender(company.sms_provider, company.sms_config);
   }
+  if (!via) via = envSender();
+  if (!via) {
+    return json(503, { code: 'sms_not_configured', error: 'Text messages are not set up yet.' });
+  }
+  // Parallel sends per round. The phone queues and paces its own sending, so
+  // the gateway is fed gently; Twilio's limits are far above 8.
+  const BATCH = via.kind === 'gateway' ? 3 : 8;
+  const sender = via;
 
   const { data: contacts, error: cErr } = await sb
     .from('session_contacts').select('id, phone')
@@ -179,7 +218,7 @@ Deno.serve(async (req: Request) => {
   const list = contacts || [];
   for (let i = 0; i < list.length; i += BATCH) {
     await Promise.all(list.slice(i, i + BATCH).map(async (c: any) => {
-      const r = await sendSms(c.phone, text);
+      const r = await sendSms(sender, c.phone, text);
       const patch = r.ok
         ? { sms_status: 'sent', sms_error: null, sms_sent_at: new Date().toISOString() }
         : { sms_status: 'failed', sms_error: r.error };
