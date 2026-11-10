@@ -15,3 +15,10 @@ node_modules
 .git
 tools
 *.md
+
+# Superseded prototypes (v0.1–v0.4). Kept in the repo for history, but not
+# served: /_redirects sends their old URLs to the current app.
+v0.1.html
+v0.2.html
+v0.3.html
+v0.4.html
