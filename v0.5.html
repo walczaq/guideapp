@@ -21,15 +21,15 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>Fieldnote</title>
 <!-- Boot-critical libraries: SELF-HOSTED same-origin under /vendor (pinned
-     versions, byte-identical to the CDN builds they replace). This removes the
+     versions, unmodified upstream builds). This removes the
      third-party-CDN dependency from first load — the libs now ship from the
      same Cloudflare origin as the HTML, so they're faster and far more reliable
      on weak Iceland/rural signal, and the service worker can precache them
      deterministically as part of the app shell (see sw.js SHELL_URLS). The
      boot-failure safety net below stays as defense-in-depth.
        - mapbox-gl  v3.8.0   (api.mapbox.com/mapbox-gl-js/v3.8.0/*)
-       - supabase-js 2.108.1 (cdn.jsdelivr.net/npm/@supabase/supabase-js@2)
-       - idb        8.0.3    (cdn.jsdelivr.net/npm/idb@8/build/umd.js)
+       - supabase-js 2.118.0 (npm @supabase/supabase-js, dist/umd/supabase.js)
+       - idb        8.0.4    (npm idb, build/umd.js)
        - qrcode-generator 1.4.4 (cdn.jsdelivr.net/npm/qrcode-generator@1.4.4) -->
 <link href="/vendor/mapbox-gl-v3.8.0.css" rel="stylesheet">
 <!-- The lib <script> tags themselves sit at the END of <body>, right before
@@ -3355,8 +3355,8 @@ window.__FN_SB = {
   <div class="boot-splash-dots" aria-hidden="true"><i></i><i></i><i></i></div>
 </div>
 <script src="/vendor/mapbox-gl-v3.8.0.js"></script>
-<script src="/vendor/supabase-js-2.108.1.umd.js"></script>
-<script src="/vendor/idb-8.0.3.umd.js"></script>
+<script src="/vendor/supabase-js-2.118.0.umd.js"></script>
+<script src="/vendor/idb-8.0.4.umd.js"></script>
 <script src="/vendor/qrcode-generator-1.4.4.min.js"></script>
 <!-- Fonts stay on Google's CDN as graceful degradation: a failed font fetch on
      weak signal only falls typography back to Georgia/monospace — it never

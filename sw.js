@@ -25,7 +25,7 @@
 // /sw.js itself is served no-cache (see /_headers), so SW updates propagate
 // on next app open; bumping SHELL_CACHE purges the old shell on activate.
 
-const SHELL_CACHE = 'fieldnote-shell-v8';   // bumped: icon set v2 (icon-192/512 changed under the same filenames)
+const SHELL_CACHE = 'fieldnote-shell-v9';   // bumped: supabase-js 2.118.0 + idb 8.0.4 (new /vendor filenames)
 
 // Same-origin shell assets — these MUST cache for the app to boot offline.
 // Includes the /vendor libs: same origin as the HTML, so if the first page
@@ -42,8 +42,8 @@ const SHELL_URLS = [
   '/badge-72.png',
   '/vendor/mapbox-gl-v3.8.0.css',
   '/vendor/mapbox-gl-v3.8.0.js',
-  '/vendor/supabase-js-2.108.1.umd.js',
-  '/vendor/idb-8.0.3.umd.js',
+  '/vendor/supabase-js-2.118.0.umd.js',
+  '/vendor/idb-8.0.4.umd.js',
   '/vendor/qrcode-generator-1.4.4.min.js',
 ];
 
