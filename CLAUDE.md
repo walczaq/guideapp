@@ -2,6 +2,8 @@
 
 ## People and access
 
+- The tour company is **Nice Travel** (Iceland). It is the first company on
+  Fieldnote's company level and the one the pilot runs with.
 - The repo owner (Filip) builds and guides with Fieldnote but has **no access to
   the operations/office side** of the tour company: the fleet GPS platform, the
   booking system, company accounts and billing (e.g. an SMS provider account).
