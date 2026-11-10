@@ -22,4 +22,5 @@
   through the company phone Filip carries — an Android — via the "SMS Gateway
   for Android" app and `send_pickup_sms`. Tap-to-send is only the fallback.
 - Passenger phone lists reach Filip by email; he pastes them into the app.
-- Volume: at most 19 pickup texts a day (one bus-load).
+- Volume: at most 38 pickup texts a day — 19 passengers maximum, doubled
+  as a safety margin.
