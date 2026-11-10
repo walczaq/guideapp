@@ -17,7 +17,8 @@
 
 - The bus GPS system has an API (confirmed by Gísli); its name and access
   details are still to come.
-- The company has no SMS service. Pickup texts go out from the company phone
-  Filip carries (Pickup screen → "Send from this phone"); the automatic
-  `send_pickup_sms` path stays unused until a provider is chosen.
+- The company has no SMS service. Pickup texts must go out **automatically**
+  (an automated system, not the driver/guide tapping per passenger), sent
+  through the company phone Filip carries — an Android — via the "SMS Gateway
+  for Android" app and `send_pickup_sms`. Tap-to-send is only the fallback.
 - Passenger phone lists reach Filip by email; he pastes them into the app.

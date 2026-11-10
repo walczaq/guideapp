@@ -103,8 +103,10 @@
     <li><strong>Cloudflare</strong> — serves the app itself.</li>
     <li><strong>Mapbox</strong> — serves the map tiles (your device requests
     tiles directly, which involves your IP address, like any website).</li>
-    <li><strong>Twilio</strong> — delivers the pickup text message, if your
-    guide sends one (this involves your phone number and the message).</li>
+    <li><strong>SMS delivery</strong> — the pickup text message, if one is
+    sent, goes out from the tour operator's own phone through a message relay
+    service (SMS Gateway for Android). This involves your phone number and the
+    message.</li>
     <li><strong>Google Firebase Cloud Messaging</strong> and
     <strong>Apple Push Notification service</strong> — deliver push
     notifications to the mobile apps, if you enable them.</li>

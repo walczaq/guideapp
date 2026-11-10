@@ -3180,8 +3180,8 @@ window.__FN_SB = {
         <textarea class="pk-textarea" id="pk-message" maxlength="300" style="min-height:64px;"></textarea>
         <div class="pk-note">The link to join this tour is added at the end automatically.</div>
         <select class="pk-select" id="pk-mode" style="margin-top:12px;" aria-label="How to send the texts">
-          <option value="phone">Send from this phone</option>
-          <option value="auto">Send automatically (needs an SMS service)</option>
+          <option value="auto">Send automatically when pickup starts</option>
+          <option value="phone">Send one by one from this phone</option>
         </select>
         <div class="pk-note" id="pk-mode-note"></div>
         <button type="button" class="pk-btn primary" id="pk-start">Start pickup</button>
@@ -9033,12 +9033,14 @@ const pkMsgKey = () => 'fieldnote.pickup_msg.' + (SESSION ? SESSION.id : '');
 // Short on purpose: with the link it fits one SMS segment (paid per segment).
 function pkDefaultMessage() { return 'See your driver online, click this link:'; }
 
-// How the texts go out. 'phone' (default): the guide taps Text next to each
-// passenger and this phone's own Messages app opens with the text filled in —
-// no SMS service needed. 'auto': the send_pickup_sms edge function sends them
-// all (needs an SMS provider configured on the server).
+// How the texts go out. 'auto' (default): Start pickup has the server send
+// them all (send_pickup_sms edge function — through the company's Android
+// phone running a gateway app, or an SMS provider); nobody types or taps per
+// passenger. 'phone': the fallback when that isn't set up or the gateway
+// phone is off — tap Text next to each passenger and this phone's own
+// Messages app opens with the text filled in.
 const PK_MODE_KEY = 'fieldnote.pickup_mode';
-function pkMode() { let v = ''; try { v = localStorage.getItem(PK_MODE_KEY) || ''; } catch (_e) {} return v === 'auto' ? 'auto' : 'phone'; }
+function pkMode() { let v = ''; try { v = localStorage.getItem(PK_MODE_KEY) || ''; } catch (_e) {} return v === 'phone' ? 'phone' : 'auto'; }
 // Exactly what the server would send: the guide's wording, then the join link.
 function pkSmsBody() {
   const el = pkEl('pk-message');
@@ -9147,7 +9149,7 @@ function pkRender() {
   const modeNote = pkEl('pk-mode-note');
   if (modeNote) modeNote.textContent = mode === 'phone'
     ? 'Tap Text next to a passenger: your Messages app opens with the number and text filled in — just press send.'
-    : 'Start pickup sends the text to everyone at once.';
+    : 'Start pickup sends the text to everyone automatically — nothing to type or tap per passenger.';
   // Contacts
   const list = pkEl('pk-contacts');
   const pending = st.contacts.filter(c => c.sms_status !== 'sent');
@@ -9289,7 +9291,7 @@ async function pkStartPickup() {
       if (!resp.ok) {
         say('Pickup started, but the texts were not sent: ' +
           (resp.status === 404 ? 'text messages are not set up on the server yet.' : (body.error || 'sending failed.')) +
-          ' Share the invite link another way, or try again.', 'bad');
+          ' Try again, or switch to “Send one by one from this phone” below.', 'bad');
       } else if (body.failed) {
         say('Texted ' + body.sent + ' · ' + body.failed + ' failed. Check those numbers and tap again to retry.', 'bad');
       } else {

@@ -14,8 +14,23 @@
 // Only contacts not yet texted (pending / failed) are sent, so tapping again
 // retries failures and covers numbers added later — nobody is texted twice.
 //
+// Two ways to send, chosen by which secrets are set:
+//
+//   A. The company's own Android phone (no per-message provider). The phone
+//      runs the open-source "SMS Gateway for Android" app
+//      (github.com/capcom6/android-sms-gateway) in Cloud Server mode; we hand
+//      each text to the app's API and the phone sends it from its own SIM.
+//      The phone must be switched on with signal. "sent" then means "handed to
+//      the phone", not "delivered".
+//   B. Twilio.
+//
 // Env (Supabase function secrets):
-//   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN — Twilio credentials.
+//   SMS_GATEWAY_USER, SMS_GATEWAY_PASS — (A) the username / password the app
+//                                  shows under Cloud Server. Setting both
+//                                  selects the phone gateway.
+//   SMS_GATEWAY_URL              — (A) API base; default
+//                                  https://api.sms-gate.app/3rdparty/v1
+//   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN — (B) Twilio credentials.
 //   TWILIO_FROM                  — sender: a Twilio number in E.164
 //                                  (+354…) or an alphanumeric sender name.
 //   TWILIO_MESSAGING_SERVICE_SID — alternative to TWILIO_FROM.
@@ -26,8 +41,7 @@
 // Deploy:
 //   supabase functions deploy send_pickup_sms --no-verify-jwt
 //
-// The provider lives entirely in sendSms() — swap that one function to use a
-// different SMS service.
+// The providers live entirely in sendSms() — add another there.
 //
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -40,8 +54,15 @@ const TWILIO_FROM = Deno.env.get('TWILIO_FROM') || '';
 const TWILIO_MSID = Deno.env.get('TWILIO_MESSAGING_SERVICE_SID') || '';
 const APP_URL = (Deno.env.get('APP_URL') || 'https://fieldnote.guide').replace(/\/+$/, '');
 
+const GATEWAY_USER = Deno.env.get('SMS_GATEWAY_USER') || '';
+const GATEWAY_PASS = Deno.env.get('SMS_GATEWAY_PASS') || '';
+const GATEWAY_URL = (Deno.env.get('SMS_GATEWAY_URL') || 'https://api.sms-gate.app/3rdparty/v1').replace(/\/+$/, '');
+const useGateway = () => !!(GATEWAY_USER && GATEWAY_PASS);
+
 const MAX_MESSAGE_CHARS = 300;
-const BATCH = 8;   // parallel sends per round — well under Twilio's rate limits
+// Parallel sends per round. The phone queues and paces its own sending, so
+// the gateway is fed gently; Twilio's limits are far above 8.
+const BATCH = useGateway() ? 3 : 8;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -55,9 +76,33 @@ function json(status: number, body: unknown) {
   });
 }
 
-const smsConfigured = () => !!(TWILIO_SID && TWILIO_TOKEN && (TWILIO_FROM || TWILIO_MSID));
+const smsConfigured = () => useGateway() || !!(TWILIO_SID && TWILIO_TOKEN && (TWILIO_FROM || TWILIO_MSID));
+
+// One request per passenger (not one for the whole list) so each row in the
+// guide's list gets its own sent / failed status.
+async function sendViaGateway(to: string, text: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`${GATEWAY_URL}/message`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Basic ' + btoa(`${GATEWAY_USER}:${GATEWAY_PASS}`),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ textMessage: { text }, phoneNumbers: [to] }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (res.ok) return { ok: true };
+    let msg = res.status === 401 ? 'The company phone rejected the login — check the gateway username and password.'
+      : `The company phone's gateway answered ${res.status}`;
+    try { const j: any = await res.json(); if (res.status !== 401 && j?.message) msg = String(j.message); } catch (_e) { /* keep status text */ }
+    return { ok: false, error: msg.slice(0, 200) };
+  } catch (e) {
+    return { ok: false, error: String((e as Error).message || e).slice(0, 200) };
+  }
+}
 
 async function sendSms(to: string, text: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (useGateway()) return sendViaGateway(to, text);
   const form = new URLSearchParams({ To: to, Body: text });
   if (TWILIO_MSID) form.set('MessagingServiceSid', TWILIO_MSID);
   else form.set('From', TWILIO_FROM);
