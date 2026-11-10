@@ -471,6 +471,75 @@ window.__FN_SB = {
   }
   .boarding-start:active, .boarding-share:active { transform: scale(0.99); }
 
+  /* Pickup screen (guide): bus picker, passenger phone list, "Start pickup". */
+  .pk-section { margin-bottom: 26px; }
+  .pk-h { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.16em; text-transform:uppercase; color:var(--rule); margin-bottom:8px; }
+  .pk-note { font-family:'JetBrains Mono',monospace; font-size:11px; line-height:1.5; color:var(--rule); margin-top:8px; }
+  .pk-note.ok { color:#15803d; }
+  .pk-note.bad { color:#b91c1c; }
+  .pk-input, .pk-select, .pk-textarea {
+    width:100%; box-sizing:border-box; padding:12px; background:var(--paper); color:var(--ink);
+    border:1px solid var(--rule); border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:16px;
+  }
+  .pk-textarea { min-height:96px; resize:vertical; line-height:1.4; font-size:14px; }
+  .pk-row { display:flex; gap:8px; margin-top:8px; }
+  .pk-row > * { min-width:0; }
+  .pk-btn {
+    width:100%; padding:13px; background:var(--paper); color:var(--ink); border:1px solid var(--ink);
+    border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em;
+    text-transform:uppercase; cursor:pointer; margin-top:8px;
+  }
+  .pk-btn.primary { background:var(--ink); color:var(--paper); padding:16px; font-size:13px; }
+  .pk-btn.link { border:none; text-transform:none; letter-spacing:0; text-decoration:underline; width:auto; padding:6px 0; color:var(--rule); }
+  .pk-btn:disabled { opacity:0.45; cursor:default; }
+  .pk-contact { display:flex; align-items:center; gap:10px; padding:10px 2px; border-bottom:1px solid var(--rule-soft); font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--ink); }
+  .pk-contact-main { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pk-contact-main small { color:var(--rule); font-size:11px; margin-left:6px; }
+  .pk-status { font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:var(--rule); white-space:nowrap; }
+  .pk-status.sent { color:#15803d; }
+  .pk-status.failed { color:#b91c1c; }
+  .pk-send { flex:none; padding:7px 12px; border:1px solid var(--ink); border-radius:999px; color:var(--ink); text-decoration:none; font-size:10px; letter-spacing:0.12em; text-transform:uppercase; }
+  .pk-send.done { border-color:var(--rule); color:var(--rule); }
+  .pk-x { background:none; border:none; color:var(--rule); font-size:18px; line-height:1; padding:4px 6px; cursor:pointer; }
+
+  /* Company screen. Above the session manager (z 90) — it opens from there too. */
+  #screen-company { z-index: 95; }
+  .co-row { display:flex; align-items:center; gap:8px; padding:11px 2px; border-bottom:1px solid var(--rule-soft); font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--ink); }
+  .co-row-main { flex:1; min-width:0; }
+  .co-row-main > div { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .co-row-sub { font-size:11px; color:var(--rule); margin-top:3px; line-height:1.45; }
+  .co-row-main > .co-row-sub { white-space:normal; }
+  .co-tag { font-size:9px; letter-spacing:0.12em; text-transform:uppercase; border:1px solid var(--rule); border-radius:999px; padding:2px 7px; color:var(--rule); margin-left:6px; }
+  .co-tag.on { border-color:#15803d; color:#15803d; }
+  .co-mini { flex:none; background:none; border:1px solid var(--rule); border-radius:6px; color:var(--ink); font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:0.08em; text-transform:uppercase; padding:6px 8px; cursor:pointer; text-decoration:none; }
+  .co-mini.danger { color:#b91c1c; border-color:#b91c1c; }
+  .co-empty { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); padding:8px 2px; line-height:1.5; }
+  .co-title { font-family:'Fraunces',serif; font-size:26px; font-weight:700; color:var(--ink); margin-bottom:4px; }
+  .co-code { padding:10px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:10.5px; word-break:break-all; user-select:all; line-height:1.5; }
+
+  /* Bus on the map, from the bus's own GPS tracker (passengers + guide). */
+  .bus-gps-badge {
+    width:34px; height:34px; border-radius:50%; background:var(--accent); color:var(--on-accent);
+    border:3px solid var(--paper); box-shadow:0 2px 8px rgba(0,0,0,0.3);
+    display:flex; align-items:center; justify-content:center; box-sizing:border-box;
+  }
+  .bus-gps-badge svg { width:19px; height:19px; }
+  .bus-gps-badge.stale { background:var(--paper); color:var(--accent); border:3px dashed var(--accent); }
+  /* "Your bus is on its way" pill — passengers, pickup until the tour starts.
+     Same slot as the next-stop banner, which only appears after the start. */
+  .bus-banner {
+    position:absolute; left:50%; transform:translateX(-50%);
+    bottom:calc(env(safe-area-inset-bottom, 0px) + 34px);
+    z-index:6; max-width:calc(100% - 120px);
+    display:flex; align-items:baseline; gap:7px; white-space:nowrap;
+    padding:9px 15px; border-radius:999px; cursor:pointer;
+    background:var(--accent); color:var(--on-accent); border:none;
+    box-shadow:0 2px 10px rgba(0,0,0,0.25);
+    font-family:'Fraunces',serif; font-size:14px; font-weight:700;
+  }
+  .bus-banner[hidden] { display:none; }
+  .bus-banner small { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:400; opacity:0.9; overflow:hidden; text-overflow:ellipsis; }
+
   /* Guide dot — beacon blue. Used both in the guide's own view and (later,
      once chunk F lands) in passenger views when guide visibility is on. */
   .you-dot.guide {
@@ -2682,6 +2751,8 @@ window.__FN_SB = {
 
       <!-- Next-stop banner: name + driving ETA (guide-computed, read from the tour). -->
       <div class="next-stop-banner" id="next-stop-banner" hidden></div>
+      <!-- Pickup: "your bus is on its way" + distance; tap to bring the bus into view. -->
+      <button type="button" class="bus-banner" id="bus-banner" hidden></button>
 
       <svg class="overlay-svg" id="overlay">
         <g id="pins-layer"></g>
@@ -2857,7 +2928,8 @@ window.__FN_SB = {
       <div class="boarding-headline"><span class="boarding-count" id="boarding-count">0</span> <span class="boarding-count-label">aboard</span></div>
       <div class="boarding-sub" id="boarding-sub">Waiting for passengers to join…</div>
       <div class="boarding-list" id="boarding-list"></div>
-      <button class="boarding-share" id="boarding-share" type="button">Share invite link</button>
+      <button class="boarding-share" id="boarding-pickup" type="button">Pickup · text passengers &amp; show bus</button>
+      <button class="boarding-share" id="boarding-share" type="button" style="margin-top:8px;">Share invite link</button>
       <button class="boarding-start" id="boarding-start">Start tour</button>
     </div>
   </div>
@@ -2909,6 +2981,20 @@ window.__FN_SB = {
           <div class="menu-label" data-i18n="share_title">Share invite</div>
           <span class="menu-chevron">›</span>
         </button>
+        <button class="menu-item" data-action="pickup" id="menu-pickup" style="display:none;">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="3" width="16" height="14" rx="2"/>
+              <line x1="4" y1="11" x2="20" y2="11"/>
+              <line x1="7" y1="17" x2="7" y2="20"/>
+              <line x1="17" y1="17" x2="17" y2="20"/>
+              <line x1="8" y1="14" x2="8.01" y2="14"/>
+              <line x1="16" y1="14" x2="16.01" y2="14"/>
+            </svg>
+          </div>
+          <div class="menu-label">Pickup &amp; bus</div>
+          <span class="menu-chevron">›</span>
+        </button>
         <button class="menu-item" data-action="group-chat" id="menu-group-chat" style="display:none;">
           <div class="menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2927,6 +3013,18 @@ window.__FN_SB = {
             </svg>
           </div>
           <div class="menu-label">My sessions</div>
+          <span class="menu-chevron">›</span>
+        </button>
+        <button class="menu-item" data-action="company" id="menu-company" style="display:none;">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="3" width="16" height="18" rx="1"/>
+              <line x1="9" y1="8" x2="9.01" y2="8"/><line x1="15" y1="8" x2="15.01" y2="8"/>
+              <line x1="9" y1="12" x2="9.01" y2="12"/><line x1="15" y1="12" x2="15.01" y2="12"/>
+              <path d="M10 21v-4h4v4"/>
+            </svg>
+          </div>
+          <div class="menu-label">Company</div>
           <span class="menu-chevron">›</span>
         </button>
         <button class="menu-item" data-action="build-tours" id="menu-build-tours" style="display:none;">
@@ -3057,6 +3155,83 @@ window.__FN_SB = {
       <!-- Discreet developer-info link (same text-link style; replaces the old "About" row). -->
       <button type="button" class="menu-guidelogin-link" id="menu-dev-info" style="margin-top:2px;">Developer info</button>
     </div>
+  </div>
+
+  <!-- PICKUP (guide only) — pick today's bus, paste the passengers' phone
+       numbers, and start pickup: everyone is texted the join link and sees
+       the bus (from its own GPS tracker) approach on their map. -->
+  <div class="screen" id="screen-pickup">
+    <div class="status-bar"></div>
+    <div class="screen-header">
+      <button class="back-btn" data-close-screen>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </button>
+      <div class="screen-title">Pickup</div>
+    </div>
+    <div class="screen-body">
+      <div class="pk-note bad" id="pk-error" style="display:none; margin:0 0 18px;"></div>
+
+      <div class="pk-section">
+        <div class="pk-h">Bus</div>
+        <select class="pk-select" id="pk-bus"></select>
+        <div class="pk-note" id="pk-bus-status"></div>
+        <button type="button" class="pk-btn link" id="pk-bus-edit" style="display:none;">Edit or remove this bus</button>
+        <div id="pk-bus-form" style="display:none; margin-top:10px;">
+          <input class="pk-input" id="pk-bus-name" placeholder="Bus name, e.g. Bus 7" maxlength="60" autocomplete="off">
+          <input class="pk-input" id="pk-bus-tracker" placeholder="Tracker ID in your fleet system" maxlength="80" autocomplete="off" autocapitalize="off" style="margin-top:8px;">
+          <div class="pk-note">The tracker ID is how your fleet GPS system identifies this bus — its vehicle ID, name or number plate, exactly as shown there.</div>
+          <div class="pk-row">
+            <button type="button" class="pk-btn" id="pk-bus-cancel">Cancel</button>
+            <button type="button" class="pk-btn" id="pk-bus-save" style="background:var(--ink); color:var(--paper);">Save bus</button>
+          </div>
+          <button type="button" class="pk-btn link" id="pk-bus-delete" style="display:none; color:#b91c1c;">Remove this bus</button>
+        </div>
+      </div>
+
+      <div class="pk-section">
+        <div class="pk-h" id="pk-contacts-h">Passengers to text</div>
+        <div id="pk-contacts"></div>
+        <textarea class="pk-textarea" id="pk-paste" style="margin-top:10px;" placeholder="Paste phone numbers — one passenger per line, name optional:&#10;Anna Jónsdóttir +354 611 2345&#10;+44 7911 123456"></textarea>
+        <div class="pk-row">
+          <input class="pk-input" id="pk-cc" style="flex:0 0 92px;" maxlength="5" inputmode="tel" aria-label="Country code for numbers without one">
+          <button type="button" class="pk-btn" id="pk-add" style="margin-top:0;">Add numbers</button>
+        </div>
+        <div class="pk-note">Numbers written without a country code get the one on the left.</div>
+      </div>
+
+      <div class="pk-section">
+        <div class="pk-h">Text message</div>
+        <textarea class="pk-textarea" id="pk-message" maxlength="300" style="min-height:64px;"></textarea>
+        <div class="pk-note">The link to join this tour is added at the end automatically.</div>
+        <select class="pk-select" id="pk-mode" style="margin-top:12px;" aria-label="How to send the texts">
+          <option value="auto">Send automatically when pickup starts</option>
+          <option value="phone">Send one by one from this phone</option>
+        </select>
+        <div class="pk-note" id="pk-mode-note"></div>
+        <button type="button" class="pk-btn primary" id="pk-start">Start pickup</button>
+        <div class="pk-note" id="pk-result"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPANY (logged-in guides) — the company's people, buses, text + GPS
+       settings and, for admins, every tour running right now. Body is built
+       by coRender(). -->
+  <div class="screen" id="screen-company">
+    <div class="status-bar"></div>
+    <div class="screen-header">
+      <button class="back-btn" data-close-screen>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </button>
+      <div class="screen-title">Company</div>
+    </div>
+    <div class="screen-body" id="co-body"></div>
   </div>
 
   <!-- SHARE INVITE -->
@@ -3583,7 +3758,7 @@ const I18N = {
     menu_title: 'Menu', notif_on: 'Notifications · on', notif_off: 'Notifications · off', notif_blocked: 'Notifications blocked · tap to fix',
     arr_stop: 'Stop', arr_now: 'Now', arr_time_at_stop: 'Time at stop', arr_departure: 'Departure', arr_time_left: 'Time left', arr_weather: 'Weather', arr_tba: 'to be added', arr_checking: 'checking…',
     warn_info: 'Info', warn_caution: 'Caution', warn_danger: 'Danger', warn_note: 'Note', bus_headback: 'Time to head back to the bus',
-    warn_fb_info: 'Heads up from your guide.', warn_fb_caution: 'Please take care.', warn_fb_danger: 'Take this seriously.', dep_now: 'Departure is now',
+    warn_fb_info: 'Heads up from your guide.', bus_label: 'Bus', bus_coming: 'Your bus is on its way', bus_here: 'Your bus is here', bus_away: '{d} away', bus_seen_ago: '{m} min ago', warn_fb_caution: 'Please take care.', warn_fb_danger: 'Take this seriously.', dep_now: 'Departure is now',
   },
   es: {
     gate_title: 'Elige tu idioma', gate_sub: 'Puedes cambiarlo luego en el menú.',
@@ -3655,7 +3830,7 @@ const I18N = {
     share_title: 'Compartir invitación', share_sub: 'Escanéalo con la cámara de otro teléfono o copia el enlace.', share_copy: 'Copiar enlace', share_copied: 'Copiado',
     menu_title: 'Menú', notif_on: 'Notificaciones · activadas', notif_off: 'Notificaciones · desactivadas', notif_blocked: 'Notificaciones bloqueadas · toca para arreglar',
     arr_stop: 'Parada', arr_now: 'Ahora', arr_time_at_stop: 'Tiempo en la parada', arr_departure: 'Salida', arr_time_left: 'Tiempo restante', arr_weather: 'Clima', arr_tba: 'por confirmar', arr_checking: 'comprobando…',
-    warn_info: 'Información', warn_caution: 'Precaución', warn_danger: 'Peligro', warn_note: 'Nota', bus_headback: 'Hora de volver al autobús',
+    warn_info: 'Información', bus_label: 'Bus', bus_coming: 'Tu autobús está en camino', bus_here: 'Tu autobús ha llegado', bus_away: 'a {d}', bus_seen_ago: 'hace {m} min', warn_caution: 'Precaución', warn_danger: 'Peligro', warn_note: 'Nota', bus_headback: 'Hora de volver al autobús',
     warn_fb_info: 'Aviso de tu guía.', warn_fb_caution: 'Por favor, ten cuidado.', warn_fb_danger: 'Tómatelo en serio.', dep_now: 'La salida es ahora a las',
   },
   zh: {
@@ -3728,7 +3903,7 @@ const I18N = {
     share_title: '分享邀请', share_sub: '用另一部手机的相机扫描，或复制链接。', share_copy: '复制链接', share_copied: '已复制',
     menu_title: '菜单', notif_on: '通知 · 已开启', notif_off: '通知 · 已关闭', notif_blocked: '通知被屏蔽 · 点按修复',
     arr_stop: '停靠点', arr_now: '现在', arr_time_at_stop: '停留时间', arr_departure: '出发', arr_time_left: '剩余时间', arr_weather: '天气', arr_tba: '待定', arr_checking: '查询中…',
-    warn_info: '提示', warn_caution: '注意', warn_danger: '危险', warn_note: '备注', bus_headback: '该回到大巴了',
+    warn_info: '提示', bus_label: '大巴', bus_coming: '大巴正在赶来', bus_here: '大巴已到达', bus_away: '距你 {d}', bus_seen_ago: '{m} 分钟前', warn_caution: '注意', warn_danger: '危险', warn_note: '备注', bus_headback: '该回到大巴了',
     warn_fb_info: '向导有提醒。', warn_fb_caution: '请小心。', warn_fb_danger: '请认真对待。', dep_now: '出发时间现在为',
   },
 };
@@ -6912,6 +7087,7 @@ async function showSessionManager() {
     <div class="sm-footer">
       <button class="sm-newbtn" id="sm-new">+ Start new session</button>
       <button class="sm-btn" id="sm-build" style="width:100%; margin-top:8px;">Build / edit tours</button>
+      <button class="sm-btn" id="sm-company" style="width:100%; margin-top:8px;">Company</button>
       <button class="sm-btn" id="sm-chat" style="width:100%; margin-top:8px;">💬 Guides room</button>
     </div>
   `;
@@ -6928,6 +7104,7 @@ async function showSessionManager() {
     if (m) m.remove();
     showTourManager();
   });
+  document.getElementById('sm-company').addEventListener('click', () => { openCompanyScreen(); });
   document.getElementById('sm-chat').addEventListener('click', () => {
     showGuideChat();   // overlay; My Sessions stays underneath
   });
@@ -7246,35 +7423,43 @@ async function showTourManager() {
   });
   document.getElementById('tb-new').addEventListener('click', tbNewTourFlow);
   _tbTours = await tbListTours();
+  // Sharing needs a company; quiet if the server has no company level yet.
+  try { _tbInCompany = !!(await coFetchCompany()); } catch (_e) { _tbInCompany = false; }
   _tbTourDeleteConfirm = null;
   _tbTranslatedCache = {};
   renderTbTourList();
 }
 
+let _tbInCompany = false;
 function renderTbTourList() {
   const list = document.getElementById('tb-list');
   if (!list) return;
   if (!_tbTours.length) { list.innerHTML = '<div class="tb-empty">No tours yet.<br>Create one below.</div>'; return; }
   list.innerHTML = '';
   for (const t of _tbTours) {
-    const own = !!t.owner_guide_id;
+    // Three kinds: mine, a colleague's tour shared with our company (run or
+    // duplicate it, but only its builder edits it), and the base tours.
+    const own = !!t.owner_guide_id && (!GUIDE || t.owner_guide_id === GUIDE.id);
+    const colleague = !!t.owner_guide_id && !own;
     const row = document.createElement('div');
     row.className = 'tb-row' + (own ? '' : ' base');
     const name = document.createElement('div');
     name.className = 'tb-row-name';
     name.innerHTML = (t.name || '(untitled)').replace(/</g, '&lt;') +
-      `<span class="tb-tag ${own ? 'yours' : ''}">${own ? 'Yours' : 'Base'}</span>`;
+      `<span class="tb-tag ${own ? 'yours' : ''}">${own ? 'Yours' : colleague ? 'Company' : 'Base'}</span>` +
+      (own && t.company_id ? '<span class="tb-tag">Shared</span>' : '');
     row.appendChild(name);
+    if (colleague && t.owner_name) { const by = document.createElement('div'); by.className = 'tb-row-sub'; by.textContent = 'Built by ' + t.owner_name; row.appendChild(by); }
     if (t.subtitle) { const s = document.createElement('div'); s.className = 'tb-row-sub'; s.textContent = t.subtitle; row.appendChild(s); }
     const meta = document.createElement('div'); meta.className = 'tb-row-meta';
     meta.textContent = `${t.stop_count} stop${t.stop_count === 1 ? '' : 's'}`;
     row.appendChild(meta);
     const actions = document.createElement('div'); actions.className = 'tb-actions';
-    actions.appendChild(smMakeBtn('Edit', 'primary', () => openTourEditor(t.id)));
+    if (!colleague) actions.appendChild(smMakeBtn('Edit', 'primary', () => openTourEditor(t.id)));
     // Translate → ES + ZH via the edge function (DeepL). Lives here on the
     // list (not buried in the editor) so guides can translate without opening.
     // Only tours with stops can be translated.
-    if (Number(t.stop_count) > 0) {
+    if (Number(t.stop_count) > 0 && !colleague) {
       const trBtn = smMakeBtn('🌐 Translate', '', async (ev) => {
         ev.stopPropagation();
         const btn = ev.currentTarget;
@@ -7309,6 +7494,17 @@ function renderTbTourList() {
       openTourEditor(r.tour.id);
     });
     actions.appendChild(dupBtn);
+    // Share with the company: every guide in it can then run or duplicate it.
+    if (own && _tbInCompany) {
+      actions.appendChild(smMakeBtn(t.company_id ? 'Stop sharing' : 'Share with company', '', async (ev) => {
+        const btn = ev.currentTarget; btn.disabled = true;
+        const { error } = await supabaseClient.rpc('set_tour_shared',
+          { p_guide_token: getStoredGuideToken(), p_tour_id: t.id, p_shared: !t.company_id });
+        if (error) { showToast(error.message || 'Could not change sharing.'); btn.disabled = false; return; }
+        _tbTours = await tbListTours();
+        renderTbTourList();
+      }));
+    }
     if (own) {
       if (_tbTourDeleteConfirm === t.id) {
         actions.appendChild(smMakeBtn('Tap to confirm', 'danger', async () => {
@@ -8420,7 +8616,7 @@ async function populateTourPicker() {
   }
   if (startBtn) { startBtn.disabled = false; startBtn.style.opacity = ''; startBtn.style.cursor = 'pointer'; }
   sel.innerHTML = tours.map(t => {
-    const mine = t.owner_guide_id ? ' (yours)' : '';
+    const mine = !t.owner_guide_id ? '' : (!GUIDE || t.owner_guide_id === GUIDE.id) ? ' (yours)' : ' (company)';
     const n = Number(t.stop_count) || 0;
     const stops = `${n} stop${n === 1 ? '' : 's'}`;
     const slug = (t.slug || '').replace(/"/g, '&quot;');
@@ -8882,6 +9078,638 @@ async function startTour() {
   if (b) b.addEventListener('click', () => { startTour(); });
   const sh = document.getElementById('boarding-share');
   if (sh) sh.addEventListener('click', () => { try { openShareScreen(); } catch (_e) {} });
+  const pk = document.getElementById('boarding-pickup');
+  if (pk) pk.addEventListener('click', () => { try { openPickupScreen(); } catch (_e) {} });
+})();
+
+// ── Company ─────────────────────────────────────────────────────────────────
+// The level above a single guide (migration 051): a company's people, its bus
+// list, how its pickup texts are sent, its fleet GPS connection — and for
+// admins an overview of every tour the company is running right now.
+// Admins add guides by their Fieldnote name; members just see who's in it.
+const COMPANY = { loaded: false, data: null, live: [], error: '', timer: null, editBus: null, addingBus: false };
+
+async function coRpc(fn, args) {
+  const { data, error } = await supabaseClient.rpc(fn, Object.assign({ p_guide_token: getStoredGuideToken() }, args || {}));
+  if (error) throw new Error(error.message || 'Request failed');
+  return data;
+}
+async function coFetchCompany() { return await coRpc('get_company'); }
+
+async function coRefresh() {
+  try {
+    COMPANY.data = await coFetchCompany();
+    COMPANY.error = '';
+    COMPANY.live = (COMPANY.data && COMPANY.data.role === 'admin') ? (await coRpc('list_company_live_sessions') || []) : [];
+  } catch (e) {
+    const m = String(e.message || '');
+    COMPANY.error = /could not find|does not exist|schema cache/i.test(m)
+      ? 'Companies aren’t switched on for this server yet.' : m;
+  }
+  COMPANY.loaded = true;
+  coRender();
+}
+
+function openCompanyScreen() {
+  if (!GUIDE) return;
+  COMPANY.editBus = null; COMPANY.addingBus = false;
+  coRender();
+  openScreen('screen-company');
+  coRefresh();
+  // Keep the live overview current while the screen is open — but never
+  // redraw under someone who is typing into one of its forms.
+  if (COMPANY.timer) clearInterval(COMPANY.timer);
+  COMPANY.timer = setInterval(() => {
+    const scr = document.getElementById('screen-company');
+    if (!scr || !scr.classList.contains('visible')) { clearInterval(COMPANY.timer); COMPANY.timer = null; return; }
+    const a = document.activeElement;
+    const typing = a && scr.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+    if (!document.hidden && !typing) coRefresh();
+  }, 15000);
+}
+
+// Small DOM builders — everything on this screen is user-entered text, so
+// nothing goes through innerHTML.
+function coEl(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function coBtn(text, cls, fn) { const b = coEl('button', cls, text); b.type = 'button'; b.addEventListener('click', fn); return b; }
+function coInput(placeholder, value, opts) {
+  const i = coEl('input', 'pk-input');
+  i.placeholder = placeholder || ''; i.value = value || ''; i.autocomplete = 'off';
+  i.setAttribute('autocapitalize', 'off');
+  Object.assign(i, opts || {});
+  return i;
+}
+function coSection(title) { const s = coEl('div', 'pk-section'); s.appendChild(coEl('div', 'pk-h', title)); return s; }
+// Run an admin action, then reload; errors surface as a toast.
+async function coDo(fn) {
+  try { await fn(); } catch (e) { showToast(e.message || 'That didn’t work.'); }
+  await coRefresh();
+}
+function coAgo(iso) {
+  if (!iso) return null;
+  const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
+  return s < 90 ? s + ' s ago' : s < 5400 ? Math.round(s / 60) + ' min ago' : Math.round(s / 3600) + ' h ago';
+}
+function coClock(iso) { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+
+function coRender() {
+  const body = document.getElementById('co-body');
+  if (!body) return;
+  body.textContent = '';
+  if (COMPANY.error) { body.appendChild(coEl('div', 'pk-note bad', COMPANY.error)); return; }
+  if (!COMPANY.loaded) { body.appendChild(coEl('div', 'co-empty', 'Loading…')); return; }
+  const c = COMPANY.data;
+
+  // ── Not in a company ──
+  if (!c) {
+    body.appendChild(coEl('div', 'co-title', 'No company yet'));
+    body.appendChild(coEl('div', 'pk-note',
+      'A company shares one bus list, one way of texting passengers and its tours between all of its guides, and gives the office a live view of every tour.'));
+    const join = coSection('Joining your employer’s company');
+    join.style.marginTop = '22px';
+    join.appendChild(coEl('div', 'pk-note', 'Ask a company admin to add you. They need your Fieldnote name:'));
+    join.appendChild(coEl('div', 'co-code', GUIDE.name || ''));
+    body.appendChild(join);
+    const make = coSection('Starting a new company');
+    const name = coInput('Company name', '', { maxLength: 80 });
+    name.setAttribute('autocapitalize', 'words');
+    make.appendChild(name);
+    make.appendChild(coBtn('Create company', 'pk-btn', () => coDo(async () => {
+      if (!name.value.trim()) throw new Error('Give the company a name.');
+      await coRpc('create_company', { p_name: name.value.trim() });
+    })));
+    make.appendChild(coEl('div', 'pk-note', 'You become its first admin, and buses you already added become the company’s.'));
+    body.appendChild(make);
+    return;
+  }
+
+  const admin = c.role === 'admin';
+  body.appendChild(coEl('div', 'co-title', c.name));
+  body.appendChild(coEl('div', 'pk-note', admin ? 'You’re an admin of this company.'
+    : 'You’re a member. Admins manage the buses, text messages and bus GPS.'));
+  body.lastChild.style.marginBottom = '22px';
+
+  // ── Live overview (admins) ──
+  if (admin) {
+    const sec = coSection('Running now · ' + COMPANY.live.length);
+    if (!COMPANY.live.length) sec.appendChild(coEl('div', 'co-empty', 'No tours are running at the moment.'));
+    for (const s of COMPANY.live) {
+      const row = coEl('div', 'co-row');
+      const main = coEl('div', 'co-row-main');
+      const top = coEl('div', null, (s.tour || 'Tour') + ' · ' + (s.guide || ''));
+      const phase = s.tour_started_at ? 'On tour since ' + coClock(s.tour_started_at)
+        : s.pickup_started_at ? 'Pickup since ' + coClock(s.pickup_started_at)
+        : 'Boarding since ' + coClock(s.started_at);
+      const ago = coAgo(s.bus_last_fix_at);
+      const bits = [phase, s.joined + ' joined'];
+      if (s.contacts) bits.push(s.texted + '/' + s.contacts + ' texted');
+      bits.push(s.bus ? s.bus + (ago ? ' (GPS ' + ago + ')' : ' (no GPS yet)') : 'no bus');
+      main.appendChild(top);
+      main.appendChild(coEl('div', 'co-row-sub', bits.join(' · ')));
+      row.appendChild(main);
+      // Opens the tour the way a passenger sees it — look, don't drive.
+      const a = coEl('a', 'co-mini', 'Map');
+      a.href = window.location.pathname + '?session=' + encodeURIComponent(s.id) + '&role=passenger';
+      a.target = '_blank'; a.rel = 'noopener';
+      row.appendChild(a);
+      sec.appendChild(row);
+    }
+    body.appendChild(sec);
+  }
+
+  // ── People ──
+  {
+    const sec = coSection('People · ' + c.members.length);
+    for (const m of c.members) {
+      const row = coEl('div', 'co-row');
+      const main = coEl('div', 'co-row-main');
+      const line = coEl('div', null, m.name + (m.id === c.me ? ' (you)' : ''));
+      if (m.role === 'admin') line.appendChild(coEl('span', 'co-tag on', 'Admin'));
+      main.appendChild(line);
+      row.appendChild(main);
+      if (admin) {
+        row.appendChild(coBtn(m.role === 'admin' ? 'Make member' : 'Make admin', 'co-mini', () => coDo(() =>
+          coRpc('company_set_member', { p_guide_id: m.id, p_role: m.role === 'admin' ? 'member' : 'admin' }))));
+        row.appendChild(coBtn('Remove', 'co-mini danger', () => {
+          if (!confirm('Remove ' + m.name + ' from ' + c.name + '?')) return;
+          coDo(() => coRpc('company_set_member', { p_guide_id: m.id, p_role: null }));
+        }));
+      }
+      sec.appendChild(row);
+    }
+    if (admin) {
+      const name = coInput('Guide’s Fieldnote name');
+      name.style.marginTop = '10px';
+      sec.appendChild(name);
+      sec.appendChild(coBtn('Add to company', 'pk-btn', () => coDo(async () => {
+        if (!name.value.trim()) throw new Error('Type the name the guide logs in to Fieldnote with.');
+        await coRpc('company_add_member', { p_guide_name: name.value.trim() });
+      })));
+      sec.appendChild(coEl('div', 'pk-note', 'The guide needs a Fieldnote account first; use the exact name they log in with.'));
+    }
+    body.appendChild(sec);
+  }
+  if (!admin) return;
+
+  // ── Buses ──
+  {
+    const sec = coSection('Buses · ' + c.buses.length);
+    const form = (bus) => {
+      const box = coEl('div');
+      box.style.margin = '10px 0';
+      const name = coInput('Bus name, e.g. Bus 7', bus ? bus.name : '', { maxLength: 60 });
+      const tracker = coInput('Tracker ID in your fleet system', bus ? bus.tracker_id : '', { maxLength: 80 });
+      tracker.style.marginTop = '8px';
+      box.appendChild(name); box.appendChild(tracker);
+      const r = coEl('div', 'pk-row');
+      r.appendChild(coBtn('Cancel', 'pk-btn', () => { COMPANY.editBus = null; COMPANY.addingBus = false; coRender(); }));
+      r.appendChild(coBtn('Save bus', 'pk-btn', () => coDo(async () => {
+        if (!name.value.trim() || !tracker.value.trim()) throw new Error('Give the bus a name and its tracker ID.');
+        await coRpc('save_bus', { p_name: name.value.trim(), p_tracker_id: tracker.value.trim(), p_bus_id: bus ? bus.id : null });
+        COMPANY.editBus = null; COMPANY.addingBus = false;
+      })));
+      box.appendChild(r);
+      return box;
+    };
+    for (const b of c.buses) {
+      if (COMPANY.editBus === b.id) { sec.appendChild(form(b)); continue; }
+      const row = coEl('div', 'co-row');
+      const main = coEl('div', 'co-row-main');
+      main.appendChild(coEl('div', null, b.name));
+      const ago = coAgo(b.last_fix_at);
+      main.appendChild(coEl('div', 'co-row-sub', 'Tracker ' + b.tracker_id + ' · ' + (ago ? 'GPS ' + ago : 'no GPS received yet')));
+      row.appendChild(main);
+      row.appendChild(coBtn('Edit', 'co-mini', () => { COMPANY.editBus = b.id; COMPANY.addingBus = false; coRender(); }));
+      row.appendChild(coBtn('Remove', 'co-mini danger', () => {
+        if (!confirm('Remove ' + b.name + ' from the company’s buses?')) return;
+        coDo(() => coRpc('delete_bus', { p_bus_id: b.id }));
+      }));
+      sec.appendChild(row);
+    }
+    if (COMPANY.addingBus) sec.appendChild(form(null));
+    else sec.appendChild(coBtn('+ Add a bus', 'pk-btn', () => { COMPANY.addingBus = true; COMPANY.editBus = null; coRender(); }));
+    sec.appendChild(coEl('div', 'pk-note', 'The tracker ID is how your fleet GPS system identifies the bus — its vehicle ID, name or number plate, exactly as shown there.'));
+    body.appendChild(sec);
+  }
+
+  // ── Pickup texts ──
+  {
+    const sec = coSection('Pickup texts');
+    const sel = coEl('select', 'pk-select');
+    for (const [v, label] of [['', 'Not set up'], ['gateway', 'Company Android phone'], ['twilio', 'Twilio']]) {
+      const o = coEl('option', null, label); o.value = v; sel.appendChild(o);
+    }
+    sel.value = COMPANY.smsPick != null ? COMPANY.smsPick : (c.sms_provider || '');
+    sel.addEventListener('change', () => { COMPANY.smsPick = sel.value; coRender(); });
+    sec.appendChild(sel);
+    const kind = sel.value;
+    const saved = c.sms_provider === kind ? c.sms : {};
+    const fields = {};
+    const field = (key, placeholder, value, secretSet) => {
+      const i = coInput(secretSet ? 'Saved — leave empty to keep' : placeholder, value);
+      i.style.marginTop = '8px';
+      fields[key] = i; sec.appendChild(i);
+    };
+    if (kind === 'gateway') {
+      sec.appendChild(coEl('div', 'pk-note', 'Texts go out from a company Android phone running the “SMS Gateway for Android” app with Cloud Server switched on. Enter the username and password the app shows. The phone must be on and have signal when pickup starts.'));
+      field('user', 'Username from the app', saved.user);
+      field('pass', 'Password from the app', '', saved.pass_set);
+    } else if (kind === 'twilio') {
+      sec.appendChild(coEl('div', 'pk-note', 'Texts are sent by Twilio from your account.'));
+      field('sid', 'Account SID', saved.sid);
+      field('token', 'Auth token', '', saved.token_set);
+      field('from', 'Sender number or name', saved.from);
+    } else {
+      sec.appendChild(coEl('div', 'pk-note', 'Guides can still text passengers one by one from their own phone.'));
+    }
+    if (kind !== (c.sms_provider || '') || kind) {
+      sec.appendChild(coBtn(kind ? 'Save text settings' : 'Turn off', 'pk-btn', () => coDo(async () => {
+        const cfg = {};
+        for (const k in fields) cfg[k] = fields[k].value.trim();
+        await coRpc('set_company_sms', { p_provider: kind || null, p_config: cfg });
+        COMPANY.smsPick = null;
+        showToast('Saved.');
+      })));
+    }
+    body.appendChild(sec);
+  }
+
+  // ── Bus GPS ──
+  {
+    const sec = coSection('Bus GPS');
+    sec.appendChild(coEl('div', 'pk-note', 'Either your fleet system sends bus positions to this address:'));
+    sec.firstChild.nextSibling.style.marginTop = '0';
+    const pushUrl = `${SUPABASE_URL}/functions/v1/bus_gps?key=${c.bus_gps_key}`;
+    const code = coEl('div', 'co-code', pushUrl);
+    code.style.marginTop = '8px';
+    sec.appendChild(code);
+    const r = coEl('div', 'pk-row');
+    r.appendChild(coBtn('Copy address', 'pk-btn', async () => {
+      try { await navigator.clipboard.writeText(pushUrl); showToast('Copied.'); } catch (_e) { showToast('Select the address and copy it.'); }
+    }));
+    r.appendChild(coBtn('New key', 'pk-btn', () => {
+      if (!confirm('Issue a new key? The current address stops working straight away.')) return;
+      coDo(() => coRpc('set_company_bus_feed', { p_feed_url: null, p_headers: null, p_new_key: true }));
+    }));
+    sec.appendChild(r);
+    sec.appendChild(coEl('div', 'pk-note', 'Anyone with this address can move your buses on the map — treat it like a password.'));
+    const note2 = coEl('div', 'pk-note', 'Or Fieldnote fetches the positions from your fleet system’s API:');
+    note2.style.marginTop = '18px';
+    sec.appendChild(note2);
+    const feed = coInput('https://… address that returns current positions', c.bus_feed_url, { inputMode: 'url' });
+    feed.style.marginTop = '8px';
+    const hName = coInput('Header name, e.g. Authorization', '');
+    hName.style.marginTop = '8px';
+    const hVal = coInput(c.bus_feed_headers_set ? 'Saved — leave both empty to keep' : 'Header value, e.g. Bearer abc123', '');
+    hVal.style.marginTop = '8px';
+    sec.appendChild(feed); sec.appendChild(hName); sec.appendChild(hVal);
+    sec.appendChild(coBtn('Save fleet address', 'pk-btn', () => coDo(async () => {
+      const n = hName.value.trim(), v = hVal.value.trim();
+      if ((n && !v) || (!n && v)) throw new Error('Fill in both the header name and its value, or neither.');
+      const headers = n ? { [n]: v } : null;   // null = keep what's saved
+      await coRpc('set_company_bus_feed', { p_feed_url: feed.value.trim(), p_headers: headers, p_new_key: false });
+      showToast('Saved.');
+    })));
+    body.appendChild(sec);
+  }
+}
+
+// ── Pickup (guide) ──────────────────────────────────────────────────────────
+// Before the tour starts: pick today's bus, paste the passengers' phone
+// numbers, tap Start pickup. Everyone is texted the join link (send_pickup_sms
+// edge function) and — because the bus is attached to the session — sees the
+// bus's tracker position on their map from now until the session ends
+// (bus_gps edge function → guide_locations 'bus_gps'). Server side: migration
+// 050. The screen also stays reachable from the menu mid-tour to swap buses
+// or text late additions.
+const PICKUP = { state: null, busy: false, editingBusId: null, timer: null };
+const PK_CC_KEY = 'fieldnote.pickup_cc';
+const pkEl = (id) => document.getElementById(id);
+const pkMsgKey = () => 'fieldnote.pickup_msg.' + (SESSION ? SESSION.id : '');
+
+// Short on purpose: with the link it fits one SMS segment (paid per segment).
+function pkDefaultMessage() { return 'See your driver online, click this link:'; }
+
+// How the texts go out. 'auto' (default): Start pickup has the server send
+// them all (send_pickup_sms edge function — through the company's Android
+// phone running a gateway app, or an SMS provider); nobody types or taps per
+// passenger. 'phone': the fallback when that isn't set up or the gateway
+// phone is off — tap Text next to each passenger and this phone's own
+// Messages app opens with the text filled in.
+const PK_MODE_KEY = 'fieldnote.pickup_mode';
+function pkMode() { let v = ''; try { v = localStorage.getItem(PK_MODE_KEY) || ''; } catch (_e) {} return v === 'phone' ? 'phone' : 'auto'; }
+// Exactly what the server would send: the guide's wording, then the join link.
+function pkSmsBody() {
+  const el = pkEl('pk-message');
+  const msg = ((el && el.value) || '').replace(/https?:\/\/\S+/gi, ' ').replace(/\s+/g, ' ').trim() || pkDefaultMessage();
+  return msg + '\n' + inviteUrlFor(SESSION.id);
+}
+// "sms:<number>?&body=…" is the one spelling both iOS and Android accept.
+function pkSmsHref(phone) { return 'sms:' + phone + '?&body=' + encodeURIComponent(pkSmsBody()); }
+
+function pkShowError(msg) {
+  const el = pkEl('pk-error');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.display = msg ? '' : 'none';
+}
+
+async function pkRpc(fn, args) {
+  const { data, error } = await supabaseClient.rpc(fn, Object.assign(
+    { p_session_id: SESSION.id, p_guide_token: getStoredGuideToken() }, args || {}));
+  if (error) throw new Error(error.message || 'Request failed');
+  return data;
+}
+
+async function pkRefresh() {
+  if (!SESSION || !getStoredGuideToken()) return;
+  try {
+    PICKUP.state = await pkRpc('get_pickup_state');
+    pkShowError('');
+  } catch (e) {
+    // PGRST202 / "Could not find the function" = migration 050 not applied.
+    const m = String(e.message || '');
+    pkShowError(/could not find|does not exist|schema cache/i.test(m)
+      ? 'Pickup isn’t switched on for this server yet.' : m);
+  }
+  pkRender();
+}
+
+function openPickupScreen() {
+  if (!SESSION || ROLE !== 'guide') return;
+  const cc = pkEl('pk-cc');
+  if (cc && !cc.value) { let v = ''; try { v = localStorage.getItem(PK_CC_KEY) || ''; } catch (_e) {} cc.value = v || '+354'; }
+  const msg = pkEl('pk-message');
+  if (msg && !msg.value) { let v = ''; try { v = localStorage.getItem(pkMsgKey()) || ''; } catch (_e) {} msg.value = v || pkDefaultMessage(); }
+  const res = pkEl('pk-result');
+  if (res) delete res.dataset.sticky;
+  const modeSel = pkEl('pk-mode');
+  if (modeSel) modeSel.value = pkMode();
+  pkBusForm(false);
+  pkRender();
+  openScreen('screen-pickup');
+  pkRefresh();
+  // Keep the bus's "GPS live" line and text statuses fresh while it's open.
+  if (PICKUP.timer) clearInterval(PICKUP.timer);
+  PICKUP.timer = setInterval(() => {
+    const scr = pkEl('screen-pickup');
+    if (!scr || !scr.classList.contains('visible')) { clearInterval(PICKUP.timer); PICKUP.timer = null; return; }
+    if (!document.hidden && !PICKUP.busy) pkRefresh();
+  }, 10000);
+}
+
+function pkBusForm(show, bus) {
+  const form = pkEl('pk-bus-form');
+  if (!form) return;
+  form.style.display = show ? '' : 'none';
+  PICKUP.editingBusId = (show && bus) ? bus.id : null;
+  if (show) {
+    pkEl('pk-bus-name').value = bus ? bus.name : '';
+    pkEl('pk-bus-tracker').value = bus ? bus.tracker_id : '';
+    pkEl('pk-bus-delete').style.display = bus ? '' : 'none';
+  }
+}
+
+function pkRender() {
+  const st = PICKUP.state || { buses: [], contacts: [], bus_id: null, pickup_started_at: null };
+  // Bus picker
+  const sel = pkEl('pk-bus');
+  if (sel && document.activeElement !== sel) {
+    sel.textContent = '';
+    const add = (value, label) => { const o = document.createElement('option'); o.value = value; o.textContent = label; sel.appendChild(o); };
+    add('', st.buses.length ? 'No bus selected' : 'No buses yet');
+    for (const b of st.buses) add(b.id, b.name);
+    // In a company the bus list is the admins' (Company screen); members pick.
+    if (st.can_manage_buses !== false) add('__add', '+ Add a bus…');
+    sel.value = st.bus_id || '';
+  }
+  const bus = st.buses.find(b => b.id === st.bus_id) || null;
+  const bs = pkEl('pk-bus-status');
+  if (bs) {
+    bs.className = 'pk-note';
+    if (!bus) {
+      bs.textContent = 'Pick the bus you’re on today — passengers see it on their map from its GPS tracker.' +
+        (st.can_manage_buses === false ? ' Missing a bus? Ask a ' + (st.company || 'company') + ' admin to add it.' : '');
+    } else if (!bus.last_fix_at) {
+      bs.textContent = 'No GPS position received for this bus yet. Check the tracker ID (' + bus.tracker_id + ') matches your fleet system.';
+      bs.classList.add('bad');
+    } else {
+      const ageS = Math.max(0, Math.round((Date.now() - Date.parse(bus.last_fix_at)) / 1000));
+      const fresh = ageS * 1000 <= BUS_GPS_STALE_MS;
+      bs.textContent = (fresh ? 'GPS live · ' : 'GPS last heard ') +
+        (ageS < 90 ? ageS + ' s ago' : Math.round(ageS / 60) + ' min ago') + ' — passengers see this bus on their map.';
+      if (fresh) bs.classList.add('ok');
+    }
+  }
+  const edit = pkEl('pk-bus-edit');
+  if (edit) edit.style.display = (bus && st.can_manage_buses !== false && pkEl('pk-bus-form').style.display === 'none') ? '' : 'none';
+
+  const mode = pkMode();
+  const modeNote = pkEl('pk-mode-note');
+  if (modeNote) modeNote.textContent = mode === 'phone'
+    ? 'Tap Text next to a passenger: your Messages app opens with the number and text filled in — just press send.'
+    : 'Start pickup sends the text to everyone automatically — nothing to type or tap per passenger.';
+  // Contacts
+  const list = pkEl('pk-contacts');
+  const pending = st.contacts.filter(c => c.sms_status !== 'sent');
+  const sent = st.contacts.length - pending.length;
+  const h = pkEl('pk-contacts-h');
+  if (h) h.textContent = st.contacts.length
+    ? 'Passengers to text · ' + st.contacts.length + (sent ? ' (' + sent + ' texted)' : '')
+    : 'Passengers to text';
+  if (list) {
+    list.textContent = '';
+    for (const c of st.contacts) {
+      const row = document.createElement('div');
+      row.className = 'pk-contact';
+      const main = document.createElement('div');
+      main.className = 'pk-contact-main';
+      main.textContent = c.name || c.phone;
+      if (c.name) { const sm = document.createElement('small'); sm.textContent = c.phone; main.appendChild(sm); }
+      row.appendChild(main);
+      const status = document.createElement('span');
+      status.className = 'pk-status ' + c.sms_status;
+      status.textContent = c.sms_status === 'sent' ? 'Texted' : c.sms_status === 'failed' ? 'Failed' : 'Not sent';
+      // Phones have no hover — tap "Failed" to read why (e.g. invalid number).
+      if (c.sms_error) { status.style.textDecoration = 'underline'; status.addEventListener('click', () => showToast(c.sms_error)); }
+      row.appendChild(status);
+      // Send from this phone: opens the Messages app with number + text filled
+      // in. We can't see whether the guide then pressed send, so the row is
+      // marked on tap and the button stays available to send again.
+      if (mode === 'phone') {
+        const a = document.createElement('a');
+        a.className = 'pk-send' + (c.sms_status === 'sent' ? ' done' : '');
+        a.textContent = c.sms_status === 'sent' ? 'Again' : 'Text';
+        a.href = pkSmsHref(c.phone);
+        a.setAttribute('aria-label', 'Text ' + (c.name || c.phone));
+        a.addEventListener('click', () => {
+          a.href = pkSmsHref(c.phone);   // pick up any last edit to the message
+          try { localStorage.setItem(pkMsgKey(), pkEl('pk-message').value.trim()); } catch (_e) {}
+          pkRpc('mark_session_contact_texted', { p_contact_id: c.id })
+            .then(pkRefresh).catch(e => console.warn('mark texted failed', e));
+        });
+        row.appendChild(a);
+      }
+      const x = document.createElement('button');
+      x.type = 'button'; x.className = 'pk-x'; x.textContent = '×';
+      x.setAttribute('aria-label', 'Remove ' + (c.name || c.phone));
+      x.addEventListener('click', async () => {
+        try { await pkRpc('remove_session_contact', { p_contact_id: c.id }); } catch (e) { showToast(e.message); }
+        pkRefresh();
+      });
+      row.appendChild(x);
+      list.appendChild(row);
+    }
+  }
+
+  // Main button
+  const btn = pkEl('pk-start');
+  if (btn) {
+    const started = !!st.pickup_started_at;
+    const n = mode === 'auto' ? pending.length : 0;   // phone mode: the button only starts pickup
+    btn.disabled = PICKUP.busy || !PICKUP.state || (started && n === 0);
+    btn.textContent = PICKUP.busy ? 'Sending…'
+      : !started ? (n ? 'Start pickup · text ' + n + (n === 1 ? ' passenger' : ' passengers') : 'Start pickup')
+      : n ? 'Text ' + n + ' more' + (n === 1 ? ' passenger' : ' passengers')
+      : 'Pickup started';
+  }
+  const res = pkEl('pk-result');
+  if (res && !res.dataset.sticky) {
+    res.className = 'pk-note';
+    res.textContent = st.pickup_started_at
+      ? 'Pickup started ' + new Date(st.pickup_started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
+        (mode === 'phone' && pending.length ? '. ' + pending.length + ' still to text.' : '.') +
+        ' Passengers who open the link appear on the boarding screen.'
+      : '';
+  }
+}
+
+// "Anna Jónsdóttir, +354 611 2345" / "+44 7911 123456" / "6112345 Bo" → one
+// contact per line. Numbers without a country code get `cc`.
+function pkParseContacts(text, cc) {
+  const out = [];
+  const bad = [];
+  const ccDigits = String(cc || '').replace(/\D/g, '');
+  for (const raw of String(text || '').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const m = line.match(/(?:\+|00)?\d[\d\s().\-\/]{4,}\d/);
+    if (!m) { bad.push(line); continue; }
+    let num = m[0].replace(/[^\d+]/g, '');
+    if (num.startsWith('00')) num = '+' + num.slice(2);
+    if (!num.startsWith('+')) num = '+' + ccDigits + num.replace(/^0+/, '');
+    if (!/^\+[1-9]\d{6,14}$/.test(num)) { bad.push(line); continue; }
+    const name = (line.slice(0, m.index) + ' ' + line.slice(m.index + m[0].length))
+      .replace(/[,;:|\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    out.push({ name: name || null, phone: num });
+  }
+  return { contacts: out, bad };
+}
+
+async function pkAddNumbers() {
+  const ta = pkEl('pk-paste');
+  const cc = pkEl('pk-cc').value.trim();
+  if (!/^\+?[1-9]\d{0,3}$/.test(cc)) { showToast('Enter a country code like +354.'); return; }
+  try { localStorage.setItem(PK_CC_KEY, cc.startsWith('+') ? cc : '+' + cc); } catch (_e) {}
+  const { contacts, bad } = pkParseContacts(ta.value, cc);
+  if (!contacts.length) { showToast(bad.length ? 'No valid phone numbers found.' : 'Paste the phone numbers first.'); return; }
+  try {
+    const r = await pkRpc('add_session_contacts', { p_contacts: contacts });
+    const skipped = bad.length + ((r && r.skipped) || 0);
+    // Keep only the lines that couldn't be read, so they can be fixed.
+    ta.value = bad.join('\n');
+    showToast('Added ' + ((r && r.added) || 0) + (skipped ? ' · ' + skipped + ' not recognised' : ''));
+  } catch (e) { showToast(e.message); }
+  pkRefresh();
+}
+
+async function pkStartPickup() {
+  if (PICKUP.busy || !PICKUP.state) return;
+  const st = PICKUP.state;
+  const n = pkMode() === 'auto' ? st.contacts.filter(c => c.sms_status !== 'sent').length : 0;
+  if (n && !confirm('Send the text message to ' + n + (n === 1 ? ' passenger' : ' passengers') + ' now?')) return;
+  const res = pkEl('pk-result');
+  const say = (msg, cls) => { if (res) { res.dataset.sticky = '1'; res.className = 'pk-note' + (cls ? ' ' + cls : ''); res.textContent = msg; } };
+  PICKUP.busy = true;
+  pkRender();
+  try {
+    const at = await pkRpc('start_pickup');
+    SESSION = Object.assign({}, SESSION, { pickup_started_at: at });
+    if (!n) {
+      if (res) delete res.dataset.sticky;   // pkRender's own "Pickup started …" line says it all
+    } else {
+      const message = pkEl('pk-message').value.trim();
+      try { localStorage.setItem(pkMsgKey(), message); } catch (_e) {}
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/send_pickup_sms`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'apikey': SUPABASE_KEY, 'authorization': 'Bearer ' + SUPABASE_KEY },
+        body: JSON.stringify({ session_id: SESSION.id, guide_token: getStoredGuideToken(), message }),
+      });
+      let body = {};
+      try { body = await resp.json(); } catch (_e) {}
+      if (!resp.ok) {
+        say('Pickup started, but the texts were not sent: ' +
+          (resp.status === 404 ? 'text messages are not set up on the server yet.' : (body.error || 'sending failed.')) +
+          ' Try again, or switch to “Send one by one from this phone” below.', 'bad');
+      } else if (body.failed) {
+        say('Texted ' + body.sent + ' · ' + body.failed + ' failed. Check those numbers and tap again to retry.', 'bad');
+      } else {
+        say('Texted ' + body.sent + (body.sent === 1 ? ' passenger.' : ' passengers.'), 'ok');
+      }
+    }
+  } catch (e) {
+    say(e.message || 'Could not start pickup.', 'bad');
+  }
+  PICKUP.busy = false;
+  await pkRefresh();
+}
+
+(() => {
+  const on = (id, ev, fn) => { const el = pkEl(id); if (el) el.addEventListener(ev, fn); };
+  on('pk-bus', 'change', async (e) => {
+    const v = e.target.value;
+    e.target.blur();
+    if (v === '__add') { pkBusForm(true); pkRender(); return; }
+    pkBusForm(false);
+    try { await pkRpc('set_session_bus', { p_bus_id: v || null }); } catch (err) { showToast(err.message); }
+    pkRefresh();
+  });
+  on('pk-bus-edit', 'click', () => {
+    const st = PICKUP.state;
+    const bus = st && st.buses.find(b => b.id === st.bus_id);
+    if (bus) { pkBusForm(true, bus); pkRender(); }
+  });
+  on('pk-bus-cancel', 'click', () => { pkBusForm(false); pkRender(); });
+  on('pk-bus-save', 'click', async () => {
+    const name = pkEl('pk-bus-name').value.trim();
+    const tracker = pkEl('pk-bus-tracker').value.trim();
+    if (!name || !tracker) { showToast('Give the bus a name and its tracker ID.'); return; }
+    try {
+      const { data, error } = await supabaseClient.rpc('save_bus', {
+        p_guide_token: getStoredGuideToken(), p_name: name, p_tracker_id: tracker, p_bus_id: PICKUP.editingBusId });
+      if (error) throw new Error(error.message);
+      // A newly added bus becomes this session's bus straight away.
+      if (!PICKUP.editingBusId && data && data.id) await pkRpc('set_session_bus', { p_bus_id: data.id });
+      pkBusForm(false);
+    } catch (err) { showToast(err.message || 'Could not save the bus.'); }
+    pkRefresh();
+  });
+  on('pk-bus-delete', 'click', async () => {
+    if (!PICKUP.editingBusId || !confirm('Remove this bus from your list?')) return;
+    try {
+      const { error } = await supabaseClient.rpc('delete_bus', { p_guide_token: getStoredGuideToken(), p_bus_id: PICKUP.editingBusId });
+      if (error) throw new Error(error.message);
+      pkBusForm(false);
+    } catch (err) { showToast(err.message); }
+    pkRefresh();
+  });
+  on('pk-add', 'click', pkAddNumbers);
+  on('pk-mode', 'change', (e) => {
+    try { localStorage.setItem(PK_MODE_KEY, e.target.value); } catch (_e) {}
+    const res = pkEl('pk-result'); if (res) delete res.dataset.sticky;
+    pkRender();
+  });
+  on('pk-start', 'click', pkStartPickup);
 })();
 
 function startRoleShell() {
@@ -8900,6 +9728,8 @@ function startRoleShell() {
   if (ROLE === 'guide') {
     startGeolocation();
     startGuideShell();
+    // The bus's own GPS tracker (if a bus is attached) — same feed passengers see.
+    startPassengerGuideListening();
     // Boarding/headcount first: until the guide taps "Start tour", show the
     // boarding screen over the control center (#1).
     if (!(SESSION && SESSION.tour_started_at)) showBoarding();
@@ -10568,7 +11398,9 @@ function applyIncomingLocationRow(row) {
 // (We had a 30s timeout earlier — false-positived when the guide was stationary
 // and GPS slowed down. Better to keep a possibly-stale dot than to lie by
 // hiding it. Same convention as passenger dots.)
-const GUIDE_VIEW = { phone: null, bus: null };
+// `gps` is the bus's own tracker (source 'bus_gps', written server-side by the
+// fleet feed — migration 050); `bus` stays the guide's hand-placed pin.
+const GUIDE_VIEW = { phone: null, bus: null, gps: null };
 
 let _guideMarkerPhone = null;
 let _guideMarkerPhoneDot = null;   // the dot div inside the marker — restyled in place when staleness flips
@@ -10602,15 +11434,28 @@ async function catchUpGuideLocations() {
   // inserts ~1 row/5s on a long session, so a bus_pin or off-sentinel row
   // could fall outside any fixed-size window and a stale bus marker would
   // persist (or fail to clear) after a visibility catch-up.
-  const SOURCES = ['phone', 'bus_pin'];
+  // The guide's own map only needs the tracker-fed bus (their dot and pin are
+  // local state — see renderGuideMarkers).
+  const SOURCES = ROLE === 'guide' ? ['bus_gps'] : ['phone', 'bus_pin', 'bus_gps'];
   const results = await Promise.all(SOURCES.map((source) =>
-    supabaseClient
-      .from('guide_locations')
-      .select('source, lng, lat, set_at, is_off')
-      .eq('session_id', SESSION.id)
-      .eq('source', source)
-      .order('set_at', { ascending: false })
-      .limit(1)
+    source === 'bus_gps'
+      // Newest by insert order: a bus attached mid-session is seeded with its
+      // last known fix, whose set_at can predate an earlier "off" row.
+      // select('*') so this keeps working before `heading` exists server-side.
+      ? supabaseClient
+          .from('guide_locations')
+          .select('*')
+          .eq('session_id', SESSION.id)
+          .eq('source', source)
+          .order('id', { ascending: false })
+          .limit(1)
+      : supabaseClient
+          .from('guide_locations')
+          .select('source, lng, lat, set_at, is_off')
+          .eq('session_id', SESSION.id)
+          .eq('source', source)
+          .order('set_at', { ascending: false })
+          .limit(1)
   ));
   for (const { data, error } of results) {
     if (error) {
@@ -10626,9 +11471,14 @@ function applyGuideRowToState(row) {
   if (row.is_off) {
     if (row.source === 'phone') GUIDE_VIEW.phone = null;
     else if (row.source === 'bus_pin') GUIDE_VIEW.bus = null;
+    else if (row.source === 'bus_gps') GUIDE_VIEW.gps = null;
     return;
   }
   const ts = Date.parse(row.set_at);
+  if (row.source === 'bus_gps') {
+    GUIDE_VIEW.gps = { lng: row.lng, lat: row.lat, ts };
+    return;
+  }
   if (row.source === 'phone') {
     GUIDE_VIEW.phone = { lng: row.lng, lat: row.lat, ts };
   } else if (row.source === 'bus_pin') {
@@ -10691,7 +11541,100 @@ function buildFloatingLabel(text) {
   return el;
 }
 
+// ── Bus from its own GPS tracker ──
+// Shown to passengers AND the guide from the moment a bus is attached to the
+// session (pickup) until the session ends. One persistent marker, moved in
+// place — the feed updates it every few seconds for hours.
+const BUS_GPS_STALE_MS = 2 * 60 * 1000;   // trackers report every 10–60 s; past this, say how old
+const BUS_HERE_M = 150;
+const BUS_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="2"/><line x1="4" y1="11" x2="20" y2="11"/><line x1="7" y1="17" x2="7" y2="20"/><line x1="17" y1="17" x2="17" y2="20"/><line x1="8" y1="14" x2="8.01" y2="14"/><line x1="16" y1="14" x2="16.01" y2="14"/></svg>';
+let _busGpsMarker = null;
+let _busGpsLabel = null;
+let _busGpsBadge = null;
+
+function renderBusGps() {
+  const g = GUIDE_VIEW.gps;
+  if (!g || !map) {
+    if (_busGpsMarker) { _busGpsMarker.remove(); _busGpsMarker = null; _busGpsLabel = null; _busGpsBadge = null; }
+    updateBusBanner();
+    return;
+  }
+  if (!_busGpsMarker) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex; flex-direction:column; align-items:center; pointer-events:none;';
+    _busGpsLabel = buildFloatingLabel(t('bus_label'));
+    wrap.appendChild(_busGpsLabel);
+    _busGpsBadge = document.createElement('div');
+    _busGpsBadge.className = 'bus-gps-badge';
+    _busGpsBadge.innerHTML = BUS_SVG;
+    wrap.appendChild(_busGpsBadge);
+    _busGpsMarker = new mapboxgl.Marker({ element: wrap, anchor: 'bottom' })
+      .setLngLat([g.lng, g.lat])
+      .addTo(map);
+  } else {
+    _busGpsMarker.setLngLat([g.lng, g.lat]);
+  }
+  applyBusGpsStaleness(Date.now());
+  updateBusBanner();
+}
+
+// An old position is still worth showing (parked bus, tunnel, tracker asleep)
+// but must not pass for live: hollow badge + how long ago it was reported.
+function applyBusGpsStaleness(now) {
+  const g = GUIDE_VIEW.gps;
+  if (!g || !_busGpsBadge || !_busGpsLabel) return;
+  const age = Number.isFinite(g.ts) ? now - g.ts : 0;
+  const stale = age > BUS_GPS_STALE_MS;
+  _busGpsBadge.classList.toggle('stale', stale);
+  const label = stale
+    ? t('bus_label') + ' · ' + t('bus_seen_ago', { m: Math.round(age / 60000) })
+    : t('bus_label');
+  if (_busGpsLabel.textContent !== label) _busGpsLabel.textContent = label;
+}
+
+// Passengers, pickup → tour start: "Your bus is on its way · 1.2 km away".
+// Once the tour is running the icon alone stays (the slot belongs to NEXT).
+function updateBusBanner() {
+  const el = document.getElementById('bus-banner');
+  if (!el) return;
+  const g = GUIDE_VIEW.gps;
+  if (ROLE === 'guide' || !g || !SESSION || SESSION.tour_started_at || SESSION.ended_at) { el.hidden = true; return; }
+  const haveMe = Number.isFinite(state.youLng) && Number.isFinite(state.youLat);
+  const d = haveMe ? metersBetween(g.lng, g.lat, state.youLng, state.youLat) : null;
+  const fresh = !Number.isFinite(g.ts) || (Date.now() - g.ts <= BUS_GPS_STALE_MS);
+  el.textContent = '';
+  const main = document.createElement('span');
+  main.textContent = (d != null && d <= BUS_HERE_M && fresh) ? t('bus_here') : t('bus_coming');
+  el.appendChild(main);
+  if (d != null && d > BUS_HERE_M) {
+    const sub = document.createElement('small');
+    sub.textContent = t('bus_away', { d: tbFmtDist(d) });
+    el.appendChild(sub);
+  }
+  el.hidden = false;
+}
+
+// Tap the banner → frame the bus (and you, if located) on the map.
+function showBusOnMap() {
+  const g = GUIDE_VIEW.gps;
+  if (!g || !map) return;
+  try {
+    if (Number.isFinite(state.youLng) && Number.isFinite(state.youLat)) {
+      const b = new mapboxgl.LngLatBounds([g.lng, g.lat], [g.lng, g.lat]);
+      b.extend([state.youLng, state.youLat]);
+      map.fitBounds(b, { padding: 90, maxZoom: 16, duration: 800 });
+    } else {
+      map.easeTo({ center: [g.lng, g.lat], zoom: Math.max(map.getZoom(), 14), duration: 800 });
+    }
+  } catch (_e) {}
+}
+(() => {
+  const el = document.getElementById('bus-banner');
+  if (el) el.addEventListener('click', showBusOnMap);
+})();
+
 function renderGuideMarkers() {
+  renderBusGps();
   // Trial-2 obs 12: these markers are the PASSENGER's view of the guide/bus.
   // On the guide's own map the bus is _busPinMarker (renderBusPinOnGuideMap);
   // rendering GUIDE_VIEW here too (via the visibilitychange catch-up) created
@@ -10775,7 +11718,8 @@ function bindVisibilityCatchUp() {
     }
     // guide_locations feeds the passenger's guide/bus markers only — the
     // guide's own map renders local state (see renderGuideMarkers note).
-    if (ROLE !== 'guide' && typeof catchUpGuideLocations === 'function') {
+    // The guide catches up too, but only for the tracker-fed bus (bus_gps).
+    if (typeof catchUpGuideLocations === 'function') {
       catchUpGuideLocations().catch(err => console.warn('visibility-catchup guide failed', err));
     }
   });
@@ -12102,6 +13046,9 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   if (shareItem) {
     shareItem.style.display = SESSION ? '' : 'none';
   }
+  // "Pickup & bus" — the guide running this session.
+  const pickupItem = document.getElementById('menu-pickup');
+  if (pickupItem) pickupItem.style.display = (SESSION && ROLE === 'guide' && GUIDE) ? '' : 'none';
   // "Chat" — the in-app tour chat, for everyone in a session.
   const groupChatItem = document.getElementById('menu-group-chat');
   if (groupChatItem) {
@@ -12117,6 +13064,8 @@ document.getElementById('burger-btn').addEventListener('click', () => {
   if (mySessionsItem) {
     mySessionsItem.style.display = GUIDE ? '' : 'none';
   }
+  const companyItem = document.getElementById('menu-company');
+  if (companyItem) companyItem.style.display = GUIDE ? '' : 'none';
   const buildToursItem = document.getElementById('menu-build-tours');
   if (buildToursItem) {
     buildToursItem.style.display = GUIDE ? '' : 'none';
@@ -12239,6 +13188,10 @@ document.querySelectorAll('#screen-menu .menu-item').forEach(item => {
       openScreen('screen-about');
     } else if (action === 'share-invite') {
       openShareScreen();
+    } else if (action === 'pickup') {
+      openPickupScreen();
+    } else if (action === 'company') {
+      openCompanyScreen();
     } else if (action === 'group-chat') {
       while (screenStack.length) closeScreen();
       openTourChat();
@@ -13353,6 +14306,7 @@ function onSessionUpdated(row) {
     showSessionEnded();
   }
   updateNextStopBanner();   // guide may have changed the next stop
+  try { updateBusBanner(); } catch (_e) {}   // "bus is on its way" ends when the tour starts
   // Tour just started / home set → redraw so the route line's home leg appears.
   try { renderAll(); } catch (_e) {}
 }
@@ -13756,6 +14710,8 @@ function tickIdentification() {
   // Passenger's view of the guide dot — same grammar, driven by the age of
   // the last broadcast row.
   applyGuideMarkerStaleness(now);
+  applyBusGpsStaleness(now);
+  if (ROLE !== 'guide' && GUIDE_VIEW.gps) updateBusBanner();   // distance follows the passenger's own fix
   // Missing/disconnected flips (guide side): re-render dots + list only when
   // some passenger's evaluated state actually changed.
   if (ROLE === 'guide' && PASSENGERS.size > 0) {
