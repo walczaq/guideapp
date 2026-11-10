@@ -4,8 +4,9 @@
 -- What the guide gets:
 --   * "Pickup": before the tour starts the guide pastes the passengers' phone
 --     numbers, picks today's bus and taps Start pickup. Every passenger gets an
---     SMS with the session's Fieldnote link (send_pickup_sms edge function), so
---     they join — and are counted on the boarding screen — before the bus
+--     SMS with the session's Fieldnote link — sent from the guide's own phone
+--     (one tap each) or all at once by the send_pickup_sms edge function — so
+--     they join, and are counted on the boarding screen, before the bus
 --     reaches them.
 --   * The bus is shown on the passengers' map from the bus's OWN GPS tracker
 --     (bus_gps edge function → ingest_bus_positions below), from pickup until
@@ -251,6 +252,17 @@ begin
   delete from session_contacts where id = p_contact_id and session_id = p_session_id;
 end; $$;
 grant execute on function remove_session_contact(text, text, bigint) to anon, authenticated;
+
+-- The guide sent this passenger's text from their own phone (the app opened the
+-- Messages app with it filled in) — record it so the list shows who is done.
+create or replace function mark_session_contact_texted(p_session_id text, p_guide_token text, p_contact_id bigint)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  perform _pickup_guide_for_session(p_session_id, p_guide_token);
+  update session_contacts set sms_status = 'sent', sms_error = null, sms_sent_at = now()
+   where id = p_contact_id and session_id = p_session_id;
+end; $$;
+grant execute on function mark_session_contact_texted(text, text, bigint) to anon, authenticated;
 
 -- ── start pickup ────────────────────────────────────────────────────────────
 -- Only stamps the moment (coalesce: a re-tap never moves it). The texts are

@@ -498,6 +498,8 @@ window.__FN_SB = {
   .pk-status { font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:var(--rule); white-space:nowrap; }
   .pk-status.sent { color:#15803d; }
   .pk-status.failed { color:#b91c1c; }
+  .pk-send { flex:none; padding:7px 12px; border:1px solid var(--ink); border-radius:999px; color:var(--ink); text-decoration:none; font-size:10px; letter-spacing:0.12em; text-transform:uppercase; }
+  .pk-send.done { border-color:var(--rule); color:var(--rule); }
   .pk-x { background:none; border:none; color:var(--rule); font-size:18px; line-height:1; padding:4px 6px; cursor:pointer; }
 
   /* Bus on the map, from the bus's own GPS tracker (passengers + guide). */
@@ -3175,8 +3177,13 @@ window.__FN_SB = {
 
       <div class="pk-section">
         <div class="pk-h">Text message</div>
-        <textarea class="pk-textarea" id="pk-message" maxlength="300"></textarea>
+        <textarea class="pk-textarea" id="pk-message" maxlength="300" style="min-height:64px;"></textarea>
         <div class="pk-note">The link to join this tour is added at the end automatically.</div>
+        <select class="pk-select" id="pk-mode" style="margin-top:12px;" aria-label="How to send the texts">
+          <option value="phone">Send from this phone</option>
+          <option value="auto">Send automatically (needs an SMS service)</option>
+        </select>
+        <div class="pk-note" id="pk-mode-note"></div>
         <button type="button" class="pk-btn primary" id="pk-start">Start pickup</button>
         <div class="pk-note" id="pk-result"></div>
       </div>
@@ -9023,12 +9030,23 @@ const PK_CC_KEY = 'fieldnote.pickup_cc';
 const pkEl = (id) => document.getElementById(id);
 const pkMsgKey = () => 'fieldnote.pickup_msg.' + (SESSION ? SESSION.id : '');
 
-function pkDefaultMessage() {
-  const who = (SESSION && SESSION.guide_name) ? SESSION.guide_name : '';
-  const tour = (TOUR && TOUR.name) ? TOUR.name : '';
-  return 'Hi! ' + (who ? 'This is ' + who + (tour ? ', your guide for ' + tour : ', your guide') + '. ' : '') +
-    'Your bus is on its way. Open the link to follow it live and check in:';
+// Short on purpose: with the link it fits one SMS segment (paid per segment).
+function pkDefaultMessage() { return 'See your driver online, click this link:'; }
+
+// How the texts go out. 'phone' (default): the guide taps Text next to each
+// passenger and this phone's own Messages app opens with the text filled in —
+// no SMS service needed. 'auto': the send_pickup_sms edge function sends them
+// all (needs an SMS provider configured on the server).
+const PK_MODE_KEY = 'fieldnote.pickup_mode';
+function pkMode() { let v = ''; try { v = localStorage.getItem(PK_MODE_KEY) || ''; } catch (_e) {} return v === 'auto' ? 'auto' : 'phone'; }
+// Exactly what the server would send: the guide's wording, then the join link.
+function pkSmsBody() {
+  const el = pkEl('pk-message');
+  const msg = ((el && el.value) || '').replace(/https?:\/\/\S+/gi, ' ').replace(/\s+/g, ' ').trim() || pkDefaultMessage();
+  return msg + '\n' + inviteUrlFor(SESSION.id);
 }
+// "sms:<number>?&body=…" is the one spelling both iOS and Android accept.
+function pkSmsHref(phone) { return 'sms:' + phone + '?&body=' + encodeURIComponent(pkSmsBody()); }
 
 function pkShowError(msg) {
   const el = pkEl('pk-error');
@@ -9066,6 +9084,8 @@ function openPickupScreen() {
   if (msg && !msg.value) { let v = ''; try { v = localStorage.getItem(pkMsgKey()) || ''; } catch (_e) {} msg.value = v || pkDefaultMessage(); }
   const res = pkEl('pk-result');
   if (res) delete res.dataset.sticky;
+  const modeSel = pkEl('pk-mode');
+  if (modeSel) modeSel.value = pkMode();
   pkBusForm(false);
   pkRender();
   openScreen('screen-pickup');
@@ -9123,6 +9143,11 @@ function pkRender() {
   const edit = pkEl('pk-bus-edit');
   if (edit) edit.style.display = (bus && pkEl('pk-bus-form').style.display === 'none') ? '' : 'none';
 
+  const mode = pkMode();
+  const modeNote = pkEl('pk-mode-note');
+  if (modeNote) modeNote.textContent = mode === 'phone'
+    ? 'Tap Text next to a passenger: your Messages app opens with the number and text filled in — just press send.'
+    : 'Start pickup sends the text to everyone at once.';
   // Contacts
   const list = pkEl('pk-contacts');
   const pending = st.contacts.filter(c => c.sms_status !== 'sent');
@@ -9147,6 +9172,23 @@ function pkRender() {
       // Phones have no hover — tap "Failed" to read why (e.g. invalid number).
       if (c.sms_error) { status.style.textDecoration = 'underline'; status.addEventListener('click', () => showToast(c.sms_error)); }
       row.appendChild(status);
+      // Send from this phone: opens the Messages app with number + text filled
+      // in. We can't see whether the guide then pressed send, so the row is
+      // marked on tap and the button stays available to send again.
+      if (mode === 'phone') {
+        const a = document.createElement('a');
+        a.className = 'pk-send' + (c.sms_status === 'sent' ? ' done' : '');
+        a.textContent = c.sms_status === 'sent' ? 'Again' : 'Text';
+        a.href = pkSmsHref(c.phone);
+        a.setAttribute('aria-label', 'Text ' + (c.name || c.phone));
+        a.addEventListener('click', () => {
+          a.href = pkSmsHref(c.phone);   // pick up any last edit to the message
+          try { localStorage.setItem(pkMsgKey(), pkEl('pk-message').value.trim()); } catch (_e) {}
+          pkRpc('mark_session_contact_texted', { p_contact_id: c.id })
+            .then(pkRefresh).catch(e => console.warn('mark texted failed', e));
+        });
+        row.appendChild(a);
+      }
       const x = document.createElement('button');
       x.type = 'button'; x.className = 'pk-x'; x.textContent = '×';
       x.setAttribute('aria-label', 'Remove ' + (c.name || c.phone));
@@ -9163,7 +9205,7 @@ function pkRender() {
   const btn = pkEl('pk-start');
   if (btn) {
     const started = !!st.pickup_started_at;
-    const n = pending.length;
+    const n = mode === 'auto' ? pending.length : 0;   // phone mode: the button only starts pickup
     btn.disabled = PICKUP.busy || !PICKUP.state || (started && n === 0);
     btn.textContent = PICKUP.busy ? 'Sending…'
       : !started ? (n ? 'Start pickup · text ' + n + (n === 1 ? ' passenger' : ' passengers') : 'Start pickup')
@@ -9175,7 +9217,8 @@ function pkRender() {
     res.className = 'pk-note';
     res.textContent = st.pickup_started_at
       ? 'Pickup started ' + new Date(st.pickup_started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
-        '. Passengers who open the link appear on the boarding screen.'
+        (mode === 'phone' && pending.length ? '. ' + pending.length + ' still to text.' : '.') +
+        ' Passengers who open the link appear on the boarding screen.'
       : '';
   }
 }
@@ -9222,7 +9265,7 @@ async function pkAddNumbers() {
 async function pkStartPickup() {
   if (PICKUP.busy || !PICKUP.state) return;
   const st = PICKUP.state;
-  const n = st.contacts.filter(c => c.sms_status !== 'sent').length;
+  const n = pkMode() === 'auto' ? st.contacts.filter(c => c.sms_status !== 'sent').length : 0;
   if (n && !confirm('Send the text message to ' + n + (n === 1 ? ' passenger' : ' passengers') + ' now?')) return;
   const res = pkEl('pk-result');
   const say = (msg, cls) => { if (res) { res.dataset.sticky = '1'; res.className = 'pk-note' + (cls ? ' ' + cls : ''); res.textContent = msg; } };
@@ -9232,7 +9275,7 @@ async function pkStartPickup() {
     const at = await pkRpc('start_pickup');
     SESSION = Object.assign({}, SESSION, { pickup_started_at: at });
     if (!n) {
-      say('Pickup started.', 'ok');
+      if (res) delete res.dataset.sticky;   // pkRender's own "Pickup started …" line says it all
     } else {
       const message = pkEl('pk-message').value.trim();
       try { localStorage.setItem(pkMsgKey(), message); } catch (_e) {}
@@ -9300,6 +9343,11 @@ async function pkStartPickup() {
     pkRefresh();
   });
   on('pk-add', 'click', pkAddNumbers);
+  on('pk-mode', 'change', (e) => {
+    try { localStorage.setItem(PK_MODE_KEY, e.target.value); } catch (_e) {}
+    const res = pkEl('pk-result'); if (res) delete res.dataset.sticky;
+    pkRender();
+  });
   on('pk-start', 'click', pkStartPickup);
 })();
 

@@ -98,7 +98,7 @@ Deno.serve(async (req: Request) => {
   const sb = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
   const { data: session, error: sErr } = await sb
-    .from('sessions').select('id, owner_guide_id, ended_at, guide_name').eq('id', sessionId).maybeSingle();
+    .from('sessions').select('id, owner_guide_id, ended_at').eq('id', sessionId).maybeSingle();
   if (sErr) return json(500, { error: sErr.message });
   if (!session) return json(404, { error: 'session not found' });
   if (session.ended_at) return json(403, { error: 'this tour has ended' });
@@ -126,10 +126,8 @@ Deno.serve(async (req: Request) => {
     .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, ' ')
     .replace(/https?:\/\/\S+/gi, ' ')
     .replace(/[ \t]+/g, ' ').trim().slice(0, MAX_MESSAGE_CHARS);
-  if (!message) {
-    const who = String(session.guide_name || '').trim();
-    message = (who ? `${who}: your` : 'Your') + ' tour bus is on its way. Open the link to follow it live and check in:';
-  }
+  // Same default as the app; short so text + link stay within one SMS segment.
+  if (!message) message = 'See your driver online, click this link:';
   const text = `${message}\n${APP_URL}/j/${encodeURIComponent(sessionId)}`;
 
   const results: { id: number; status: 'sent' | 'failed'; error?: string }[] = [];
