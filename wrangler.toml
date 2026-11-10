@@ -5,3 +5,9 @@ compatibility_date = "2024-09-23"
 [assets]
 directory = "./"
 binding = "ASSETS"
+
+# Runs before every deploy (GitHub Action and Workers Builds): stamps the
+# About-screen build line in v0.5.html with the deploy date + commit.
+# The script never fails the deploy — see tools/stamp-build.mjs.
+[build]
+command = "node tools/stamp-build.mjs"

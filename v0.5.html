@@ -19,7 +19,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<title>Fieldnote v0.6</title>
+<title>Fieldnote</title>
 <!-- Boot-critical libraries: SELF-HOSTED same-origin under /vendor (pinned
      versions, byte-identical to the CDN builds they replace). This removes the
      third-party-CDN dependency from first load — the libs now ship from the
@@ -2671,7 +2671,7 @@ window.__FN_SB = {
 </head>
 <body>
 
-<div class="proto-label">Fieldnote v0.6 · prototype</div>
+<div class="proto-label">Fieldnote · prototype</div>
 
 <div class="phone" id="phone">
 
@@ -3439,12 +3439,15 @@ window.addEventListener('unhandledrejection', function () {
 // │  dots, trails, realtime, visibility, names) intact.  │
 // ╰──────────────────────────────────────────────────────╯
 
-// Build version. Bumped every time a new file is shipped — visible in the
-// About panel so you can confirm you're running the latest deploy.
-// Bump this WITH each meaningful deploy — it's the only build indicator a
-// phone in the field can show us (a stale stamp here misled a 2026-07-13
-// debugging session into suspecting a stale app).
-const BUILD_VERSION = '0.7 · native shell (Capacitor) + permanent guide QR + boarding v2 + control center v2 + session auto-end · build 2026-07-13';
+// Build version — visible in the About panel so you can confirm which deploy
+// a phone in the field is running. The date + commit are written at deploy
+// time by tools/stamp-build.mjs (wrangler's [build] command), because a
+// hand-bumped stamp went stale and misled a 2026-07-13 debugging session into
+// suspecting a stale app. "dev" = an unstamped copy (local file / preview).
+// Only bump APP_VERSION by hand, when the milestone changes.
+const APP_VERSION = '0.7';
+const BUILD_STAMP = 'dev';   // @build-stamp — rewritten at deploy, keep on one line
+const BUILD_VERSION = APP_VERSION + ' · build ' + BUILD_STAMP;
 
 // Verbose tracing — OFF in production so real warnings/errors aren't buried under
 // the per-render [maybeShow]/[catch-up]/[realtime] spam (~1800 lines a session).
@@ -5999,7 +6002,65 @@ function resumeSession(id) {
 // through token-validated RPCs (passengers share the anon key but have no guide
 // token, so they get nothing). No realtime (that needs public-read RLS) — the
 // room polls while open.
+//
+// Chat "poke" — what makes both chats (this room and the tour chat) feel
+// live without giving the message tables a realtime/public-read path. After
+// a successful post the sender broadcasts an EMPTY event on a per-room
+// realtime channel; every open client that hears it runs its normal RPC
+// refresh straight away. The poke carries no content, sender or thread —
+// reading still goes through the token/key-checked RPCs, so a listener
+// learns only "something was posted in this room". Polling stays as the
+// backstop: at the old pace whenever the channel isn't SUBSCRIBED, and at a
+// slow pace when it is (a lost poke still surfaces within CHAT_POLL_SLOW_MS).
+const CHAT_POLL_SLOW_MS = 15000;     // open chat, pokes live
+const CHAT_BADGE_SLOW_MS = 60000;    // unread-dot check, pokes live
+const _chatPokes = {};               // topic → { ch, live, subs, t }
+function chatPokeJoin(topic, onPoke) {
+  let e = _chatPokes[topic];
+  if (!e) {
+    e = _chatPokes[topic] = { ch: null, live: false, subs: new Set(), t: null };
+    try {
+      e.ch = supabaseClient.channel(topic)
+        .on('broadcast', { event: 'new' }, () => {
+          if (e.t) return;             // coalesce a burst into one refresh
+          e.t = setTimeout(() => {
+            e.t = null;
+            e.subs.forEach(fn => { try { fn(); } catch (_e) {} });
+          }, 250);
+        })
+        .subscribe((status) => { e.live = status === 'SUBSCRIBED'; });
+    } catch (_e) { /* no pokes — polling carries on at the fast pace */ }
+  }
+  e.subs.add(onPoke);
+  return function leave() {
+    e.subs.delete(onPoke);
+    if (e.subs.size || _chatPokes[topic] !== e) return;
+    delete _chatPokes[topic];
+    if (e.t) clearTimeout(e.t);
+    if (e.ch) { try { supabaseClient.removeChannel(e.ch); } catch (_e) {} }
+  };
+}
+function chatPokeLive(topic) { const e = _chatPokes[topic]; return !!(e && e.live); }
+function chatPokeSend(topic) {
+  const e = _chatPokes[topic];
+  if (!e || !e.live || !e.ch) return;
+  try { Promise.resolve(e.ch.send({ type: 'broadcast', event: 'new', payload: {} })).catch(() => {}); } catch (_e) {}
+}
+// setInterval that runs `fn` every `fastMs` while the room's pokes are NOT
+// live, and only every `slowMs` while they are.
+function chatPollInterval(topic, fn, fastMs, slowMs) {
+  let last = Date.now();
+  return setInterval(() => {
+    if (chatPokeLive(topic) && Date.now() - last < slowMs) return;
+    last = Date.now();
+    fn();
+  }, fastMs);
+}
+const GC_POKE_TOPIC = 'chat-poke:guides';
+function scPokeTopic(sessionId) { return 'chat-poke:' + sessionId; }
+
 let _gcPollTimer = null;
+let _gcLeavePoke = null;
 let _gcLastId = 0;
 let _gcAnon = false;   // post-anonymously toggle (per open)
 
@@ -6210,6 +6271,7 @@ function showGuideChat() {
     if (r.error) { console.warn('[guidechat] send failed', r.error); syncSend(); return; }
     input.value = ''; pendingMedia = null; renderPreview(); autoGrow(); syncSend();
     gcRefresh(false);   // pull our own message right back
+    chatPokeSend(GC_POKE_TOPIC);
   }
   sendBtn.addEventListener('click', doSend);
   input.addEventListener('keydown', (e) => {
@@ -6223,11 +6285,14 @@ function showGuideChat() {
   _gcLastId = 0;
   gcRefresh(true);
   if (_gcPollTimer) clearInterval(_gcPollTimer);
-  _gcPollTimer = setInterval(() => gcRefresh(false), 4000);
+  if (_gcLeavePoke) _gcLeavePoke();
+  _gcLeavePoke = chatPokeJoin(GC_POKE_TOPIC, () => gcRefresh(false));
+  _gcPollTimer = chatPollInterval(GC_POKE_TOPIC, () => gcRefresh(false), 4000, CHAT_POLL_SLOW_MS);
 }
 
 function closeGuideChat() {
   if (_gcPollTimer) { clearInterval(_gcPollTimer); _gcPollTimer = null; }
+  if (_gcLeavePoke) { _gcLeavePoke(); _gcLeavePoke = null; }
   const el = document.getElementById('guide-chat-screen');
   if (el) el.remove();
 }
@@ -6239,9 +6304,11 @@ function closeGuideChat() {
 //   • Private — one thread per passenger, visible only to them and the guide.
 // Passengers: tabs "Group" | "Guide". Guide: tabs "Group" | "Passengers"
 // (an inbox listing every passenger → tap one to open that thread).
-// Like the guides room, it polls while open (no realtime — the table has no
-// public-read policy). A slow background poll lights an unread dot on the
-// map's chat button + the menu row.
+// Like the guides room, it reads only through RPCs (no realtime on the table
+// — it has no public-read policy). An empty "poke" broadcast after each post
+// (see chatPokeJoin) triggers everyone's refresh; polling is the backstop.
+// The same poke + a slow background poll light an unread dot on the map's
+// chat button + the menu row.
 //
 // Passenger auth: PASSENGER_ID is not secret (session_passengers is public),
 // so each device keeps a random chat key in localStorage and claims it once
@@ -6249,6 +6316,7 @@ function closeGuideChat() {
 let _sc = null;              // open-screen state, null when closed
 let _scPollTimer = null;
 let _scBadgeTimer = null;
+let _scBadgeLeavePoke = null;
 const _scKeyClaims = {};     // sessionId → Promise<boolean>
 let _scMemKey = null;        // fallback when localStorage is unavailable
 
@@ -6493,12 +6561,13 @@ function scSetView(view, thread) {
   if (list) list.innerHTML = `<div class="gc-empty">${t('chat_loading')}</div>`;
   scRenderChrome();
   if (_scPollTimer) clearInterval(_scPollTimer);
+  const topic = scPokeTopic(_sc.session.id);
   if (view === 'inbox') {
     scRefreshInbox(true);
-    _scPollTimer = setInterval(() => scRefreshInbox(false), 6000);
+    _scPollTimer = chatPollInterval(topic, () => scRefreshInbox(false), 6000, CHAT_POLL_SLOW_MS);
   } else {
     scRefreshMessages(true);
-    _scPollTimer = setInterval(() => scRefreshMessages(false), 4000);
+    _scPollTimer = chatPollInterval(topic, () => scRefreshMessages(false), 4000, CHAT_POLL_SLOW_MS);
   }
 }
 
@@ -6510,6 +6579,12 @@ async function openTourChat(sessionObj, opts) {
   const asGuide = !!((opts && opts.asGuide) || (ROLE === 'guide' && getStoredGuideToken()));
   closeTourChat();
   _sc = { session, asGuide, view: 'group', thread: null, lastId: 0, ended: !!session.ended_at };
+  // Someone posted in this session's chat → refresh whatever view is open.
+  // (An ended session gets no new messages, so no channel for it.)
+  _sc.leavePoke = _sc.ended ? null : chatPokeJoin(scPokeTopic(session.id), () => {
+    if (!_sc) return;
+    if (_sc.view === 'inbox') scRefreshInbox(false); else scRefreshMessages(false);
+  });
 
   const el = document.createElement('div');
   el.id = 'tour-chat-screen';
@@ -6601,6 +6676,7 @@ async function openTourChat(sessionObj, opts) {
     }
     input.value = ''; pendingMedia = null; renderPreview(); autoGrow(); syncSend();
     scRefreshMessages(false);
+    if (_sc) chatPokeSend(scPokeTopic(_sc.session.id));
   }
   sendBtn.addEventListener('click', doSend);
   input.addEventListener('keydown', (e) => {
@@ -6641,6 +6717,7 @@ async function openTourChat(sessionObj, opts) {
 
 function closeTourChat() {
   if (_scPollTimer) { clearInterval(_scPollTimer); _scPollTimer = null; }
+  if (_sc && _sc.leavePoke) _sc.leavePoke();
   const el = document.getElementById('tour-chat-screen');
   if (el) el.remove();
   _sc = null;
@@ -6684,13 +6761,20 @@ async function scBadgeTick() {
   _scLatest = l;
   scRefreshBadge();
   // An ended tour gets no new messages — stop polling.
-  if (l.ended && _scBadgeTimer) { clearInterval(_scBadgeTimer); _scBadgeTimer = null; }
+  if (l.ended && _scBadgeTimer) {
+    clearInterval(_scBadgeTimer); _scBadgeTimer = null;
+    if (_scBadgeLeavePoke) { _scBadgeLeavePoke(); _scBadgeLeavePoke = null; }
+  }
 }
 
 function startTourChatBadge() {
   if (!SESSION || _scBadgeTimer) return;
   scBadgeTick();
-  _scBadgeTimer = setInterval(scBadgeTick, 20000);
+  // The unread dot lights as soon as anyone posts (poke); the timer is the
+  // backstop — every 20 s without live pokes, once a minute with them.
+  const topic = scPokeTopic(SESSION.id);
+  _scBadgeLeavePoke = chatPokeJoin(topic, scBadgeTick);
+  _scBadgeTimer = chatPollInterval(topic, scBadgeTick, 20000, CHAT_BADGE_SLOW_MS);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) scBadgeTick(); });
 }
 

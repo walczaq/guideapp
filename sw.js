@@ -58,11 +58,26 @@ const NAV_FALLBACK = '/v0.5';
 
 // Mapbox map data (style JSON, sprite, glyph fonts, vector tiles) gets its
 // own cache so previously-viewed areas keep rendering when the signal drops.
-// Stale-while-revalidate + a size cap (LRU-ish via insertion order). This is
-// what makes "lost internet, zoom in, paths still show" work — for tiles the
-// device fetched while it was online.
+// Cache-first while an entry is fresh, stale-while-revalidate once it isn't,
+// + a size cap (LRU-ish via insertion order). This is what makes "lost
+// internet, zoom in, paths still show" work — for tiles the device fetched
+// while it was online.
 const TILE_CACHE = 'fieldnote-tiles-v1';
 const TILE_CACHE_MAX = 1500;
+// How long a cached map resource is served WITHOUT touching the network.
+// Plain stale-while-revalidate re-downloaded every tile on every view, i.e.
+// the map cost its data twice on exactly the connections that can't spare
+// it. A day covers a whole tour; past it the entry is still served
+// instantly and refreshed in the background, as before.
+const TILE_FRESH_MS = 24 * 60 * 60 * 1000;
+// Header we add to cached copies to remember when they were fetched (the
+// upstream Date header isn't readable on cross-origin responses).
+const TILE_STAMP_HEADER = 'x-fn-cached-at';
+// Enforce the size cap once per this many stored tiles (and on the first
+// store after the worker starts) instead of listing the whole cache — up to
+// TILE_CACHE_MAX keys — after every single tile.
+const TILE_TRIM_EVERY = 100;
+let _tilePutsSinceTrim = TILE_TRIM_EVERY;
 
 const NOTIFICATION_DEFAULTS = {
   title: 'New stop activated',
@@ -172,16 +187,27 @@ self.addEventListener('fetch', (event) => {
   //    passthrough. Not cached; fails offline and the app handles it.
 });
 
-// Serve from cache immediately if present (revalidating in the background),
-// else fall back to the network. Caps the cache by entry count, evicting
-// the oldest entries (Cache Storage keys() preserves insertion order).
+// Serve from cache if present — with no network at all while the entry is
+// younger than TILE_FRESH_MS, revalidating in the background once it is
+// older — else fall back to the network. Caps the cache by entry count,
+// evicting the oldest entries (Cache Storage keys() preserves insertion order).
 async function staleWhileRevalidate(req, cacheName, cap) {
   const cache = await caches.open(cacheName);
   const cached = await cache.match(req);
+  if (cached) {
+    // Entries stored before the stamp existed (or opaque ones) read as age
+    // "forever" → they revalidate once and get stamped.
+    const at = Number(cached.headers.get(TILE_STAMP_HEADER)) || 0;
+    if (Date.now() - at < TILE_FRESH_MS) return cached;
+  }
   const networkFetch = fetch(req).then((net) => {
     if (net && (net.ok || net.type === 'opaque')) {
-      cache.put(req, net.clone())
-        .then(() => trimCache(cacheName, cap))
+      putStamped(cache, req, net.clone())
+        .then(() => {
+          if (++_tilePutsSinceTrim < TILE_TRIM_EVERY) return null;
+          _tilePutsSinceTrim = 0;
+          return trimCache(cacheName, cap);
+        })
         .catch(() => { /* opaque/uncacheable — ignore */ });
     }
     return net;
@@ -189,6 +215,17 @@ async function staleWhileRevalidate(req, cacheName, cap) {
   if (cached) return cached;            // stale hit; networkFetch revalidates
   const net = await networkFetch;
   return net || Response.error();
+}
+
+// Store `net` with the fetch time stamped on it. Only a plain 200 can be
+// re-wrapped (an opaque body is unreadable; 204/206 can't be rebuilt as-is) —
+// anything else is stored untouched and simply revalidates on every use.
+async function putStamped(cache, req, net) {
+  if (net.type === 'opaque' || net.status !== 200) return cache.put(req, net);
+  const body = await net.blob();
+  const headers = new Headers(net.headers);
+  headers.set(TILE_STAMP_HEADER, String(Date.now()));
+  return cache.put(req, new Response(body, { status: 200, statusText: net.statusText, headers }));
 }
 
 async function trimCache(cacheName, cap) {

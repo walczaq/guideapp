@@ -18,3 +18,14 @@
 # CURRENT live session, resolved client-side (boot's ?guide= handler via
 # the resolve_guide_qr RPC). One printed/laminated code per guide, forever.
 /g/*     /v0.5?guide=:splat     302
+
+# Superseded prototypes are no longer deployed (see .assetsignore) — send
+# any old bookmark or shared link to the current app instead of a 404.
+/v0.1       /v0.5   302
+/v0.2       /v0.5   302
+/v0.3       /v0.5   302
+/v0.4       /v0.5   302
+/v0.1.html  /v0.5   302
+/v0.2.html  /v0.5   302
+/v0.3.html  /v0.5   302
+/v0.4.html  /v0.5   302
