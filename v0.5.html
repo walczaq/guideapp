@@ -133,15 +133,14 @@ window.__FN_SB = {
     content: ""; position: absolute;
     top: 10px; left: 50%; transform: translateX(-50%);
     width: 120px; height: 28px;
-    background: #0a0a0a; border-radius: 20px;
+    background: #0a0a0a; border-radius: var(--r-l);
     z-index: 200; pointer-events: none;
   }
   .proto-label {
     position: fixed; top: 14px; left: 50%;
     transform: translateX(-50%);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.18em;
-    text-transform: uppercase; color: #777;
+    font-family: var(--font-ui);
+    font-size: 13px; color: #777;
     pointer-events: none;
   }
   /* "Real phone" mode — drop the phone-in-frame chrome and fill the
@@ -215,9 +214,9 @@ window.__FN_SB = {
      blank map is undebuggable. Shown by a watchdog if load never fires. */
   .map-load-err {
     position: absolute; left: 14px; right: 14px; top: 50%; transform: translateY(-50%);
-    z-index: 6; text-align: center; font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; line-height: 1.55; color: var(--ink);
-    background: var(--paper); border: 1px solid var(--rule); border-radius: 8px;
+    z-index: 6; text-align: center; font-family: var(--font-ui);
+    font-size: 13px; line-height: 1.55; color: var(--ink);
+    background: var(--paper); border: 1px solid var(--rule); border-radius: var(--r-s);
     padding: 12px 14px; max-width: 320px; margin: 0 auto;
   }
   .mapboxgl-ctrl-bottom-left,
@@ -225,7 +224,7 @@ window.__FN_SB = {
     display: none !important;
   }
   .mapboxgl-ctrl-attrib {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-ui);
     font-size: 8px !important;
     background: rgba(235,229,215,0.8) !important;
     padding: 2px 6px !important;
@@ -258,7 +257,7 @@ window.__FN_SB = {
   .map-hud > * { pointer-events: auto; }
   .icon-btn {
     width: 48px; height: 48px;
-    background: var(--paper); border: 1px solid var(--rule); border-radius: 14px;
+    background: var(--paper); border: 1px solid var(--rule); border-radius: var(--r-m);
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; color: var(--ink);
     box-shadow: 0 2px 8px rgba(0,0,0,0.12);
@@ -269,13 +268,12 @@ window.__FN_SB = {
 
   /* signal indicator (top-right) */
   .signal {
-    background: var(--paper); border: 1px solid var(--rule); border-radius: 10px;
+    background: var(--paper); border: 1px solid var(--rule); border-radius: var(--r-m);
     padding: 0 9px; height: 28px;
     display: flex; align-items: center; gap: 6px;
     box-shadow: 0 1px 5px rgba(0,0,0,0.10);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 9px; letter-spacing: 0.06em;
-    color: var(--rule);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule);
   }
   .signal-dot {
     width: 6px; height: 6px; border-radius: 50%;
@@ -299,8 +297,8 @@ window.__FN_SB = {
   }
   .zoom-btn {
     width: 44px; height: 44px;
-    background: var(--paper); border: 1px solid var(--rule); border-radius: 12px;
-    font-family: 'JetBrains Mono', monospace;
+    background: var(--paper); border: 1px solid var(--rule); border-radius: var(--r-m);
+    font-family: var(--font-ui);
     font-size: 20px; font-weight: 700; color: var(--ink);
     cursor: pointer;
     display: flex; align-items: center; justify-content: center;
@@ -315,8 +313,8 @@ window.__FN_SB = {
   /* Tour-chat button: chat-bubble icon + small caption stacked */
   .zoom-btn.chat { flex-direction: column; gap: 1px; }
   .zoom-btn-cap {
-    font-family: 'JetBrains Mono', monospace; font-size: 7.5px; font-weight: 700;
-    letter-spacing: 0.06em; text-transform: uppercase; line-height: 1;
+    font-family: var(--font-ui); font-size: 7.5px; font-weight: 700;
+    line-height: 1;
   }
   .zoom-sep { height: 10px; }
   /* Live zoom readout — mirrors the builder's badge so the guide can map a
@@ -324,7 +322,7 @@ window.__FN_SB = {
   .map-zoom-readout {
     position: absolute; left: 14px;
     bottom: calc(env(safe-area-inset-bottom, 0px) + 6px);
-    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink);
+    font-family: var(--font-ui); font-size: 11px; color: var(--ink);
     text-shadow: 0 0 4px var(--paper), 0 0 8px var(--paper), 0 1px 2px var(--paper);
     z-index: 5; pointer-events: none;
   }
@@ -340,33 +338,32 @@ window.__FN_SB = {
     font-family: 'Fraunces', serif; font-size: 14px; color: var(--ink);
   }
   .next-stop-banner[hidden] { display: none; }
-  .nsb-label { font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--rule); }
+  .nsb-label { font-family: var(--font-ui); font-size: 13px; color: var(--rule); }
   .nsb-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
-  .nsb-eta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #2563eb; }
+  .nsb-eta { font-family: var(--font-ui); font-size: 13px; color: #2563eb; }
   /* Guide "which stop is next?" prompt (after deactivating a stop). */
   .nsp-backdrop {
     position: absolute; inset: 0; z-index: 95; background: rgba(26,29,26,0.42);
     display: flex; align-items: flex-end; justify-content: center; padding: 16px;
   }
   .nsp-card {
-    width: 100%; max-width: 420px; background: var(--paper); border: 1px solid var(--ink); border-radius: 14px;
+    width: 100%; max-width: 420px; background: var(--paper); border: 1px solid var(--ink); border-radius: var(--r-m);
     box-shadow: 0 20px 60px rgba(0,0,0,0.35); padding: 16px 16px calc(16px + env(safe-area-inset-bottom,0px));
     max-height: 72vh; display: flex; flex-direction: column;
   }
   .nsp-title { font-family:'Fraunces',serif; font-weight:700; font-size:19px; color:var(--ink); }
-  .nsp-sub { font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--rule); margin:4px 0 12px; }
+  .nsp-sub { font-family:var(--font-ui); font-size:13px; color:var(--rule); margin:4px 0 12px; }
   .nsp-list { overflow-y:auto; display:flex; flex-direction:column; gap:8px; }
   .nsp-stop {
     display:flex; align-items:center; gap:10px; padding:11px 12px; cursor:pointer; text-align:left;
-    background:var(--paper); border:1px solid var(--rule); border-radius:10px; font-family:'Fraunces',serif; font-size:15px; color:var(--ink);
+    background:var(--paper); border:1px solid var(--rule); border-radius:var(--r-m); font-family:'Fraunces',serif; font-size:15px; color:var(--ink);
   }
   .nsp-stop.suggested { border-color:#2563eb; box-shadow:0 0 0 2px rgba(37,99,235,0.25); }
-  .nsp-num { flex:0 0 auto; width:22px; height:22px; border-radius:50%; background:var(--ink); color:var(--paper); display:inline-flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; }
+  .nsp-num { flex:0 0 auto; width:22px; height:22px; border-radius:50%; background:var(--ink); color:var(--paper); display:inline-flex; align-items:center; justify-content:center; font-family:var(--font-ui); font-size:10px; font-weight:700; }
   .nsp-stop .nsp-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .nsp-stop .nsp-eta { font-family:'JetBrains Mono',monospace; font-size:10px; color:#2563eb; white-space:nowrap; }
+  .nsp-stop .nsp-eta { font-family:var(--font-ui); font-size:13px; color:#2563eb; white-space:nowrap; }
   .nsp-skip {
-    margin-top:12px; align-self:center; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase;
-    padding:9px 16px; background:transparent; border:1px solid var(--rule); border-radius:8px; color:var(--rule); cursor:pointer;
+    margin-top:12px; align-self:center; font-family:var(--font-ui); font-size:13px; padding:9px 16px; background:transparent; border:1px solid var(--rule); border-radius:var(--r-s); color:var(--rule); cursor:pointer;
   }
 
   /* pins */
@@ -396,7 +393,7 @@ window.__FN_SB = {
   .pin-group.visited .pin-marker { fill: var(--paper-2); stroke: var(--rule); }
   .pin-group.visited .pin-label { fill: var(--rule); }
   .pin-label {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-ui);
     font-size: 11px; font-weight: 700;
     fill: var(--paper); text-anchor: middle; pointer-events: none;
   }
@@ -451,71 +448,70 @@ window.__FN_SB = {
   }
   .boarding-screen.show { display: block; }
   .boarding-inner { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; min-height: 100%; }
-  .boarding-stamp { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--rule); text-align:center; margin-top:8px; }
+  .boarding-stamp { font-family:var(--font-ui); font-size:13px; color:var(--rule); text-align:center; margin-top:8px; }
   .boarding-headline { text-align:center; margin:18px 0 2px; }
   .boarding-count { font-family:'Fraunces',serif; font-size:64px; font-weight:700; color:var(--ink); line-height:1; }
   .boarding-count-label { font-family:'Fraunces',serif; font-style:italic; font-size:20px; color:#4a4a4a; }
-  .boarding-sub { text-align:center; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); margin-bottom:18px; }
+  .boarding-sub { text-align:center; font-family:var(--font-ui); font-size:13px; color:var(--rule); margin-bottom:18px; }
   .boarding-list { flex:1 1 auto; }
-  .boarding-row { display:flex; align-items:center; gap:10px; padding:12px 6px; border-bottom:1px solid var(--rule); font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink); }
+  .boarding-row { display:flex; align-items:center; gap:10px; padding:12px 6px; border-bottom:1px solid var(--rule); font-family:var(--font-ui); font-size:14px; color:var(--ink); }
   .boarding-row::before { content:'✓'; color:#15803d; font-weight:700; }
   .boarding-share {
     margin-top:18px; width:100%; padding:14px; background:var(--paper); color:var(--ink);
-    border:1px solid var(--ink); border-radius:10px; font-family:'JetBrains Mono',monospace;
-    font-size:12px; letter-spacing:0.14em; text-transform:uppercase; cursor:pointer;
+    border:1px solid var(--ink); border-radius:var(--r-m); font-family:var(--font-ui);
+    font-size:13px; cursor:pointer;
   }
   .boarding-start {
     margin-top:8px; width:100%; padding:16px; background:var(--ink); color:var(--paper);
-    border:none; border-radius:10px; font-family:'JetBrains Mono',monospace; font-size:13px;
-    letter-spacing:0.14em; text-transform:uppercase; cursor:pointer;
+    border:none; border-radius:var(--r-m); font-family:var(--font-ui); font-size:13px;
+    cursor:pointer;
   }
   .boarding-start:active, .boarding-share:active { transform: scale(0.99); }
 
   /* Pickup screen (guide): bus picker, passenger phone list, "Start pickup". */
   .pk-section { margin-bottom: 26px; }
-  .pk-h { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.16em; text-transform:uppercase; color:var(--rule); margin-bottom:8px; }
-  .pk-note { font-family:'JetBrains Mono',monospace; font-size:11px; line-height:1.5; color:var(--rule); margin-top:8px; }
+  .pk-h { font-family:var(--font-ui); font-size:13px; color:var(--rule); margin-bottom:8px; }
+  .pk-note { font-family:var(--font-ui); font-size:13px; line-height:1.5; color:var(--rule); margin-top:8px; }
   .pk-note.ok { color:#15803d; }
   .pk-note.bad { color:#b91c1c; }
   .pk-input, .pk-select, .pk-textarea {
     width:100%; box-sizing:border-box; padding:12px; background:var(--paper); color:var(--ink);
-    border:1px solid var(--rule); border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:16px;
+    border:1px solid var(--rule); border-radius:var(--r-s); font-family:var(--font-ui); font-size:16px;
   }
   .pk-textarea { min-height:96px; resize:vertical; line-height:1.4; font-size:14px; }
   .pk-row { display:flex; gap:8px; margin-top:8px; }
   .pk-row > * { min-width:0; }
   .pk-btn {
     width:100%; padding:13px; background:var(--paper); color:var(--ink); border:1px solid var(--ink);
-    border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em;
-    text-transform:uppercase; cursor:pointer; margin-top:8px;
+    border-radius:var(--r-s); font-family:var(--font-ui); font-size:13px; cursor:pointer; margin-top:8px;
   }
   .pk-btn.primary { background:var(--ink); color:var(--paper); padding:16px; font-size:13px; }
   .pk-btn.link { border:none; text-transform:none; letter-spacing:0; text-decoration:underline; width:auto; padding:6px 0; color:var(--rule); }
   .pk-btn:disabled { opacity:0.45; cursor:default; }
-  .pk-contact { display:flex; align-items:center; gap:10px; padding:10px 2px; border-bottom:1px solid var(--rule-soft); font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--ink); }
+  .pk-contact { display:flex; align-items:center; gap:10px; padding:10px 2px; border-bottom:1px solid var(--rule-soft); font-family:var(--font-ui); font-size:13px; color:var(--ink); }
   .pk-contact-main { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .pk-contact-main small { color:var(--rule); font-size:11px; margin-left:6px; }
-  .pk-status { font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:var(--rule); white-space:nowrap; }
+  .pk-contact-main small { color:var(--rule); font-size:13px; margin-left:6px; }
+  .pk-status { font-size:13px; color:var(--rule); white-space:nowrap; }
   .pk-status.sent { color:#15803d; }
   .pk-status.failed { color:#b91c1c; }
-  .pk-send { flex:none; padding:7px 12px; border:1px solid var(--ink); border-radius:999px; color:var(--ink); text-decoration:none; font-size:10px; letter-spacing:0.12em; text-transform:uppercase; }
+  .pk-send { flex:none; padding:7px 12px; border:1px solid var(--ink); border-radius:999px; color:var(--ink); text-decoration:none; font-size:13px; }
   .pk-send.done { border-color:var(--rule); color:var(--rule); }
   .pk-x { background:none; border:none; color:var(--rule); font-size:18px; line-height:1; padding:4px 6px; cursor:pointer; }
 
   /* Company screen. Above the session manager (z 90) — it opens from there too. */
   #screen-company { z-index: 95; }
-  .co-row { display:flex; align-items:center; gap:8px; padding:11px 2px; border-bottom:1px solid var(--rule-soft); font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--ink); }
+  .co-row { display:flex; align-items:center; gap:8px; padding:11px 2px; border-bottom:1px solid var(--rule-soft); font-family:var(--font-ui); font-size:13px; color:var(--ink); }
   .co-row-main { flex:1; min-width:0; }
   .co-row-main > div { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .co-row-sub { font-size:11px; color:var(--rule); margin-top:3px; line-height:1.45; }
+  .co-row-sub { font-size:13px; color:var(--rule); margin-top:3px; line-height:1.45; }
   .co-row-main > .co-row-sub { white-space:normal; }
-  .co-tag { font-size:9px; letter-spacing:0.12em; text-transform:uppercase; border:1px solid var(--rule); border-radius:999px; padding:2px 7px; color:var(--rule); margin-left:6px; }
+  .co-tag { font-size:13px; border:1px solid var(--rule); border-radius:999px; padding:2px 7px; color:var(--rule); margin-left:6px; }
   .co-tag.on { border-color:#15803d; color:#15803d; }
-  .co-mini { flex:none; background:none; border:1px solid var(--rule); border-radius:6px; color:var(--ink); font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:0.08em; text-transform:uppercase; padding:6px 8px; cursor:pointer; text-decoration:none; }
+  .co-mini { flex:none; background:none; border:1px solid var(--rule); border-radius:var(--r-s); color:var(--ink); font-family:var(--font-ui); font-size:13px; padding:6px 8px; cursor:pointer; text-decoration:none; }
   .co-mini.danger { color:#b91c1c; border-color:#b91c1c; }
-  .co-empty { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); padding:8px 2px; line-height:1.5; }
+  .co-empty { font-family:var(--font-ui); font-size:13px; color:var(--rule); padding:8px 2px; line-height:1.5; }
   .co-title { font-family:'Fraunces',serif; font-size:26px; font-weight:700; color:var(--ink); margin-bottom:4px; }
-  .co-code { padding:10px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:10.5px; word-break:break-all; user-select:all; line-height:1.5; }
+  .co-code { padding:10px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:var(--r-s); font-family:var(--font-ui); font-size:13px; word-break:break-all; user-select:all; line-height:1.5; }
 
   /* Bus on the map, from the bus's own GPS tracker (passengers + guide). */
   .bus-gps-badge {
@@ -538,7 +534,7 @@ window.__FN_SB = {
     font-family:'Fraunces',serif; font-size:14px; font-weight:700;
   }
   .bus-banner[hidden] { display:none; }
-  .bus-banner small { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:400; opacity:0.9; overflow:hidden; text-overflow:ellipsis; }
+  .bus-banner small { font-family:var(--font-ui); font-size:13px; font-weight:400; opacity:0.9; overflow:hidden; text-overflow:ellipsis; }
 
   /* Guide dot — beacon blue. Used both in the guide's own view and (later,
      once chunk F lands) in passenger views when guide visibility is on. */
@@ -592,7 +588,7 @@ window.__FN_SB = {
   }
   .back-btn {
     width: 40px; height: 40px;
-    background: transparent; border: none; border-radius: 10px;
+    background: transparent; border: none; border-radius: var(--r-m);
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; color: var(--ink); margin-left: -8px;
   }
@@ -608,12 +604,12 @@ window.__FN_SB = {
      Rounded tile + soft shadow so the beige icon reads on the cream page
      (and pops on the dark page in dark mode). */
   .brand-logo {
-    width: 72px; height: 72px; border-radius: 18px;
+    width: 72px; height: 72px; border-radius: var(--r-l);
     box-shadow: 0 2px 12px rgba(0,0,0,0.16);
     display: block; flex-shrink: 0;
   }
   .menu-brand { display: flex; align-items: center; gap: 12px; padding: 8px 4px 20px; }
-  .menu-brand .brand-logo { width: 46px; height: 46px; border-radius: 12px; }
+  .menu-brand .brand-logo { width: 46px; height: 46px; border-radius: var(--r-m); }
   .menu-brand-name { font-family: 'Fraunces', serif; font-weight: 700; font-size: 20px; color: var(--ink); }
   .screen-body {
     flex: 1; overflow-y: auto;
@@ -644,18 +640,16 @@ window.__FN_SB = {
   }
   .menu-session-guide.show { display: block; }
   .menu-session-guide-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--rule);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule);
     display: block; margin-bottom: 2px;
   }
   /* Small "Your link" / contact button under the guide name — deliberately
      more compact than the full menu rows. */
   .menu-guidecard-btn {
     display: flex; width: max-content; align-items: center; gap: 6px; margin-top: 8px;
-    padding: 6px 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper);
-    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.04em;
-    color: var(--ink); cursor: pointer;
+    padding: 6px 12px; border: 1px solid var(--rule); border-radius: var(--r-s); background: var(--paper);
+    font-family: var(--font-ui); font-size: 13px; color: var(--ink); cursor: pointer;
   }
   .menu-guidecard-btn:active { background: var(--paper-2); }
   .menu-session-stop {
@@ -663,13 +657,12 @@ window.__FN_SB = {
     padding: 10px 12px;
     background: var(--paper-2);
     border: 1px solid var(--rule);
-    border-radius: 8px;
+    border-radius: var(--r-s);
   }
   .menu-session-stop.show { display: block; }
   .menu-session-stop-stamp {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--rule); margin-bottom: 4px;
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule); margin-bottom: 4px;
   }
   .menu-session-stop-name {
     font-family: 'Fraunces', serif;
@@ -682,13 +675,12 @@ window.__FN_SB = {
   }
   .menu-session-warnings.show { display: flex; }
   .menu-session-warnings-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--rule);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule);
   }
   .menu-session-warning-row {
     padding: 8px 10px;
-    border-radius: 6px;
+    border-radius: var(--r-s);
     font-family: 'Fraunces', serif;
     font-size: 14px; line-height: 1.35;
     display: flex; align-items: flex-start; gap: 8px;
@@ -731,9 +723,8 @@ window.__FN_SB = {
     border-bottom: 1px solid var(--rule-soft);
   }
   .menu-masthead-stamp {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--rule); margin-bottom: 8px;
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule); margin-bottom: 8px;
   }
   .menu-masthead h1 {
     font-family: 'Fraunces', serif; font-weight: 400;
@@ -758,16 +749,15 @@ window.__FN_SB = {
   .menu-icon {
     width: 36px; height: 36px;
     display: flex; align-items: center; justify-content: center;
-    background: var(--paper-2); border-radius: 10px; flex-shrink: 0;
+    background: var(--paper-2); border-radius: var(--r-m); flex-shrink: 0;
   }
   .menu-icon svg { width: 18px; height: 18px; color: var(--ink); }
   .menu-label { flex: 1; }
   .menu-sub {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--rule); opacity: 0.7; margin-left: 6px;
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule); margin-left: 6px;
   }
-  .menu-chevron { color: var(--rule); opacity: 0.4; font-size: 22px; }
+  .menu-chevron { color: var(--rule); font-size: 22px; }
 
   /* arrived popup */
   .pin-popup {
@@ -796,9 +786,8 @@ window.__FN_SB = {
     border-bottom: 1px solid var(--rule);
   }
   .popup-stamp {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--mark);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--mark);
   }
   .popup-close {
     background: transparent; border: none;
@@ -830,10 +819,9 @@ window.__FN_SB = {
     width: 100%;
     padding: 12px 16px;
     background: var(--ink); color: var(--paper);
-    border: 1px solid var(--ink); border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-    cursor: pointer; transition: transform 0.1s;
+    border: 1px solid var(--ink); border-radius: var(--r-s);
+    font-family: var(--font-ui);
+    font-size: 13px; cursor: pointer; transition: transform 0.1s;
   }
   .popup-ok:active { transform: scale(0.97); }
   /* "Arrived" check-in — GPS-free way for a passenger to tell the guide they
@@ -841,10 +829,9 @@ window.__FN_SB = {
   .popup-arrived {
     width: 100%; padding: 12px 16px;
     background: #15803d; color: #fff;
-    border: 1px solid #15803d; border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-    cursor: pointer; transition: transform 0.1s;
+    border: 1px solid #15803d; border-radius: var(--r-s);
+    font-family: var(--font-ui);
+    font-size: 13px; cursor: pointer; transition: transform 0.1s;
   }
   .popup-arrived:active { transform: scale(0.97); }
 
@@ -855,7 +842,7 @@ window.__FN_SB = {
     background: var(--mark);
     color: var(--paper);
     padding: 12px 16px;
-    border-radius: 10px;
+    border-radius: var(--r-m);
     font-size: 13px; line-height: 1.4;
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     z-index: 8;
@@ -872,9 +859,8 @@ window.__FN_SB = {
   .gps-banner b {
     font-weight: 700;
     display: block;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    margin-bottom: 4px;
+    font-family: var(--font-ui);
+    font-size: 13px; margin-bottom: 4px;
   }
 
   /* Push permission prompt — sits at the same z-layer as the GPS banner
@@ -888,7 +874,7 @@ window.__FN_SB = {
     border: 1px solid var(--ink);
     color: var(--ink);
     padding: 12px 14px;
-    border-radius: 10px;
+    border-radius: var(--r-m);
     box-shadow: 0 4px 12px rgba(0,0,0,0.18), 0 0 0 2px var(--paper-2);
     font-family: 'Fraunces', serif;
     font-size: 13px; line-height: 1.35;
@@ -909,10 +895,9 @@ window.__FN_SB = {
     display: flex; gap: 8px; justify-content: flex-end;
   }
   .notif-prompt-btn {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.10em; text-transform: uppercase;
-    padding: 8px 14px;
-    border-radius: 6px;
+    font-family: var(--font-ui);
+    font-size: 13px; padding: 8px 14px;
+    border-radius: var(--r-s);
     border: 1px solid var(--ink);
     background: var(--paper); color: var(--ink);
     cursor: pointer;
@@ -934,7 +919,7 @@ window.__FN_SB = {
     border: 1px solid var(--armed);
     color: var(--ink);
     padding: 12px 14px;
-    border-radius: 10px;
+    border-radius: var(--r-m);
     box-shadow: 0 4px 12px rgba(0,0,0,0.18), 0 0 0 2px rgba(199,148,40,0.18);
     font-family: 'Fraunces', serif;
     font-size: 13px; line-height: 1.35;
@@ -953,10 +938,9 @@ window.__FN_SB = {
     display: flex; gap: 8px; justify-content: flex-end;
   }
   .install-prompt-btn {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.10em; text-transform: uppercase;
-    padding: 8px 14px;
-    border-radius: 6px;
+    font-family: var(--font-ui);
+    font-size: 13px; padding: 8px 14px;
+    border-radius: var(--r-s);
     border: 1px solid var(--ink);
     background: var(--paper); color: var(--ink);
     cursor: pointer;
@@ -981,11 +965,10 @@ window.__FN_SB = {
     background: #2563eb;       /* beacon blue — same family as guide identity */
     color: var(--paper);
     padding: 8px 12px;
-    border-radius: 10px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.05em;
-    line-height: 1.3;
+    border-radius: var(--r-m);
+    font-family: var(--font-ui);
+    font-size: 13px;
+        line-height: 1.3;
     text-align: center;
     box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
     z-index: 8;
@@ -1018,7 +1001,7 @@ window.__FN_SB = {
     background: var(--ink);
     color: var(--paper);
     padding: 12px 16px;
-    border-radius: 10px;
+    border-radius: var(--r-m);
     box-shadow: 0 4px 14px rgba(0,0,0,0.30);
     font-family: 'Fraunces', serif;
     font-size: 14px; line-height: 1.35;
@@ -1031,11 +1014,10 @@ window.__FN_SB = {
   .departure-place-text { flex: 1; }
   .departure-place-cancel {
     flex: 0 0 auto;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.10em; text-transform: uppercase;
-    padding: 6px 10px;
+    font-family: var(--font-ui);
+    font-size: 13px; padding: 6px 10px;
     background: transparent; color: var(--paper);
-    border: 1px solid var(--paper); border-radius: 6px;
+    border: 1px solid var(--paper); border-radius: var(--r-s);
     cursor: pointer;
   }
 
@@ -1078,14 +1060,13 @@ window.__FN_SB = {
   }
   .guide-sheet-title {
     display: flex; align-items: center; gap: 8px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--ink);
   }
   .guide-sheet-title-count {
     background: var(--ink); color: var(--paper);
-    padding: 2px 8px; border-radius: 10px;
-    font-size: 10px;
+    padding: 2px 8px; border-radius: var(--r-m);
+    font-size: 13px;
   }
   .guide-sheet-body {
     flex: 1;
@@ -1111,9 +1092,8 @@ window.__FN_SB = {
     border-bottom: 1px solid var(--rule);
   }
   .visibility-section-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--rule);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule);
     margin-bottom: 10px;
   }
   .visibility-control {
@@ -1126,8 +1106,8 @@ window.__FN_SB = {
     background: var(--paper-2);
     border: 1px solid var(--rule);
     border-radius: 999px;        /* pill */
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
+    font-family: var(--font-ui);
+    font-size: 13px;
     color: var(--ink);
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s, color 0.15s;
@@ -1144,8 +1124,8 @@ window.__FN_SB = {
     padding: 8px 10px;
     background: rgba(37, 99, 235, 0.08);
     border-left: 2px solid #2563eb;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
+    font-family: var(--font-ui);
+    font-size: 13px;
     color: var(--ink);
     line-height: 1.4;
   }
@@ -1169,9 +1149,8 @@ window.__FN_SB = {
     border-bottom: 1px solid var(--rule);
   }
   .stops-section-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--rule);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule);
     margin-bottom: 10px;
   }
 
@@ -1184,14 +1163,13 @@ window.__FN_SB = {
   }
   .passengers-section-label {
     display: flex; align-items: center; gap: 8px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--rule);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule);
     margin-bottom: 10px;
   }
   .passengers-count-badge {
     background: var(--ink); color: var(--paper);
-    padding: 2px 8px; border-radius: 10px;
+    padding: 2px 8px; border-radius: var(--r-m);
     font-size: 10px; letter-spacing: 0;
   }
   .stop-row {
@@ -1201,7 +1179,7 @@ window.__FN_SB = {
   }
   .stop-row:last-child { border-bottom: none; }
   .stop-row-num {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-ui);
     font-size: 11px; color: var(--rule);
     width: 24px; flex-shrink: 0;
   }
@@ -1214,9 +1192,8 @@ window.__FN_SB = {
   .stop-row.active .stop-row-name { color: var(--rule); }
   .stop-row-action {
     flex: 0 0 auto;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
-    padding: 6px 12px;
+    font-family: var(--font-ui);
+    font-size: 13px; padding: 6px 12px;
     background: var(--ink); color: var(--paper);
     border: 1px solid var(--ink); border-radius: 999px;
     cursor: pointer;
@@ -1225,9 +1202,8 @@ window.__FN_SB = {
   .stop-row-action[disabled] { opacity: 0.5; cursor: progress; }
   .stop-row-active-pill {
     flex: 0 0 auto;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
-    padding: 6px 12px;
+    font-family: var(--font-ui);
+    font-size: 13px; padding: 6px 12px;
     background: transparent; color: var(--signal-good);
     border: 1px solid var(--signal-good); border-radius: 999px;
     cursor: pointer;
@@ -1245,9 +1221,8 @@ window.__FN_SB = {
      ink and a heavier weight so it survives both themes. */
   .stop-row-note-btn {
     flex: 0 0 auto;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.08em;
-    font-weight: 600;
+    font-family: var(--font-ui);
+    font-size: 13px; font-weight: 600;
     padding: 6px 10px;
     background: var(--paper-2); color: var(--ink);
     border: 1px solid var(--ink); border-radius: 999px;
@@ -1261,12 +1236,11 @@ window.__FN_SB = {
     margin-bottom: 10px;
     background: var(--paper-2);
     border: 1px solid var(--signal-good);
-    border-radius: 10px;
+    border-radius: var(--r-m);
   }
   .current-stop-stamp {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
-    color: var(--signal-good);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--signal-good);
     margin-bottom: 4px;
   }
   .current-stop-name {
@@ -1283,9 +1257,8 @@ window.__FN_SB = {
     padding: 8px 0;
     background: transparent;
     border: none;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--rule);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule);
     cursor: pointer;
     text-align: left;
   }
@@ -1298,9 +1271,8 @@ window.__FN_SB = {
     padding: 8px 20px 0;
   }
   .stop-modal-duration-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--rule);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule);
     margin-bottom: 8px;
   }
   .stop-modal-duration-row {
@@ -1310,8 +1282,8 @@ window.__FN_SB = {
     width: 96px;
     padding: 8px 12px;
     background: var(--paper);
-    border: 1px solid var(--rule); border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
+    border: 1px solid var(--rule); border-radius: var(--r-s);
+    font-family: var(--font-ui);
     font-size: 14px;
     color: var(--ink);
     text-align: center;
@@ -1326,16 +1298,15 @@ window.__FN_SB = {
     outline: none; border-color: var(--ink);
   }
   .stop-modal-duration-suffix {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing: 0.08em; color: var(--rule);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule);
   }
   /* Live "departs at HH:MM" hint under the edit-notes duration field, so
      the guide sees the resulting clock time as they change the minutes. */
   .notes-modal-departure-hint {
     margin-top: 6px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing: 0.04em;
-    color: var(--rule);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule);
   }
   .notes-modal-departure-hint:empty { display: none; }
 
@@ -1345,9 +1316,8 @@ window.__FN_SB = {
     padding: 14px 20px 0;
   }
   .stop-modal-warning-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--rule);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule);
     margin-bottom: 8px;
   }
   .stop-modal-warning-row {
@@ -1358,9 +1328,8 @@ window.__FN_SB = {
     padding: 8px 4px;
     background: var(--paper-2); color: var(--ink);
     border: 1px solid var(--rule); border-radius: 999px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.08em;
-    cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: 13px; cursor: pointer;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
   }
   .stop-modal-warning-pill.active[data-level="none"] {
@@ -1387,9 +1356,9 @@ window.__FN_SB = {
   .stop-arrival-warning.show { display: flex; }
   .stop-arrival-warning-row {
     padding: 12px 14px;
-    border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing: 0.08em; line-height: 1.45;
+    border-radius: var(--r-s);
+    font-family: var(--font-ui);
+    font-size: 13px; line-height: 1.45;
   }
   /* Neutral state — note present without an explicit warning level. */
   .stop-arrival-warning-row[data-level="note"] {
@@ -1423,12 +1392,10 @@ window.__FN_SB = {
     border: 1px solid var(--ink);
     color: var(--paper);
     font-weight: 700;
-    letter-spacing: 0.1em;
-  }
+      }
   .stop-arrival-warning-prefix {
     display: inline-flex; align-items: center; gap: 6px;
-    text-transform: uppercase; letter-spacing: 0.14em;
-    font-weight: 700;
+        font-weight: 700;
     margin-right: 6px;
     line-height: 1;
     vertical-align: middle;
@@ -1447,9 +1414,8 @@ window.__FN_SB = {
     padding: 14px 20px 6px;
   }
   .stop-modal-notes-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--rule);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule);
     margin-bottom: 6px;
   }
   .stop-modal-notes textarea {
@@ -1457,7 +1423,7 @@ window.__FN_SB = {
     min-height: 64px;
     padding: 10px;
     background: var(--paper);
-    border: 1px solid var(--rule); border-radius: 6px;
+    border: 1px solid var(--rule); border-radius: var(--r-s);
     font-family: 'Fraunces', serif;
     font-size: 14px; line-height: 1.4;
     color: var(--ink);
@@ -1476,7 +1442,7 @@ window.__FN_SB = {
     flex: 1 1 auto;
     padding: 10px 12px;
     background: var(--paper);
-    border: 1px solid var(--rule); border-radius: 6px;
+    border: 1px solid var(--rule); border-radius: var(--r-s);
     font-family: 'Fraunces', serif;
     font-size: 14px; line-height: 1.4;
     color: var(--ink);
@@ -1489,8 +1455,8 @@ window.__FN_SB = {
     flex: 0 0 auto;
     width: 36px;
     background: transparent; color: var(--rule);
-    border: 1px solid var(--rule); border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
+    border: 1px solid var(--rule); border-radius: var(--r-s);
+    font-family: var(--font-ui);
     font-size: 16px; line-height: 1; cursor: pointer;
   }
   .notes-row-remove:hover { background: var(--paper-2); color: var(--ink); }
@@ -1501,7 +1467,7 @@ window.__FN_SB = {
     width: 44px; height: auto;
     background: var(--paper-2);
     border: 1px solid var(--rule);
-    border-radius: 6px;
+    border-radius: var(--r-s);
     display: inline-flex; align-items: center; justify-content: center;
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
@@ -1527,8 +1493,7 @@ window.__FN_SB = {
   /* Per-note category dropdown (replaces the tap-to-cycle button). */
   .notes-level-select {
     flex: 0 0 auto; align-self: stretch;
-    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.04em;
-    padding: 0 8px; border: 1px solid var(--rule); border-radius: 6px;
+    font-family: var(--font-ui); font-size: 13px; padding: 0 8px; border: 1px solid var(--rule); border-radius: var(--r-s);
     background: var(--paper-2); color: var(--ink); cursor: pointer;
   }
   .notes-level-select[data-level="info"]    { background: rgba(37, 99, 235, 0.10);  border-color: rgba(37, 99, 235, 0.55);  color: #2563eb; }
@@ -1539,10 +1504,9 @@ window.__FN_SB = {
     margin-top: 4px;
     padding: 10px;
     background: var(--paper-2); color: var(--ink);
-    border: 1px dashed var(--rule); border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing: 0.08em;
-    cursor: pointer;
+    border: 1px dashed var(--rule); border-radius: var(--r-s);
+    font-family: var(--font-ui);
+    font-size: 13px; cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
   }
   .notes-add-btn:hover { background: var(--paper); border-color: var(--ink); }
@@ -1582,9 +1546,8 @@ window.__FN_SB = {
     border-bottom: 1px solid var(--rule);
   }
   .stop-arrival-stamp {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--mark);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--mark);
     margin-bottom: 6px;
   }
   .stop-arrival-name {
@@ -1604,22 +1567,21 @@ window.__FN_SB = {
   .stop-arrival-info-row {
     display: flex; justify-content: space-between; align-items: baseline;
     padding: 6px 0;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px; color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--ink);
   }
   .stop-arrival-info-row + .stop-arrival-info-row {
     border-top: 1px solid var(--rule-soft);
   }
   .stop-arrival-info-label {
-    color: var(--rule); letter-spacing: 0.08em; text-transform: uppercase;
-    font-size: 10px;
+    color: var(--rule);     font-size: 13px;
   }
   .stop-arrival-info-value {
     color: var(--ink);
     font-feature-settings: "tnum";
   }
   .stop-arrival-info-value.placeholder {
-    color: var(--rule); opacity: 0.55; font-style: italic; font-family: 'Fraunces', serif; font-size: 13px;
+    color: var(--rule); font-style: italic; font-family: 'Fraunces', serif; font-size: 13px;
   }
   .stop-arrival-actions {
     display: flex; padding: 14px 20px 18px;
@@ -1628,10 +1590,9 @@ window.__FN_SB = {
     flex: 1;
     padding: 12px 16px;
     background: var(--ink); color: var(--paper);
-    border: 1px solid var(--ink); border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-    cursor: pointer;
+    border: 1px solid var(--ink); border-radius: var(--r-s);
+    font-family: var(--font-ui);
+    font-size: 13px; cursor: pointer;
     transition: transform 0.1s;
   }
   .stop-arrival-ok:active { transform: scale(0.97); }
@@ -1669,9 +1630,8 @@ window.__FN_SB = {
     border-bottom: 1px solid var(--rule);
   }
   .update-popup-stamp {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--mark);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--mark);
     margin-bottom: 6px;
   }
   .update-popup-title {
@@ -1688,11 +1648,11 @@ window.__FN_SB = {
   .update-popup-departure {
     display: flex; align-items: center; gap: 8px;
     padding: 12px 14px;
-    border-radius: 6px;
+    border-radius: var(--r-s);
     background: var(--paper-2);
     border: 1px solid var(--ink);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 13px; letter-spacing: 0.04em; color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--ink);
   }
   .update-popup-departure b {
     font-size: 16px; font-weight: 700;
@@ -1731,8 +1691,8 @@ window.__FN_SB = {
   }
   .setup-row .setup-btn { width: 100%; }
   .setup-why {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10.5px; line-height: 1.5;
+    font-family: var(--font-ui);
+    font-size: 13px; line-height: 1.5;
     color: var(--rule);
     margin: 6px 0 0;
   }
@@ -1745,9 +1705,8 @@ window.__FN_SB = {
   }
   .intro-progress span.on { background: var(--mark); }
   .intro-stamp {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
-    color: var(--mark); margin-bottom: 10px;
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--mark); margin-bottom: 10px;
   }
   .intro-title {
     font-family: 'Fraunces', serif; font-weight: 400;
@@ -1775,8 +1734,8 @@ window.__FN_SB = {
   }
   .intro-point-icon svg { display: block; }
   .intro-status {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; line-height: 1.4; letter-spacing: 0.02em;
+    font-family: var(--font-ui);
+    font-size: 13px; line-height: 1.4; letter-spacing: 0.02em;
     color: var(--rule);
     min-height: 16px; margin: 4px 0 2px;
   }
@@ -1787,10 +1746,9 @@ window.__FN_SB = {
   }
   .intro-btn {
     flex: 1; padding: 14px 16px;
-    border-radius: 8px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
-    cursor: pointer;
+    border-radius: var(--r-s);
+    font-family: var(--font-ui);
+    font-size: 13px; cursor: pointer;
     transition: transform 0.1s, background 0.15s;
     border: 1px solid var(--ink);
   }
@@ -1812,9 +1770,8 @@ window.__FN_SB = {
     border-bottom: 1px solid var(--rule-soft);
   }
   .sm-stamp {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--rule); margin-bottom: 6px;
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule); margin-bottom: 6px;
   }
   .sm-title {
     font-family: 'Fraunces', serif; font-weight: 400; font-size: 26px;
@@ -1830,7 +1787,7 @@ window.__FN_SB = {
     padding: 40px 20px;
   }
   .sm-row {
-    border: 1px solid var(--rule); border-radius: 10px;
+    border: 1px solid var(--rule); border-radius: var(--r-m);
     padding: 12px 14px; margin-bottom: 10px;
     background: var(--paper);
   }
@@ -1840,8 +1797,8 @@ window.__FN_SB = {
     color: var(--ink); line-height: 1.2;
   }
   .sm-status {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.06em; color: var(--rule);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule);
     margin-top: 3px;
   }
   .sm-status .sm-dot {
@@ -1852,9 +1809,8 @@ window.__FN_SB = {
     display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;
   }
   .sm-btn {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
-    padding: 9px 14px; border-radius: 6px; cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: 13px; padding: 9px 14px; border-radius: var(--r-s); cursor: pointer;
     border: 1px solid var(--ink); background: var(--paper); color: var(--ink);
     transition: transform 0.1s;
   }
@@ -1864,7 +1820,7 @@ window.__FN_SB = {
   .sm-rename-input {
     width: 100%; box-sizing: border-box;
     padding: 8px 10px; margin-bottom: 8px;
-    border: 1px solid var(--ink); border-radius: 6px;
+    border: 1px solid var(--ink); border-radius: var(--r-s);
     font-family: 'Fraunces', serif; font-size: 16px; color: var(--ink);
     background: var(--paper);
   }
@@ -1874,10 +1830,9 @@ window.__FN_SB = {
   }
   .sm-newbtn {
     width: 100%; padding: 14px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
-    background: var(--ink); color: var(--paper);
-    border: none; border-radius: 8px; cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: 13px; background: var(--ink); color: var(--paper);
+    border: none; border-radius: var(--r-s); cursor: pointer;
   }
   .sm-newbtn:active { transform: scale(0.98); }
 
@@ -1892,13 +1847,13 @@ window.__FN_SB = {
     padding: 12px 16px; border-bottom: 1px solid var(--rule-soft);
   }
   .gc-back {
-    flex: 0 0 auto; font-family: 'JetBrains Mono', monospace; font-size: 12px;
-    letter-spacing: 0.06em; padding: 8px 12px; background: transparent;
-    border: 1px solid var(--rule); border-radius: 8px; color: var(--ink); cursor: pointer;
+    flex: 0 0 auto; font-family: var(--font-ui); font-size: 13px;
+    padding: 8px 12px; background: transparent;
+    border: 1px solid var(--rule); border-radius: var(--r-s); color: var(--ink); cursor: pointer;
   }
   .gc-titles { min-width: 0; }
   .gc-title { font-family: 'Fraunces', serif; font-weight: 700; font-size: 19px; color: var(--ink); line-height: 1.1; }
-  .gc-sub { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--rule); margin-top: 3px; }
+  .gc-sub { font-family: var(--font-ui); font-size: 13px; color: var(--rule); margin-top: 3px; }
   .gc-list {
     flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
     padding: 14px 14px 8px; display: flex; flex-direction: column; gap: 8px;
@@ -1907,13 +1862,12 @@ window.__FN_SB = {
   .gc-msg { max-width: 82%; align-self: flex-start; }
   .gc-msg.mine { align-self: flex-end; }
   .gc-meta {
-    font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.06em;
-    color: var(--rule); margin: 0 4px 3px; display: flex; gap: 8px;
+    font-family: var(--font-ui); font-size: 13px; color: var(--rule); margin: 0 4px 3px; display: flex; gap: 8px;
   }
   .gc-msg.mine .gc-meta { justify-content: flex-end; }
   .gc-bubble {
     font-family: 'Fraunces', serif; font-size: 15px; line-height: 1.4; color: var(--ink);
-    background: var(--paper-2); border: 1px solid var(--rule-soft); border-radius: 12px;
+    background: var(--paper-2); border: 1px solid var(--rule-soft); border-radius: var(--r-m);
     padding: 9px 12px; white-space: pre-wrap; word-break: break-word;
   }
   .gc-msg.mine .gc-bubble { background: var(--ink); color: var(--paper); border-color: var(--ink); }
@@ -1925,75 +1879,74 @@ window.__FN_SB = {
   .gc-row { display: flex; gap: 8px; align-items: flex-end; }
   .gc-tools { display: flex; gap: 8px; }
   .gc-tool {
-    flex: 0 0 auto; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.02em;
+    flex: 0 0 auto; font-family: var(--font-ui); font-size: 13px; letter-spacing: 0.02em;
     padding: 7px 10px; background: var(--paper); color: var(--rule);
-    border: 1px solid var(--rule); border-radius: 10px; cursor: pointer; white-space: nowrap;
+    border: 1px solid var(--rule); border-radius: var(--r-m); cursor: pointer; white-space: nowrap;
   }
   .gc-attach-preview { display: inline-flex; align-items: center; gap: 8px; }
-  .gc-attach-preview img { height: 56px; border-radius: 8px; border: 1px solid var(--rule-soft); }
+  .gc-attach-preview img { height: 56px; border-radius: var(--r-s); border: 1px solid var(--rule-soft); }
   .gc-attach-x {
     width: 22px; height: 22px; border-radius: 50%; border: none; cursor: pointer;
     background: var(--ink); color: var(--paper); font-size: 11px; line-height: 1;
   }
-  .gc-attach-status { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--rule); }
+  .gc-attach-status { font-family: var(--font-ui); font-size: 13px; color: var(--rule); }
   .gc-input {
     flex: 1; box-sizing: border-box; resize: none; max-height: 120px;
-    padding: 10px 12px; border: 1px solid var(--rule); border-radius: 10px;
+    padding: 10px 12px; border: 1px solid var(--rule); border-radius: var(--r-m);
     font-family: 'Fraunces', serif; font-size: 15px; color: var(--ink); background: var(--paper);
   }
   .gc-send {
-    flex: 0 0 auto; font-family: 'JetBrains Mono', monospace; font-size: 11px;
-    letter-spacing: 0.1em; text-transform: uppercase; padding: 11px 16px;
-    background: var(--ink); color: var(--paper); border: none; border-radius: 10px; cursor: pointer;
+    flex: 0 0 auto; font-family: var(--font-ui); font-size: 13px;
+    padding: 11px 16px;
+    background: var(--ink); color: var(--paper); border: none; border-radius: var(--r-m); cursor: pointer;
   }
   .gc-send:disabled { opacity: 0.45; cursor: default; }
   /* Pinned house rules under the header. */
   .gc-rules {
     display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center;
     padding: 8px 14px; border-bottom: 1px solid var(--rule-soft); background: var(--paper-2);
-    font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.04em; color: var(--rule);
+    font-family: var(--font-ui); font-size: 13px; color: var(--rule);
   }
-  .gc-rules-h { text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink); opacity: 0.7; }
+  .gc-rules-h { color: var(--ink); opacity: 0.7; }
   /* Anonymous toggle in the composer. */
   .gc-anon {
-    flex: 0 0 auto; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.02em;
+    flex: 0 0 auto; font-family: var(--font-ui); font-size: 13px; letter-spacing: 0.02em;
     padding: 7px 10px; background: var(--paper); color: var(--rule);
-    border: 1px solid var(--rule); border-radius: 10px; cursor: pointer; white-space: nowrap;
+    border: 1px solid var(--rule); border-radius: var(--r-m); cursor: pointer; white-space: nowrap;
   }
   .gc-anon.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   /* Photo in a message bubble */
   .gc-photo { display: block; margin: 2px 0; }
-  .gc-photo img { max-width: 220px; max-height: 260px; border-radius: 12px; border: 1px solid var(--rule-soft); display: block; }
+  .gc-photo img { max-width: 220px; max-height: 260px; border-radius: var(--r-m); border: 1px solid var(--rule-soft); display: block; }
   .gc-msg.mine .gc-photo { margin-left: auto; }
   /* Tour chat (v0.7) — reuses .gc-* plus tabs, guide inbox, unread dots */
   .sc-tabs { display: flex; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--rule-soft); }
   .sc-tab {
     flex: 1; position: relative; cursor: pointer; padding: 8px 10px; border-radius: 999px;
-    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
-    background: transparent; color: var(--ink); border: 1px solid var(--rule);
+    font-family: var(--font-ui); font-size: 13px; background: transparent; color: var(--ink); border: 1px solid var(--rule);
   }
   .sc-tab.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   .sc-dot { display: none; position: absolute; top: 4px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--mark); }
   .sc-dot.on { display: block; }
   .sc-thread-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--rule-soft); }
-  .sc-thread-back { background: transparent; border: none; color: var(--ink); cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 4px 0; }
+  .sc-thread-back { background: transparent; border: none; color: var(--ink); cursor: pointer; font-family: var(--font-ui); font-size: 13px; padding: 4px 0; }
   .sc-thread-title { font-family: 'Fraunces', serif; font-weight: 700; font-size: 16px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sc-inbox-note { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--rule); padding: 2px 2px 6px; }
+  .sc-inbox-note { font-family: var(--font-ui); font-size: 13px; color: var(--rule); padding: 2px 2px 6px; }
   .sc-thread {
-    display: block; width: 100%; text-align: left; cursor: pointer; padding: 11px 12px; border-radius: 10px;
+    display: block; width: 100%; text-align: left; cursor: pointer; padding: 11px 12px; border-radius: var(--r-m);
     background: var(--paper-2); border: 1px solid var(--rule-soft); color: var(--ink);
   }
   .sc-thread-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
   .sc-thread-name { font-family: 'Fraunces', serif; font-size: 15px; font-weight: 600; }
-  .sc-thread-when { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--rule); }
+  .sc-thread-when { font-family: var(--font-ui); font-size: 13px; color: var(--rule); }
   .sc-thread-prev { font-size: 13px; color: var(--rule); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sc-thread.unread .sc-thread-name::after { content: ''; display: inline-block; width: 8px; height: 8px; margin-left: 7px; border-radius: 50%; background: var(--mark); vertical-align: middle; }
   .sc-thread.unread .sc-thread-prev { color: var(--ink); font-weight: 600; }
   .gc-msg.sc-from-guide .gc-bubble { border-color: var(--ink); border-width: 1.5px; }
-  .sc-ended { text-align: center; padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px); font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--rule); border-top: 1px solid var(--rule-soft); }
+  .sc-ended { text-align: center; padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px); font-family: var(--font-ui); font-size: 13px; color: var(--rule); border-top: 1px solid var(--rule-soft); }
   .sc-photo { padding: 0 10px; font-size: 16px; align-self: stretch; }
-  .sc-notify { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--rule-soft); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--ink); background: var(--paper-2); }
-  .sc-notify-btn { flex: none; cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 6px 10px; border-radius: 999px; background: transparent; color: var(--ink); border: 1px solid var(--rule); }
+  .sc-notify { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--rule-soft); font-family: var(--font-ui); font-size: 13px; color: var(--ink); background: var(--paper-2); }
+  .sc-notify-btn { flex: none; cursor: pointer; font-family: var(--font-ui); font-size: 13px; padding: 6px 10px; border-radius: 999px; background: transparent; color: var(--ink); border: 1px solid var(--rule); }
   .sc-notify-btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   .zoom-btn.chat { position: relative; }
   .zoom-btn.chat.has-unread::after, .menu-item.has-unread .menu-label::after {
@@ -2027,17 +1980,16 @@ window.__FN_SB = {
   }
   .tb-ro-title { font-family: 'Fraunces', serif; font-weight: 700; font-size: 19px; color: var(--ink); }
   .tb-ro-done {
-    font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
-    padding: 10px 20px; background: var(--ink); color: var(--paper); border: none; border-radius: 8px; cursor: pointer;
+    font-family: var(--font-ui); font-size: 13px; padding: 10px 20px; background: var(--ink); color: var(--paper); border: none; border-radius: var(--r-s); cursor: pointer;
   }
   .tb-ro-hint {
-    padding: 10px 16px 2px; font-family: 'JetBrains Mono', monospace; font-size: 10px;
-    letter-spacing: 0.06em; color: var(--rule);
+    padding: 10px 16px 2px; font-family: var(--font-ui); font-size: 13px;
+    color: var(--rule);
   }
   .tb-ro-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 14px calc(24px + env(safe-area-inset-bottom, 0px)); }
   .tb-ro-tile {
     display: flex; align-items: center; gap: 12px; padding: 14px 12px; margin-bottom: 8px;
-    background: var(--paper); border: 1px solid var(--rule); border-radius: 10px;
+    background: var(--paper); border: 1px solid var(--rule); border-radius: var(--r-m);
     user-select: none; touch-action: none; cursor: grab;
   }
   .tb-ro-tile.dragging { box-shadow: 0 10px 28px rgba(0,0,0,0.32); border-color: #2563eb; position: relative; z-index: 5; opacity: 0.97; }
@@ -2045,28 +1997,26 @@ window.__FN_SB = {
   .tb-ro-name { font-family: 'Fraunces', serif; font-size: 15px; color: var(--ink); flex: 1; min-width: 0; }
   .tb-header { padding: 16px 20px 12px; border-bottom: 1px solid var(--rule-soft); }
   .tb-stamp {
-    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em;
-    text-transform: uppercase; color: var(--rule); margin-bottom: 6px;
+    font-family: var(--font-ui); font-size: 13px; color: var(--rule); margin-bottom: 6px;
   }
   .tb-title {
     font-family: 'Fraunces', serif; font-weight: 400; font-size: 26px; color: var(--ink);
     font-variation-settings: "opsz" 90;
   }
   .tb-hint {
-    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; line-height: 1.5;
+    font-family: var(--font-ui); font-size: 13px; line-height: 1.5;
     color: var(--rule); margin-top: 8px;
   }
   .tb-hint b { color: var(--ink); font-weight: 700; }
   .tb-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px 16px calc(16px + env(safe-area-inset-bottom,0px)); }
   .tb-empty { text-align:center; color:var(--rule); font-family:'Fraunces',serif; font-style:italic; font-size:15px; padding:40px 20px; }
-  .tb-row { border:1px solid var(--rule); border-radius:10px; padding:12px 14px; margin-bottom:10px; background:var(--paper); }
+  .tb-row { border:1px solid var(--rule); border-radius:var(--r-m); padding:12px 14px; margin-bottom:10px; background:var(--paper); }
   .tb-row.base { border-style: dashed; }
   .tb-row-name { font-family:'Fraunces',serif; font-weight:700; font-size:17px; color:var(--ink); line-height:1.2; }
   .tb-row-sub { font-family:'Fraunces',serif; font-style:italic; font-size:13px; color:#4a4a4a; margin-top:2px; }
-  .tb-row-meta { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.06em; color:var(--rule); margin-top:4px; }
+  .tb-row-meta { font-family:var(--font-ui); font-size:13px; color:var(--rule); margin-top:4px; }
   .tb-tag {
-    display:inline-block; font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.1em;
-    text-transform:uppercase; padding:2px 7px; border-radius:10px; margin-left:6px; vertical-align:middle;
+    display:inline-block; font-family:var(--font-ui); font-size:13px; padding:2px 7px; border-radius:var(--r-m); margin-left:6px; vertical-align:middle;
     border:1px solid var(--rule); color:var(--rule);
   }
   .tb-tag.yours { border-color: var(--ink); color: var(--ink); }
@@ -2088,20 +2038,20 @@ window.__FN_SB = {
     flex: 0 0 auto; display: flex; align-items: center; justify-content: center; gap: 10px;
     padding: 9px 12px; background: var(--paper); cursor: ns-resize;
     border: none; border-top: 1px solid var(--rule-soft); border-bottom: 1px solid var(--rule-soft);
-    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--rule);
+    font-family: var(--font-ui); font-size: 13px; color: var(--rule);
     touch-action: none; user-select: none; -webkit-user-select: none;
   }
   .tb-panel-grip { display: inline-block; width: 40px; height: 5px; border-radius: 3px; background: var(--rule); opacity: 0.55; }
   /* Collapsed = animate to zero height (not display:none) so it slides shut.
      The handle bar stays, so the list can be pulled back up. */
   .tb-editor.panel-collapsed .tb-panel { flex-basis: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; }
-  .tb-section-label { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); margin:8px 0 6px; }
+  .tb-section-label { font-family:var(--font-ui); font-size:13px; color:var(--rule); margin:8px 0 6px; }
   /* Compact "Stops (N)" header row with an inline Rename. */
   .tb-list-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:2px 0 8px; }
   .tb-mini { padding:5px 10px !important; font-size:9px !important; }
   .tb-mini.tb-done { color:#15803d; border-color:#15803d; }
   .tb-stop-row, .tb-pin-row {
-    border:1px solid var(--rule); border-radius:8px; padding:8px 10px; margin-bottom:6px; background:var(--paper); cursor:pointer;
+    border:1px solid var(--rule); border-radius:var(--r-s); padding:8px 10px; margin-bottom:6px; background:var(--paper); cursor:pointer;
   }
   .tb-stop-row.selected { border-color:var(--ink); }
   .tb-stop-row.open { box-shadow:0 2px 8px rgba(0,0,0,0.08); }
@@ -2114,21 +2064,21 @@ window.__FN_SB = {
   .tb-rowbody { font-family:'Fraunces',serif; font-size:13px; color:#3a3a3a; margin-top:2px; line-height:1.35; }
   .tb-num {
     display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%;
-    background:var(--ink); color:var(--paper); font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; margin-right:8px; vertical-align:middle;
+    background:var(--ink); color:var(--paper); font-family:var(--font-ui); font-size:10px; font-weight:700; margin-right:8px; vertical-align:middle;
   }
   /* Map markers */
   .tb-stop-marker {
     width:28px; height:28px; border-radius:50%; background:var(--ink); color:var(--paper);
     border:2px solid var(--paper); box-shadow:0 2px 6px rgba(0,0,0,0.3);
     display:flex; align-items:center; justify-content:center;
-    font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700;
+    font-family:var(--font-ui); font-size:12px; font-weight:700;
   }
   .tb-stop-marker.sel { background:var(--mark); }
   .tb-pin-marker {
     width:20px; height:20px; border-radius:50%; background:var(--mark); border:2px solid var(--paper);
     box-shadow:0 1px 4px rgba(0,0,0,0.3);
     display:flex; align-items:center; justify-content:center;
-    color:var(--paper); font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700;
+    color:var(--paper); font-family:var(--font-ui); font-size:10px; font-weight:700;
   }
   .tb-pin-marker.emoji { font-size:12px; }
   /* Highlighted marker (tapped on the map to locate it in the list) */
@@ -2144,15 +2094,14 @@ window.__FN_SB = {
      overlap them — that row is ~34px tall at top:8px+inset. */
   .tb-place-banner {
     position:absolute; left:12px; right:12px; top:calc(max(env(safe-area-inset-top,0px),0px) + 52px); z-index:8;
-    background:var(--ink); color:var(--paper); padding:10px 14px; border-radius:10px;
+    background:var(--ink); color:var(--paper); padding:10px 14px; border-radius:var(--r-m);
     font-family:'Fraunces',serif; font-size:13px; display:none; align-items:center; gap:10px;
     box-shadow:0 4px 14px rgba(0,0,0,0.3);
   }
   .tb-place-banner.show { display:flex; }
   .tb-place-banner span { flex:1; }
   .tb-place-cancel {
-    font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase;
-    padding:5px 9px; background:transparent; color:var(--paper); border:1px solid var(--paper); border-radius:6px; cursor:pointer;
+    font-family:var(--font-ui); font-size:13px; padding:5px 9px; background:transparent; color:var(--paper); border:1px solid var(--paper); border-radius:var(--r-s); cursor:pointer;
   }
   /* Form modal */
   .tb-form-backdrop {
@@ -2165,18 +2114,18 @@ window.__FN_SB = {
     box-shadow:0 20px 60px rgba(0,0,0,0.35), 0 0 0 8px var(--paper-2); padding:18px 20px 20px;
   }
   .tb-form h3 { font-family:'Fraunces',serif; font-weight:400; font-size:20px; margin-bottom:14px; }
-  .tb-form label { display:block; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--rule); margin:10px 0 4px; }
+  .tb-form label { display:block; font-family:var(--font-ui); font-size:13px; color:var(--rule); margin:10px 0 4px; }
   .tb-form input, .tb-form textarea {
-    width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid var(--rule); border-radius:6px;
+    width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid var(--rule); border-radius:var(--r-s);
     font-family:'Fraunces',serif; font-size:15px; color:var(--ink); background:var(--paper);
   }
   .tb-form textarea { min-height:64px; resize:vertical; }
-  .tb-form-err { color:var(--mark); font-family:'JetBrains Mono',monospace; font-size:11px; min-height:14px; margin-top:8px; }
+  .tb-form-err { color:var(--mark); font-family:var(--font-ui); font-size:13px; min-height:14px; margin-top:8px; }
   .tb-form-actions { display:flex; gap:10px; margin-top:16px; }
   .tb-choice-row { display:flex; gap:8px; }
   .tb-choice {
-    flex:1; padding:11px; border:1px solid var(--rule); border-radius:6px; background:var(--paper); cursor:pointer;
-    font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:0.06em; color:var(--ink);
+    flex:1; padding:11px; border:1px solid var(--rule); border-radius:var(--r-s); background:var(--paper); cursor:pointer;
+    font-family:var(--font-ui); font-size:13px; color:var(--ink);
   }
   .tb-choice.on { background:var(--ink); color:var(--paper); border-color:var(--ink); }
 
@@ -2186,9 +2135,8 @@ window.__FN_SB = {
     display:flex; align-items:center; gap:8px; max-width:calc(100% - 110px);
   }
   .tb-float-back {
-    flex:0 0 auto; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.04em;
-    padding:7px 11px; background:rgba(255,255,255,0.9); color:var(--ink);
-    border:1px solid rgba(0,0,0,0.12); border-radius:8px; cursor:pointer;
+    flex:0 0 auto; font-family:var(--font-ui); font-size:13px; padding:7px 11px; background:rgba(255,255,255,0.9); color:var(--ink);
+    border:1px solid rgba(0,0,0,0.12); border-radius:var(--r-s); cursor:pointer;
     -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); box-shadow:0 1px 4px rgba(0,0,0,0.18);
   }
   .tb-float-back:active { transform:scale(0.97); }
@@ -2199,14 +2147,14 @@ window.__FN_SB = {
   }
   .tb-float-tr { position:absolute; top:calc(8px + max(env(safe-area-inset-top,0px), 0px)); right:10px; z-index:7; }
   .tb-add-btn {
-    font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:0.06em; font-weight:700;
+    font-family:var(--font-ui); font-size:13px; font-weight:700;
     padding:8px 14px; background:var(--ink); color:var(--paper);
-    border:none; border-radius:8px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.28);
+    border:none; border-radius:var(--r-s); cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.28);
   }
   .tb-add-btn:active { transform:scale(0.97); }
   .tb-add-menu {
     position:absolute; top:42px; right:0; min-width:208px;
-    background:var(--paper); border:1px solid var(--rule); border-radius:10px; overflow:hidden;
+    background:var(--paper); border:1px solid var(--rule); border-radius:var(--r-m); overflow:hidden;
     box-shadow:0 12px 36px rgba(0,0,0,0.28); display:none; flex-direction:column;
   }
   .tb-add-menu.show { display:flex; }
@@ -2229,8 +2177,8 @@ window.__FN_SB = {
   /* Live zoom readout on the editor map */
   .tb-zoom {
     position:absolute; bottom:10px; right:10px; z-index:5;
-    background:var(--paper); border:1px solid var(--rule); border-radius:8px;
-    padding:3px 9px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink);
+    background:var(--paper); border:1px solid var(--rule); border-radius:var(--r-s);
+    padding:3px 9px; font-family:var(--font-ui); font-size:13px; color:var(--ink);
     box-shadow:0 1px 4px rgba(0,0,0,0.15); pointer-events:none;
   }
   /* Save-state + Done — sits at the end of the scrolling panel (not pinned) */
@@ -2239,10 +2187,9 @@ window.__FN_SB = {
     border-top:1px solid var(--rule-soft);
     display:flex; align-items:center; gap:12px;
   }
-  .tb-saved { flex:1; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.04em; color:var(--rule); }
+  .tb-saved { flex:1; font-family:var(--font-ui); font-size:13px; color:var(--rule); }
   .tb-donebtn {
-    flex:0 0 auto; font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:0.1em; text-transform:uppercase;
-    padding:12px 24px; background:var(--ink); color:var(--paper); border:none; border-radius:8px; cursor:pointer;
+    flex:0 0 auto; font-family:var(--font-ui); font-size:13px; padding:12px 24px; background:var(--ink); color:var(--paper); border:none; border-radius:var(--r-s); cursor:pointer;
   }
   .tb-donebtn:active { transform:scale(0.98); }
 
@@ -2260,7 +2207,7 @@ window.__FN_SB = {
     display: none;
     background: var(--paper);
     border: 1px solid var(--rule);
-    border-radius: 12px;
+    border-radius: var(--r-m);
     padding: 6px 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.14);
     text-align: right;
@@ -2281,12 +2228,11 @@ window.__FN_SB = {
     width: 100%;
     margin-top: 6px;
     padding: 6px 10px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
-    background: transparent;
+    font-family: var(--font-ui);
+    font-size: 13px; background: transparent;
     color: var(--mark);
     border: 1px solid var(--mark);
-    border-radius: 8px;
+    border-radius: var(--r-s);
     cursor: pointer;
     touch-action: none;
   }
@@ -2297,27 +2243,23 @@ window.__FN_SB = {
     border-top: 1px dashed var(--rule);
     display: none;
     align-items: center; justify-content: flex-end; gap: 6px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 9px; letter-spacing: 0.1em;
-    color: var(--rule); text-transform: uppercase;
-  }
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule);   }
   .stop-timer.clickable .stop-timer-bus-hint { display: flex; }
   .stop-timer-bus-hint svg { width: 18px; height: 14px; display: block; }
   .stop-timer-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 9px; letter-spacing: 0.12em;
-    color: var(--muted); text-transform: uppercase;
-    line-height: 1;
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--muted);     line-height: 1;
   }
   .stop-timer-time {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-ui);
     font-size: 18px; font-weight: 700;
     color: var(--ink); line-height: 1.15;
     margin-top: 2px;
     font-variant-numeric: tabular-nums;
   }
   .stop-timer-countdown {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-ui);
     font-size: 13px;
     color: var(--ink); line-height: 1.2;
     font-variant-numeric: tabular-nums;
@@ -2328,8 +2270,8 @@ window.__FN_SB = {
      Amber/red until everyone's near the bus, green once they all are. Uses
      theme vars so it reads on both the light and dark card. */
   .stop-timer-headcount {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px; font-weight: 700; letter-spacing: 0.03em;
+    font-family: var(--font-ui);
+    font-size: 13px; font-weight: 700; letter-spacing: 0.03em;
     margin-top: 4px; color: var(--mark); line-height: 1.2;
     font-variant-numeric: tabular-nums;
   }
@@ -2378,7 +2320,7 @@ window.__FN_SB = {
   .bus-pin-pulse::after {
     content: "";
     position: absolute; inset: -3px;
-    border-radius: 6px;
+    border-radius: var(--r-s);
     border: 2px solid var(--mark);
     animation: bus-pin-pulse 1.6s ease-out infinite;
     pointer-events: none;
@@ -2398,7 +2340,7 @@ window.__FN_SB = {
     margin: 0 10px;
     background: var(--paper);
     border: 1px solid var(--rule);
-    border-radius: 12px;
+    border-radius: var(--r-m);
     box-shadow: 0 2px 8px rgba(0,0,0,0.14), 0 0 0 2px var(--paper-2);
     display: none;
     overflow: hidden;          /* keeps rounded corners; height is content-driven */
@@ -2444,8 +2386,7 @@ window.__FN_SB = {
     background: var(--ink);
     color: var(--paper);
     font-weight: 700;
-    letter-spacing: 0.1em;
-  }
+      }
   .top-warning-icon {
     flex: 0 0 auto;
     width: 16px; height: 16px;
@@ -2468,7 +2409,7 @@ window.__FN_SB = {
     background: transparent; color: inherit;
     border: 1px solid currentColor;
     border-radius: 50%;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-ui);
     font-size: 12px;
     line-height: 1;
     cursor: pointer;
@@ -2547,9 +2488,8 @@ window.__FN_SB = {
     border-bottom: 1px solid var(--rule);
   }
   .stop-modal-stamp {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--mark);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--mark);
   }
   .stop-modal-body { padding: 18px 20px 14px; }
   .stop-modal-body h2 {
@@ -2562,8 +2502,8 @@ window.__FN_SB = {
     font-size: 14px; line-height: 1.5; color: #2a2e2a;
   }
   .stop-modal-error {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; color: var(--mark);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--mark);
     margin-top: 10px; min-height: 0;
   }
   .stop-modal-actions {
@@ -2573,9 +2513,8 @@ window.__FN_SB = {
   .stop-modal-btn {
     flex: 1;
     padding: 12px 14px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-    border-radius: 6px;
+    font-family: var(--font-ui);
+    font-size: 13px; border-radius: var(--r-s);
     cursor: pointer;
     border: 1px solid var(--ink);
     transition: transform 0.1s;
@@ -2604,11 +2543,10 @@ window.__FN_SB = {
     display: flex; justify-content: center;
   }
   .end-session-btn {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-    padding: 10px 18px;
+    font-family: var(--font-ui);
+    font-size: 13px; padding: 10px 18px;
     background: transparent; color: var(--mark);
-    border: 1px solid var(--mark); border-radius: 6px;
+    border: 1px solid var(--mark); border-radius: var(--r-s);
     cursor: pointer;
     transition: background 0.15s, color 0.15s;
   }
@@ -2632,16 +2570,14 @@ window.__FN_SB = {
   .menu-guidelogin-link {
     display: block; width: 100%; margin: 16px auto 2px; padding: 6px;
     background: transparent; border: none; cursor: pointer; text-align: center;
-    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em;
-    text-transform: uppercase; color: var(--rule); text-decoration: underline;
+    font-family: var(--font-ui); font-size: 13px; color: var(--rule); text-decoration: underline;
   }
   .menu-guidelogin-link:active { color: var(--ink); }
   .install-btn {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
-    padding: 12px 24px;
+    font-family: var(--font-ui);
+    font-size: 13px; padding: 12px 24px;
     background: #2ea44f; color: #ffffff;
-    border: 1px solid #267e3d; border-radius: 6px;
+    border: 1px solid #267e3d; border-radius: var(--r-s);
     cursor: pointer;
     transition: background 0.15s, transform 0.1s;
     box-shadow: 0 2px 6px rgba(46,164,79,0.25);
@@ -2657,7 +2593,7 @@ window.__FN_SB = {
   }
   .install-hint {
     font-family: 'Fraunces', serif;
-    font-size: 12px; line-height: 1.45;
+    font-size: 13px; line-height: 1.45;
     color: var(--rule);
     text-align: center;
     max-width: 320px;
@@ -2671,7 +2607,7 @@ window.__FN_SB = {
     margin: 0 0 4px;
     background: rgba(199, 148, 40, 0.10);
     border: 1px solid var(--armed);
-    border-radius: 8px;
+    border-radius: var(--r-s);
     font-family: 'Fraunces', serif;
     font-size: 13px; line-height: 1.5; color: #5a3a00;
   }
@@ -2693,9 +2629,8 @@ window.__FN_SB = {
   }
   .session-ended-screen.show { display: flex; }
   .session-ended-stamp {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--rule);
+    font-family: var(--font-ui);
+    font-size: 13px; color: var(--rule);
   }
   .session-ended-title {
     font-family: 'Fraunces', serif; font-style: italic;
@@ -2707,10 +2642,9 @@ window.__FN_SB = {
     max-width: 280px;
   }
   .session-ended-btn {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-    padding: 14px 28px; background: transparent; color: var(--ink);
-    border: 1px solid var(--rule); border-radius: 6px; cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: 13px; padding: 14px 28px; background: transparent; color: var(--ink);
+    border: 1px solid var(--rule); border-radius: var(--r-s); cursor: pointer;
     margin-top: 10px;
   }
 
@@ -2779,13 +2713,14 @@ window.__FN_SB = {
             <div class="stop-timer-label">Departure</div>
             <div class="stop-timer-time" id="stop-timer-time">—:—</div>
             <div class="stop-timer-countdown" id="stop-timer-countdown">—:—</div>
+            <div class="stop-timer-bar" id="stop-timer-bar" aria-hidden="true"><i></i></div>
             <div class="stop-timer-headcount" id="stop-timer-headcount" style="display:none;"></div>
             <!-- Trial 4 (guide ask): "end stop should be placed below the tour
                  time". Guide-only; visible while a stop is active. Lives inside
                  the clickable timer card, so the handler stops propagation. -->
             <button type="button" class="stop-timer-end" id="stop-timer-end" style="display:none;">■ End stop</button>
             <div class="stop-timer-bus-hint" id="stop-timer-bus-hint" aria-hidden="true">
-              <span>tap to send</span>
+              <span>Tap to send</span>
               <svg viewBox="0 0 24 18" width="22" height="18" aria-hidden="true">
                 <rect x="2" y="3" width="18" height="11" rx="2.4" fill="currentColor" />
                 <rect x="3.6" y="4.8" width="5.6" height="3.4" fill="var(--paper)"/>
@@ -3193,20 +3128,26 @@ window.__FN_SB = {
 
       <div class="pk-section">
         <div class="pk-h" id="pk-contacts-h">Passengers to text</div>
+        <div class="pk-count" id="pk-count" style="display:none;"></div>
         <div id="pk-contacts"></div>
         <textarea class="pk-textarea" id="pk-paste" style="margin-top:10px;" placeholder="Paste phone numbers — one passenger per line, name optional:&#10;Anna Jónsdóttir +354 611 2345&#10;+44 7911 123456"></textarea>
-        <div class="pk-row">
-          <input class="pk-input" id="pk-cc" style="flex:0 0 92px;" maxlength="5" inputmode="tel" aria-label="Country code for numbers without one">
+        <label class="pk-h pk-h-sub" for="pk-cc">Country code for numbers written without one</label>
+        <div class="pk-row" style="margin-top:0;">
+          <input class="pk-input" id="pk-cc" style="flex:0 0 92px;" maxlength="5" inputmode="tel">
           <button type="button" class="pk-btn" id="pk-add" style="margin-top:0;">Add numbers</button>
         </div>
-        <div class="pk-note">Numbers written without a country code get the one on the left.</div>
       </div>
 
       <div class="pk-section">
         <div class="pk-h">Text message</div>
         <textarea class="pk-textarea" id="pk-message" maxlength="300" style="min-height:64px;"></textarea>
         <div class="pk-note">The link to join this tour is added at the end automatically.</div>
-        <select class="pk-select" id="pk-mode" style="margin-top:12px;" aria-label="How to send the texts">
+        <div class="pk-h pk-h-sub" id="pk-mode-h">How to send</div>
+        <div class="pk-seg" id="pk-mode-seg" role="radiogroup" aria-labelledby="pk-mode-h">
+          <button type="button" role="radio" data-mode="auto">Automatically</button>
+          <button type="button" role="radio" data-mode="phone">One by one from this phone</button>
+        </div>
+        <select id="pk-mode" hidden aria-hidden="true" tabindex="-1">
           <option value="auto">Send automatically when pickup starts</option>
           <option value="phone">Send one by one from this phone</option>
         </select>
@@ -3247,18 +3188,18 @@ window.__FN_SB = {
       <div class="screen-title" data-i18n="share_title">Share invite</div>
     </div>
     <div class="screen-body">
-      <div data-i18n="share_sub" style="text-align:center; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); line-height:1.5; margin-bottom:20px;">
+      <div data-i18n="share_sub" style="text-align:center; font-family:var(--font-ui); font-size:13px; color:var(--rule); line-height:1.5; margin-bottom:20px;">
         Scan with another phone's camera, or copy the link.
       </div>
-      <div id="share-qr-wrap" style="display:flex; justify-content:center; padding:20px; background:#ffffff; border:2px solid var(--ink); border-radius:12px; margin-bottom:18px;">
+      <div id="share-qr-wrap" style="display:flex; justify-content:center; padding:20px; background:#ffffff; border:2px solid var(--ink); border-radius:var(--r-m); margin-bottom:18px;">
         <!-- QR SVG inserted at runtime by qrcode-generator -->
         <div id="share-qr" style="display:flex; align-items:center; justify-content:center; min-height:240px; min-width:240px; background:#ffffff;"></div>
       </div>
-      <div id="share-url" style="padding:12px 14px; background:var(--paper-2); border:1px solid var(--rule); border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:11px; word-break:break-all; user-select:all; line-height:1.5; margin-bottom:14px;"></div>
+      <div id="share-url" style="padding:12px 14px; background:var(--paper-2); border:1px solid var(--rule); border-radius:var(--r-s); font-family:var(--font-ui); font-size:13px; word-break:break-all; user-select:all; line-height:1.5; margin-bottom:14px;"></div>
       <button
         id="share-copy-btn"
         data-i18n="share_copy"
-        style="width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+        style="width:100%; font-family:var(--font-ui); font-size:15px; font-weight:700; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:var(--r-s); cursor:pointer;"
       >
         Copy link
       </button>
@@ -3379,7 +3320,7 @@ window.__FN_SB = {
     <div style="font-family:'Fraunces',serif; font-style:italic; font-size:20px; color:var(--ink);">
       Please rotate your phone
     </div>
-    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule);">
+    <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule);">
       Fieldnote works in portrait.
     </div>
   </div>
@@ -3543,7 +3484,7 @@ window.__FN_SB = {
        - AFTER the lib scripts: the parser only gets here once they have run,
          so the font files never compete with the libs for a thin connection
          (in <head> they cost ~0.5 s of boot on a weak signal — measured). -->
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <script>
 // Old-browser blank-page guard. This single inline script uses modern JS
 // (e.g. `??` nullish coalescing). A browser too old to PARSE it (iOS Safari
@@ -3588,7 +3529,7 @@ function showBootError() {
       '<div style="font-size:14px;line-height:1.6;color:#555;max-width:300px">' +
       'Check your internet connection and try again. A weak signal on the first open can interrupt loading.</div>' +
       '<button id="fn-boot-retry" type="button" style="margin-top:6px;font-size:15px;padding:14px 28px;' +
-      'background:#1a1d1a;color:#f4ede0;border:none;border-radius:10px;cursor:pointer;' +
+      'background:#1a1d1a;color:#f4ede0;border:none;border-radius:var(--r-m);cursor:pointer;' +
       'font-family:-apple-system,Helvetica,Arial,sans-serif">Try again</button>';
     document.body.appendChild(el);
     var btn = document.getElementById('fn-boot-retry');
@@ -3735,7 +3676,7 @@ const I18N = {
     install_text: 'Install Fieldnote on your phone to keep notifications reliable even if you close the browser.', install_btn: 'Install',
     notif_text: 'Get notified when your guide activates a new stop or sends a warning, even with the app closed.', notif_enable: 'Enable', prompt_not_now: 'Not now',
     arrival_joke: "Watch out for the hidden people — they're somewhere around.",
-    hud_head_back: 'Time to head back', hud_departure: 'Departure',
+    hud_head_back: 'Time to head back', hud_departure: 'Departure', hud_back_at_bus: 'Back at the bus', hud_min_left: '{n} min left',
     update_from_guide: 'Update from your guide',
     gps_getting: 'Getting your location…',
     gps_denied: "Location permission was denied. Open your browser's site settings to allow it, then tap here to retry.",
@@ -3808,7 +3749,7 @@ const I18N = {
     install_text: 'Instala Fieldnote en tu teléfono para mantener las notificaciones fiables aunque cierres el navegador.', install_btn: 'Instalar',
     notif_text: 'Recibe un aviso cuando tu guía active una nueva parada o envíe una advertencia, incluso con la app cerrada.', notif_enable: 'Activar', prompt_not_now: 'Ahora no',
     arrival_joke: 'Cuidado con la gente oculta: andan por aquí, en alguna parte.',
-    hud_head_back: 'Hora de volver', hud_departure: 'Salida',
+    hud_head_back: 'Hora de volver', hud_departure: 'Salida', hud_back_at_bus: 'De vuelta en el autobús', hud_min_left: 'Quedan {n} min',
     update_from_guide: 'Actualización de tu guía',
     gps_getting: 'Obteniendo tu ubicación…',
     gps_denied: 'El permiso de ubicación fue denegado. Actívalo en los ajustes del sitio de tu navegador y luego toca aquí para reintentar.',
@@ -3881,7 +3822,7 @@ const I18N = {
     install_text: '在手机上安装 Fieldnote，即使关闭浏览器也能保持通知可靠。', install_btn: '安装',
     notif_text: '当向导激活新的停靠点或发送警示时收到通知——即使应用已关闭。', notif_enable: '开启', prompt_not_now: '暂不',
     arrival_joke: '小心“隐形人”——他们就在附近。',
-    hud_head_back: '该回去了', hud_departure: '出发',
+    hud_head_back: '该回去了', hud_departure: '出发', hud_back_at_bus: '返回巴士时间', hud_min_left: '还剩 {n} 分钟',
     update_from_guide: '来自向导的更新',
     gps_getting: '正在获取你的位置…',
     gps_denied: '位置权限被拒绝。请在浏览器的网站设置中允许定位，然后点按此处重试。',
@@ -4814,13 +4755,13 @@ function showLanguageGate() {
   el.innerHTML = `
     <img class="brand-logo" src="/icon.svg" alt="Fieldnote" />
     <div style="font-family:'Fraunces',serif; font-style:italic; font-size:23px; color:var(--ink);">${t('gate_title')}</div>
-    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule);">${t('gate_sub')}</div>
+    <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule);">${t('gate_sub')}</div>
     <div id="lang-btns" style="display:flex; flex-direction:column; gap:10px; width:240px; margin-top:4px;"></div>`;
   document.getElementById('phone').appendChild(el);
   const wrap = el.querySelector('#lang-btns');
   LANGS.forEach(l => {
     const b = document.createElement('button'); b.type = 'button'; b.textContent = l.native;
-    b.style.cssText = "font-family:'JetBrains Mono',monospace; font-size:15px; padding:15px; background:var(--paper-2); color:var(--ink); border:1px solid var(--rule); border-radius:10px; cursor:pointer;";
+    b.style.cssText = "font-family:var(--font-ui); font-size:15px; padding:15px; background:var(--paper-2); color:var(--ink); border:1px solid var(--rule); border-radius:var(--r-m); cursor:pointer;";
     if (l.code === LANG) b.style.borderColor = 'var(--ink)';
     b.addEventListener('click', () => { try { localStorage.setItem('fieldnote_lang', l.code); } catch (_e) {} location.reload(); });
     wrap.appendChild(b);
@@ -4854,10 +4795,10 @@ function showAttackerGate() {
         @keyframes nyanBob{0%,100%{transform:translateY(-4px);}50%{transform:translateY(4px);}}
         #nyan-gate .nyan-q{font-family:'Fraunces',serif; font-style:italic; font-size:22px; line-height:1.35; color:#fff; max-width:300px; text-shadow:0 2px 8px rgba(0,0,0,.5);}
         #nyan-gate .nyan-btns{display:flex; flex-direction:column; gap:12px; width:240px;}
-        #nyan-gate .nyan-btns button{font-family:'JetBrains Mono',monospace; font-size:15px; padding:15px;
-          background:rgba(255,255,255,.10); color:#fff; border:1px solid rgba(255,255,255,.55); border-radius:10px; cursor:pointer;}
+        #nyan-gate .nyan-btns button{font-family:var(--font-ui); font-size:15px; padding:15px;
+          background:rgba(255,255,255,.10); color:#fff; border:1px solid rgba(255,255,255,.55); border-radius:var(--r-m); cursor:pointer;}
         #nyan-gate .nyan-btns button:active{background:rgba(255,255,255,.22);}
-        #nyan-gate .nyan-foot{font-family:'JetBrains Mono',monospace; font-size:10px; color:rgba(255,255,255,.4);}
+        #nyan-gate .nyan-foot{font-family:var(--font-ui); font-size:13px; color:rgba(255,255,255,.4);}
       </style>
       <div class="nyan-stars"></div>
       <svg class="nyan-cat" viewBox="0 0 240 84" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
@@ -5130,21 +5071,21 @@ async function openQrScanner() {
   const hint = document.createElement('div');
   hint.textContent = 'Point at the tour QR code';
   hint.style.cssText = 'position:absolute; top:44px; left:0; right:0; text-align:center;'
-    + "font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:0.08em;"
+    + "font-family:var(--font-ui); font-size:13px; "
     + 'color:#fff; text-shadow:0 1px 4px rgba(0,0,0,0.8); padding:0 30px; line-height:1.5;';
   el.appendChild(hint);
   const frame = document.createElement('div');
   frame.style.cssText = 'position:absolute; top:50%; left:50%; width:230px; height:230px;'
     + 'transform:translate(-50%,-50%); border:2px solid rgba(255,255,255,0.9);'
-    + 'border-radius:18px; box-shadow:0 0 0 4000px rgba(0,0,0,0.35);';
+    + 'border-radius:var(--r-l); box-shadow:0 0 0 4000px rgba(0,0,0,0.35);';
   el.appendChild(frame);
   const cancel = document.createElement('button');
   cancel.type = 'button';
   cancel.textContent = 'Cancel';
   cancel.style.cssText = 'position:absolute; bottom:44px; left:50%; transform:translateX(-50%);'
-    + "font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em;"
-    + 'text-transform:uppercase; padding:13px 28px; background:rgba(0,0,0,0.55); color:#fff;'
-    + 'border:1px solid rgba(255,255,255,0.7); border-radius:6px; cursor:pointer;';
+    + "font-family:var(--font-ui); font-size:13px; "
+    + 'padding:13px 28px; background:rgba(0,0,0,0.55); color:#fff;'
+    + 'border:1px solid rgba(255,255,255,0.7); border-radius:var(--r-s); cursor:pointer;';
   cancel.addEventListener('click', closeQrScanner);
   el.appendChild(cancel);
   document.body.appendChild(el);
@@ -5199,30 +5140,30 @@ function showLandingScreen() {
   const standalone = runningAsInstalledPWA();
   el.innerHTML = `
     <img class="brand-logo" src="/icon.svg" alt="Fieldnote" />
-    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
+    <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule);">
       Fieldnote
     </div>
     <div style="font-family:'Fraunces',serif; font-style:italic; font-size:24px; color:var(--ink); max-width:280px; line-height:1.3;">
       ${standalone ? 'Find your tour' : 'Joining a tour?'}
     </div>
-    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:260px; line-height:1.6;">
+    <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule); max-width:260px; line-height:1.6;">
       Type your guide's name to join — no account needed.
     </div>
     <input id="landing-guide-name" type="text" placeholder="guide's name" autocomplete="off" autocapitalize="words"
-      style="font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:6px; text-align:center;" />
+      style="font-family:var(--font-ui); font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:var(--r-s); text-align:center;" />
     <button
       id="landing-find-btn"
-      style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:13px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+      style="font-family:var(--font-ui); font-size:15px; font-weight:700; padding:13px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:var(--r-s); cursor:pointer;"
     >Find my tour</button>
-    <div id="landing-find-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em; max-width:260px;"></div>
+    <div id="landing-find-error" style="font-family:var(--font-ui); font-size:13px; color:var(--mark); min-height:1em; max-width:260px;"></div>
     <button
       id="landing-scan-btn"
-      style="display:none; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:13px 28px; background:transparent; color:var(--ink); border:1px solid var(--rule); border-radius:6px; cursor:pointer;"
+      style="display:none; font-family:var(--font-ui); font-size:15px; font-weight:700; padding:13px 28px; background:transparent; color:var(--ink); border:1px solid var(--rule); border-radius:var(--r-s); cursor:pointer;"
     >Scan QR code</button>
-    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); opacity:0.7; max-width:260px; line-height:1.5;">
+    <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule); max-width:260px; line-height:1.5;">
       Or open the link your guide sent you.
     </div>
-    <a id="landing-guide-link" href="#" style="margin-top:14px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.06em; color:var(--rule); text-decoration:underline; opacity:0.8; cursor:pointer;">
+    <a id="landing-guide-link" href="#" style="margin-top:14px; font-family:var(--font-ui); font-size:13px; color:var(--rule); text-decoration:underline; cursor:pointer;">
       I'm a guide — log in
     </a>
   `;
@@ -5296,16 +5237,16 @@ function showGuideWaitScreen(guideCode, guideName) {
     'gap:18px; padding:40px; text-align:center;';
   el.innerHTML = `
     <img class="brand-logo" src="/icon.svg" alt="Fieldnote" />
-    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
+    <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule);">
       Fieldnote
     </div>
     <div style="font-family:'Fraunces',serif; font-style:italic; font-size:24px; color:var(--ink); max-width:300px; line-height:1.3;">
       ${t('gw_title', { guide: (guideName || 'Your guide') })}
     </div>
-    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:270px; line-height:1.6;">
+    <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule); max-width:270px; line-height:1.6;">
       ${t('gw_body')}
     </div>
-    <div style="display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); opacity:0.7;">
+    <div style="display:flex; align-items:center; gap:8px; font-family:var(--font-ui); font-size:13px; color:var(--rule);">
       <span class="gw-pulse" style="width:8px; height:8px; border-radius:50%; background:var(--signal-good); display:inline-block; animation: pulse 2s ease-in-out infinite;"></span>
       <span>${t('gw_watching')}</span>
     </div>
@@ -5392,7 +5333,7 @@ async function loadSessionAndTour(sessionId, opts) {
     if (es) {
       const b = document.createElement('button');
       b.textContent = t('load_retry');
-      b.style.cssText = "font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:12px 24px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;";
+      b.style.cssText = "font-family:var(--font-ui); font-size:13px; padding:12px 24px; background:var(--ink); color:var(--paper); border:none; border-radius:var(--r-s); cursor:pointer;";
       b.onclick = () => window.location.reload();
       es.appendChild(b);
     }
@@ -5599,13 +5540,13 @@ function showNameEntryGate() {
     'gap:18px; padding:40px; text-align:center;';
   const guideName = (SESSION && SESSION.guide_name) ? SESSION.guide_name : 'your guide';
   el.innerHTML = `
-    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
+    <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule);">
       ${t('join_stamp')}
     </div>
     <div style="font-family:'Fraunces',serif; font-style:italic; font-size:24px; color:var(--ink); max-width:280px; line-height:1.3;">
       ${t('join_q')}
     </div>
-    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:280px; line-height:1.5;">
+    <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule); max-width:280px; line-height:1.5;">
       ${t('join_sub', { guide: guideName })}
     </div>
     <input
@@ -5614,15 +5555,15 @@ function showNameEntryGate() {
       placeholder="${t('join_ph')}"
       maxlength="40"
       autocomplete="given-name"
-      style="font-family:'JetBrains Mono',monospace; font-size:14px; padding:14px 16px; border:1px solid var(--rule); background:var(--paper-2); width:260px; border-radius:6px; text-align:center;"
+      style="font-family:var(--font-ui); font-size:14px; padding:14px 16px; border:1px solid var(--rule); background:var(--paper-2); width:260px; border-radius:var(--r-s); text-align:center;"
     />
     <button
       id="name-gate-submit"
-      style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+      style="font-family:var(--font-ui); font-size:15px; font-weight:700; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:var(--r-s); cursor:pointer;"
     >
       ${t('join_btn')}
     </button>
-    <div id="name-gate-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
+    <div id="name-gate-error" style="font-family:var(--font-ui); font-size:13px; color:var(--mark); min-height:1em;"></div>
   `;
   document.getElementById('phone').appendChild(el);
 
@@ -5674,12 +5615,12 @@ function showRecoveryCodeScreen(code, onDone) {
   el.id = 'recovery-code-screen';
   el.style.cssText = 'position:absolute; inset:0; z-index:97; background:var(--paper); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:40px; text-align:center;';
   el.innerHTML = `
-    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule);">Fieldnote · Recovery code</div>
+    <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule);">Fieldnote · Recovery code</div>
     <div style="font-family:'Fraunces',serif; font-style:italic; font-size:22px; color:var(--ink); max-width:300px; line-height:1.3;">Save your recovery code</div>
-    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:280px; line-height:1.55;">This is the only way to reset a forgotten passkey. Save it in your notes app, screenshot it, or write it down — it won't be shown again. Lost it? Email <a href="mailto:help@fieldnote.guide" style="color:var(--ink); text-decoration:underline;">help@fieldnote.guide</a>.</div>
-    <div id="rc-code" style="font-family:'JetBrains Mono',monospace; font-size:20px; letter-spacing:0.1em; font-weight:700; color:var(--ink); background:var(--paper-2); border:1px dashed var(--ink); border-radius:8px; padding:14px 18px;">${code}</div>
-    <button id="rc-copy" style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; padding:8px 14px; background:transparent; border:1px solid var(--rule); border-radius:6px; cursor:pointer;">Copy</button>
-    <button id="rc-done" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;">I've saved it — continue</button>
+    <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule); max-width:280px; line-height:1.55;">This is the only way to reset a forgotten passkey. Save it in your notes app, screenshot it, or write it down — it won't be shown again. Lost it? Email <a href="mailto:help@fieldnote.guide" style="color:var(--ink); text-decoration:underline;">help@fieldnote.guide</a>.</div>
+    <div id="rc-code" style="font-family:var(--font-ui); font-size:20px; font-weight:700; color:var(--ink); background:var(--paper-2); border:1px dashed var(--ink); border-radius:var(--r-s); padding:14px 18px;">${code}</div>
+    <button id="rc-copy" style="font-family:var(--font-ui); font-size:15px; font-weight:700; padding:8px 14px; background:transparent; border:1px solid var(--rule); border-radius:var(--r-s); cursor:pointer;">Copy</button>
+    <button id="rc-done" style="font-family:var(--font-ui); font-size:15px; font-weight:700; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:var(--r-s); cursor:pointer;">I've saved it — continue</button>
   `;
   document.getElementById('phone').appendChild(el);
   document.getElementById('rc-copy').addEventListener('click', () => {
@@ -5698,8 +5639,8 @@ async function showGuideAccountForm() {
   el = document.createElement('div');
   el.id = 'guide-account-overlay';
   el.style.cssText = 'position:absolute; inset:0; z-index:95; background:var(--paper); display:flex; flex-direction:column;';
-  const fld = "font-family:'JetBrains Mono',monospace; font-size:14px; padding:12px 14px; border:1px solid var(--rule); background:var(--paper-2); border-radius:6px;";
-  const lbl = "font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--rule); margin-top:4px;";
+  const fld = "font-family:var(--font-ui); font-size:14px; padding:12px 14px; border:1px solid var(--rule); background:var(--paper-2); border-radius:var(--r-s);";
+  const lbl = "font-family:var(--font-ui); font-size:13px; color:var(--rule); margin-top:4px;";
   el.innerHTML = `
     <div class="status-bar"></div>
     <div class="screen-header">
@@ -5715,14 +5656,14 @@ async function showGuideAccountForm() {
       <input id="ga-email" type="email" inputmode="email" autocapitalize="off" autocomplete="email" placeholder="email" style="${fld}" />
       <label style="${lbl}">Passkey</label>
       <input id="ga-pass" type="password" autocomplete="new-password" placeholder="leave blank to keep current" style="${fld}" />
-      <div id="ga-passnote" style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); line-height:1.5;"></div>
-      <button id="ga-save" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; margin-top:6px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;">Save</button>
-      <div id="ga-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
-      <div id="ga-ok" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); min-height:1em;"></div>
+      <div id="ga-passnote" style="font-family:var(--font-ui); font-size:13px; color:var(--rule); line-height:1.5;"></div>
+      <button id="ga-save" style="font-family:var(--font-ui); font-size:15px; font-weight:700; padding:14px 28px; margin-top:6px; background:var(--ink); color:var(--paper); border:none; border-radius:var(--r-s); cursor:pointer;">Save</button>
+      <div id="ga-error" style="font-family:var(--font-ui); font-size:13px; color:var(--mark); min-height:1em;"></div>
+      <div id="ga-ok" style="font-family:var(--font-ui); font-size:13px; color:var(--rule); min-height:1em;"></div>
       <div style="height:1px; background:var(--rule-soft); margin:10px 0 4px;"></div>
       <label style="${lbl}">Recovery code</label>
-      <div id="ga-recstatus" style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); line-height:1.5;"></div>
-      <button id="ga-recgen" type="button" style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; padding:10px 14px; background:transparent; border:1px solid var(--rule); border-radius:6px; cursor:pointer; align-self:flex-start;">Generate recovery code</button>
+      <div id="ga-recstatus" style="font-family:var(--font-ui); font-size:13px; color:var(--rule); line-height:1.5;"></div>
+      <button id="ga-recgen" type="button" style="font-family:var(--font-ui); font-size:15px; font-weight:700; padding:10px 14px; background:transparent; border:1px solid var(--rule); border-radius:var(--r-s); cursor:pointer; align-self:flex-start;">Generate recovery code</button>
     </div>`;
   document.getElementById('phone').appendChild(el);
 
@@ -5814,7 +5755,7 @@ function showEditNameForm() {
       <div class="screen-title">Your name</div>
     </div>
     <div style="flex:1; padding:30px 28px; display:flex; flex-direction:column; gap:14px;">
-      <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); line-height:1.5;">
+      <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule); line-height:1.5;">
         How your guide sees you on the map.
       </div>
       <input
@@ -5823,13 +5764,13 @@ function showEditNameForm() {
         placeholder="your name"
         maxlength="40"
         value="${(MY_NAME || '').replace(/"/g, '&quot;')}"
-        style="font-family:'JetBrains Mono',monospace; font-size:14px; padding:12px 14px; border:1px solid var(--rule); background:var(--paper-2); border-radius:6px;"
+        style="font-family:var(--font-ui); font-size:14px; padding:12px 14px; border:1px solid var(--rule); background:var(--paper-2); border-radius:var(--r-s);"
       />
       <button
         id="edit-name-save"
-        style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+        style="font-family:var(--font-ui); font-size:15px; font-weight:700; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:var(--r-s); cursor:pointer;"
       >Save</button>
-      <div id="edit-name-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
+      <div id="edit-name-error" style="font-family:var(--font-ui); font-size:13px; color:var(--mark); min-height:1em;"></div>
     </div>
   `;
   document.getElementById('phone').appendChild(el);
@@ -5923,25 +5864,25 @@ function showInviteCodeForm() {
     'position:absolute; inset:0; z-index:90; background:var(--paper);' +
     'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
     'gap:16px; padding:40px; text-align:center;';
-  const inputStyle = "font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:6px; text-align:center;";
-  const linkStyle = "font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); text-decoration:underline; cursor:pointer;";
+  const inputStyle = "font-family:var(--font-ui); font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:var(--r-s); text-align:center;";
+  const linkStyle = "font-family:var(--font-ui); font-size:13px; color:var(--rule); text-decoration:underline; cursor:pointer;";
   el.innerHTML = `
     <img class="brand-logo" src="/icon.svg" alt="Fieldnote" />
-    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
+    <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule);">
       Fieldnote · Guide access
     </div>
     <div id="invite-headline" style="font-family:'Fraunces',serif; font-style:italic; font-size:22px; color:var(--ink); max-width:280px; line-height:1.3;"></div>
-    <div id="invite-blurb" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); max-width:260px; line-height:1.5;"></div>
+    <div id="invite-blurb" style="font-family:var(--font-ui); font-size:13px; color:var(--rule); max-width:260px; line-height:1.5;"></div>
     <input id="invite-code-input" type="text" placeholder="invite code" autocomplete="off" autocapitalize="off" style="${inputStyle} display:none;" />
     <input id="invite-name-input" type="text" placeholder="your name" autocapitalize="words" style="${inputStyle}" />
     <input id="invite-email-input" type="email" placeholder="email" autocomplete="email" autocapitalize="off" inputmode="email" style="${inputStyle} display:none;" />
     <input id="invite-pass-input" type="password" placeholder="passkey" autocomplete="current-password" style="${inputStyle}" />
-    <button id="invite-redeem-btn" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"></button>
-    <div id="invite-error" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--mark); min-height:1em;"></div>
+    <button id="invite-redeem-btn" style="font-family:var(--font-ui); font-size:15px; font-weight:700; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:var(--r-s); cursor:pointer;"></button>
+    <div id="invite-error" style="font-family:var(--font-ui); font-size:13px; color:var(--mark); min-height:1em;"></div>
     <a id="invite-toggle-a" href="#" style="${linkStyle}"></a>
     <a id="invite-toggle-b" href="#" style="${linkStyle} opacity:0.85;"></a>
     <a id="invite-toggle-c" href="#" style="${linkStyle} opacity:0.85; display:none;"></a>
-    <button id="invite-back-btn" type="button" style="margin-top:18px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.1em; padding:10px 20px; background:transparent; color:var(--ink); border:1px solid var(--rule); border-radius:6px; cursor:pointer;">← I'm not a guide — go back</button>
+    <button id="invite-back-btn" type="button" style="margin-top:18px; font-family:var(--font-ui); font-size:15px; font-weight:700; padding:10px 20px; background:transparent; color:var(--ink); border:1px solid var(--rule); border-radius:var(--r-s); cursor:pointer;">← I'm not a guide — go back</button>
   `;
   document.getElementById('phone').appendChild(el);
 
@@ -8549,8 +8490,8 @@ function showCreateSessionForm() {
     'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
     'gap:24px; padding:40px; text-align:center;';
   el.innerHTML = `
-    <button id="cs-back" aria-label="Back to my sessions" style="position:absolute; top:calc(14px + env(safe-area-inset-top,0px)); left:14px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.1em; padding:8px 12px; background:transparent; border:1px solid var(--rule); border-radius:6px; color:var(--ink); cursor:pointer;">‹ Back</button>
-    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">
+    <button id="cs-back" aria-label="Back to my sessions" style="position:absolute; top:calc(14px + env(safe-area-inset-top,0px)); left:14px; font-family:var(--font-ui); font-size:15px; font-weight:700; padding:8px 12px; background:transparent; border:1px solid var(--rule); border-radius:var(--r-s); color:var(--ink); cursor:pointer;">‹ Back</button>
+    <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule);">
       Fieldnote · Start a tour
     </div>
     <div style="font-family:'Fraunces',serif; font-style:italic; font-size:24px; color:var(--ink); max-width:280px; line-height:1.3;">
@@ -8561,17 +8502,17 @@ function showCreateSessionForm() {
       type="text"
       placeholder="Your name (e.g. Filip)"
       value="${GUIDE ? GUIDE.name.replace(/"/g, '&quot;') : ''}"
-      style="font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:6px; text-align:center;"
+      style="font-family:var(--font-ui); font-size:13px; padding:12px 16px; border:1px solid var(--rule); background:var(--paper-2); width:240px; border-radius:var(--r-s); text-align:center;"
     />
     <div id="tour-picker-wrap" style="display:flex; flex-direction:column; gap:8px; align-items:center;">
-      <label for="tour-select" style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule);">Tour</label>
-      <select id="tour-select" style="font-family:'JetBrains Mono',monospace; font-size:13px; padding:11px 14px; border:1px solid var(--rule); background:var(--paper-2); color:var(--ink); width:272px; border-radius:6px; text-align:center; cursor:pointer;">
+      <label for="tour-select" style="font-family:var(--font-ui); font-size:13px; color:var(--rule);">Tour</label>
+      <select id="tour-select" style="font-family:var(--font-ui); font-size:13px; padding:11px 14px; border:1px solid var(--rule); background:var(--paper-2); color:var(--ink); width:272px; border-radius:var(--r-s); text-align:center; cursor:pointer;">
         <option value="" disabled selected>Loading tours…</option>
       </select>
     </div>
     <button
       id="create-session-btn"
-      style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+      style="font-family:var(--font-ui); font-size:15px; font-weight:700; padding:14px 28px; background:var(--ink); color:var(--paper); border:none; border-radius:var(--r-s); cursor:pointer;"
     >
       Start Session
     </button>
@@ -8745,34 +8686,34 @@ function applyTourMetadata() {
       ? `Session: <code>${SESSION.id}</code><br>Label: <code>${SESSION.label}</code><br>Guide: <code>${SESSION.guide_name}</code>`
       : `No session (legacy ?tour mode)`;
     const guideLine = GUIDE
-      ? `Logged-in guide: <code>${GUIDE.name}</code> <button id="debug-logout" style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:3px 7px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">log out</button>`
+      ? `Logged-in guide: <code>${GUIDE.name}</code> <button id="debug-logout" style="margin-left:6px; font-family:var(--font-ui); font-size:15px; font-weight:700; padding:3px 7px; background:transparent; border:1px solid var(--rule); border-radius:var(--r-s); cursor:pointer;">log out</button>`
       : `Not logged in as a guide`;
     // Show a role-switch link only when the toggle would actually change something
     // (i.e. you're a logged-in guide, on a session URL).
     const roleSwitchLine = (GUIDE && SESSION)
-      ? `Role: <code>${ROLE}</code> <button id="debug-role-switch" style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:3px 7px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">view as ${ROLE === 'guide' ? 'passenger' : 'guide'}</button>`
+      ? `Role: <code>${ROLE}</code> <button id="debug-role-switch" style="margin-left:6px; font-family:var(--font-ui); font-size:15px; font-weight:700; padding:3px 7px; background:transparent; border:1px solid var(--rule); border-radius:var(--r-s); cursor:pointer;">view as ${ROLE === 'guide' ? 'passenger' : 'guide'}</button>`
       : '';
     const newSessionLine = (GUIDE && SESSION)
-      ? `<button id="debug-new-session" style="font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">start new session</button>`
+      ? `<button id="debug-new-session" style="font-family:var(--font-ui); font-size:15px; font-weight:700; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:var(--r-s); cursor:pointer;">start new session</button>`
       : '';
     // Joystick simulator is available to everyone (passengers included).
     // The arrival-modal diagnostics stay dev/guide-only (see isDevMode).
     const simBlock = `
       <span style="display:inline-block; margin-top:10px;">Simulator (joystick):</span>
-      <button id="joystick-toggle-btn" style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Enable</button>` + (isDevMode() ? `
+      <button id="joystick-toggle-btn" style="margin-left:6px; font-family:var(--font-ui); font-size:15px; font-weight:700; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:var(--r-s); cursor:pointer;">Enable</button>` + (isDevMode() ? `
       <br>
-      <button id="debug-force-arrival" style="margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Force arrival modal</button>
-      <button id="debug-clear-acks" style="margin-top:6px; margin-left:4px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">Clear acks</button>` : '');
+      <button id="debug-force-arrival" style="margin-top:6px; font-family:var(--font-ui); font-size:15px; font-weight:700; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:var(--r-s); cursor:pointer;">Force arrival modal</button>
+      <button id="debug-clear-acks" style="margin-top:6px; margin-left:4px; font-family:var(--font-ui); font-size:15px; font-weight:700; padding:4px 10px; background:transparent; border:1px solid var(--rule); border-radius:var(--r-s); cursor:pointer;">Clear acks</button>` : '');
     debug.innerHTML = `
-      <div style="opacity:0.5; font-size:10px; margin-bottom:6px;">Build: <code>${BUILD_VERSION}</code></div>
+      <div style="opacity:0.5; font-size:13px; margin-bottom:6px;">Build: <code>${BUILD_VERSION}</code></div>
       ${guideLine}<br>
       ${roleSwitchLine ? roleSwitchLine + '<br>' : ''}
       ${sessionLine}<br>
       ${newSessionLine ? newSessionLine + '<br>' : ''}
       Passenger: <code>${PASSENGER_ID.slice(0, 8)}…</code><br>
       Queue: <code id="debug-queue-count">…</code>
-      <button id="debug-clear-queue" style="margin-left:8px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 8px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">clear</button>
-      <button id="debug-force-sync" style="margin-left:4px; font-family:'JetBrains Mono',monospace; font-size:9px; padding:4px 8px; background:transparent; border:1px solid var(--rule); border-radius:4px; cursor:pointer;">sync now</button>
+      <button id="debug-clear-queue" style="margin-left:8px; font-family:var(--font-ui); font-size:15px; font-weight:700; padding:4px 8px; background:transparent; border:1px solid var(--rule); border-radius:var(--r-s); cursor:pointer;">clear</button>
+      <button id="debug-force-sync" style="margin-left:4px; font-family:var(--font-ui); font-size:15px; font-weight:700; padding:4px 8px; background:transparent; border:1px solid var(--rule); border-radius:var(--r-s); cursor:pointer;">sync now</button>
       <br>
       <span id="debug-sync-stats" style="opacity:0.7;">Sync: idle</span><br>
       <span id="debug-passengers" style="opacity:0.7;">Passengers: idle</span><br>
@@ -8956,7 +8897,7 @@ function showLoading(msg) {
       'gap:20px; padding:40px; text-align:center;';
     el.innerHTML =
       '<div style="font-family:\'Fraunces\',serif; font-style:italic; font-size:22px; color:var(--ink);" id="loading-msg"></div>' +
-      '<div style="font-family:\'JetBrains Mono\',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule); opacity:0.6;">Fieldnote</div>';
+      '<div style="font-family:var(--font-ui); font-size:13px; color:var(--rule);">Fieldnote</div>';
     document.getElementById('phone').appendChild(el);
   }
   document.getElementById('loading-msg').textContent = msg;
@@ -8979,7 +8920,7 @@ function showFatalError(msg) {
   }
   el.innerHTML =
     '<div style="font-family:\'Fraunces\',serif; font-style:italic; font-size:22px; color:var(--mark);">Something went wrong</div>' +
-    '<div style="font-family:\'JetBrains Mono\',monospace; font-size:12px; line-height:1.6; color:var(--rule); max-width:300px;">' +
+    '<div style="font-family:var(--font-ui); font-size:13px; line-height:1.6; color:var(--rule); max-width:300px;">' +
     msg.replace(/</g, '&lt;') +
     '</div>';
 }
@@ -9513,10 +9454,24 @@ function pkRender() {
   const list = pkEl('pk-contacts');
   const pending = st.contacts.filter(c => c.sms_status !== 'sent');
   const sent = st.contacts.length - pending.length;
+  const failed = st.contacts.filter(c => c.sms_status === 'failed').length;
   const h = pkEl('pk-contacts-h');
-  if (h) h.textContent = st.contacts.length
-    ? 'Passengers to text · ' + st.contacts.length + (sent ? ' (' + sent + ' texted)' : '')
-    : 'Passengers to text';
+  if (h) h.textContent = 'Passengers to text';
+  // Big "12 of 19 texted" — the one number the guide checks at a glance.
+  const count = pkEl('pk-count');
+  if (count) {
+    count.style.display = st.contacts.length ? '' : 'none';
+    count.textContent = '';
+    const big = document.createElement('b'); big.textContent = sent;
+    const rest = document.createElement('span'); rest.textContent = 'of ' + st.contacts.length + ' texted';
+    count.append(big, rest);
+    if (failed) { const f = document.createElement('span'); f.className = 'pk-count-failed'; f.textContent = failed + ' failed'; count.appendChild(f); }
+  }
+  for (const b of document.querySelectorAll('#pk-mode-seg button')) {
+    const on = b.dataset.mode === mode;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  }
   if (list) {
     list.textContent = '';
     for (const c of st.contacts) {
@@ -9529,9 +9484,11 @@ function pkRender() {
       row.appendChild(main);
       const status = document.createElement('span');
       status.className = 'pk-status ' + c.sms_status;
-      status.textContent = c.sms_status === 'sent' ? 'Texted' : c.sms_status === 'failed' ? 'Failed' : 'Not sent';
+      // A mark and a word as well as a colour, so it reads in glare and for
+      // colour-blind guides.
+      status.textContent = c.sms_status === 'sent' ? '✓ Texted' : c.sms_status === 'failed' ? '✕ Failed' : 'Waiting';
       // Phones have no hover — tap "Failed" to read why (e.g. invalid number).
-      if (c.sms_error) { status.style.textDecoration = 'underline'; status.addEventListener('click', () => showToast(c.sms_error)); }
+      if (c.sms_error) { status.textContent += ' · why?'; status.setAttribute('role', 'button'); status.addEventListener('click', () => showToast(c.sms_error)); }
       row.appendChild(status);
       // Send from this phone: opens the Messages app with number + text filled
       // in. We can't see whether the guide then pressed send, so the row is
@@ -9709,6 +9666,14 @@ async function pkStartPickup() {
     const res = pkEl('pk-result'); if (res) delete res.dataset.sticky;
     pkRender();
   });
+  for (const b of document.querySelectorAll('#pk-mode-seg button')) {
+    b.addEventListener('click', () => {
+      const sel = pkEl('pk-mode');
+      if (!sel || sel.value === b.dataset.mode) return;
+      sel.value = b.dataset.mode;
+      sel.dispatchEvent(new Event('change'));
+    });
+  }
   on('pk-start', 'click', pkStartPickup);
 })();
 
@@ -9929,8 +9894,8 @@ function showPrewarmStatus(on) {
         'position:absolute; left:50%; transform:translateX(-50%);' +
         'bottom:calc(env(safe-area-inset-bottom,0px) + 18px); z-index:8;' +
         'background:var(--ink); color:var(--paper); padding:7px 14px;' +
-        'border-radius:14px; font-family:\'JetBrains Mono\',monospace;' +
-        'font-size:10px; letter-spacing:0.06em; box-shadow:0 2px 8px rgba(0,0,0,0.25);' +
+        'border-radius:var(--r-m); font-family:var(--font-ui);' +
+        'font-size:13px; box-shadow:0 2px 8px rgba(0,0,0,0.25);' +
         'pointer-events:none; opacity:0.92;';
       const phone = document.getElementById('phone');
       if (phone) phone.appendChild(el);
@@ -10615,7 +10580,7 @@ function renderPassengers() {
       label.setAttribute('x', 0);
       label.setAttribute('y', -(HALO_R + 6));     // sits above the halo
       label.setAttribute('text-anchor', 'middle');
-      label.setAttribute('font-family', 'JetBrains Mono, monospace');
+      label.setAttribute('font-family', 'Atkinson Hyperlegible, system-ui, sans-serif');
       label.setAttribute('font-size', '10');
       label.setAttribute('font-weight', '700');
       label.setAttribute('letter-spacing', '0.04em');
@@ -10821,9 +10786,9 @@ function renderBusPinOnGuideMap() {
   const square = document.createElement('div');
   square.style.cssText =
     'width:24px; height:24px; background:var(--accent); border:2px solid var(--paper);' +
-    'border-radius:4px; box-shadow:0 2px 6px rgba(0,0,0,0.25);' +
+    'border-radius:var(--r-s); box-shadow:0 2px 6px rgba(0,0,0,0.25);' +
     'display:flex; align-items:center; justify-content:center; color:var(--on-accent);' +
-    'font-family:JetBrains Mono,monospace; font-size:9px; font-weight:700;';
+    'font-family:var(--font-data); font-size:9px; font-weight:700;';
   square.textContent = 'BUS';
   square.className = 'bus-pin-pulse';
   wrap.appendChild(square);
@@ -10852,8 +10817,8 @@ function openBusPinPopup() {
   });
   const html = `
     <div style="display:flex; flex-direction:column; gap:6px; padding:4px; min-width:120px;">
-      <button data-bus-action="move" style="font-family:'JetBrains Mono',monospace; font-size:11px; padding:8px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:6px; cursor:pointer; text-align:left;">Move pin</button>
-      <button data-bus-action="remove" style="font-family:'JetBrains Mono',monospace; font-size:11px; padding:8px 12px; background:var(--paper-2); border:1px solid var(--mark); color:var(--mark); border-radius:6px; cursor:pointer; text-align:left;">Remove pin</button>
+      <button data-bus-action="move" style="font-family:var(--font-ui); font-size:15px; font-weight:700; padding:8px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:var(--r-s); cursor:pointer; text-align:left;">Move pin</button>
+      <button data-bus-action="remove" style="font-family:var(--font-ui); font-size:15px; font-weight:700; padding:8px 12px; background:var(--paper-2); border:1px solid var(--mark); color:var(--mark); border-radius:var(--r-s); cursor:pointer; text-align:left;">Remove pin</button>
     </div>
   `;
   popup.setLngLat([BUS_PIN.lng, BUS_PIN.lat]).setHTML(html).addTo(map);
@@ -11213,7 +11178,7 @@ function renderPassengerList() {
     // Name.
     const nameEl = document.createElement('div');
     nameEl.style.cssText =
-      'flex:1; font-family:JetBrains Mono,monospace; font-size:13px; color:var(--ink);' +
+      'flex:1; font-family:var(--font-ui); font-size:13px; color:var(--ink);' +
       (hasLocation ? '' : ' opacity:0.55;');
     nameEl.textContent = passengerDisplayName(p, passengerId);
     row.appendChild(nameEl);
@@ -11230,8 +11195,8 @@ function renderPassengerList() {
     // Status text — small mono caption on the right.
     const status = document.createElement('div');
     status.style.cssText =
-      'font-family:JetBrains Mono,monospace; font-size:9px; letter-spacing:0.1em;' +
-      'text-transform:uppercase; color:var(--rule);';
+      'font-family:var(--font-ui); font-size:13px; ' +
+      'color:var(--rule);';
     // Status precedence (R2-F): the sticky, self-reported "at the bus" wins —
     // the one signal that needs no GPS and survives screen-lock. Then GPS
     // states. Then the GPS-free presence heartbeat: "present" (app open, pinged
@@ -11524,9 +11489,9 @@ function startGuideLocationsSubscription() {
 function buildFloatingLabel(text) {
   const el = document.createElement('div');
   el.style.cssText =
-    'font-family:JetBrains Mono,monospace; font-size:10px; font-weight:700;' +
+    'font-family:var(--font-ui); font-size:13px; font-weight:700;' +
     'color:#000000; white-space:nowrap; pointer-events:none;' +
-    'letter-spacing:0.04em; margin-bottom:3px;' +
+    'margin-bottom:3px;' +
     // Pure-white 8-direction halo — readable on any map background.
     'text-shadow:' +
       '-1px -1px 0 #ffffff,' +
@@ -11674,9 +11639,9 @@ function renderGuideMarkers() {
     const square = document.createElement('div');
     square.style.cssText =
       'width:24px; height:24px; background:var(--accent); border:2px solid var(--paper);' +
-      'border-radius:4px; box-shadow:0 2px 6px rgba(0,0,0,0.25);' +
+      'border-radius:var(--r-s); box-shadow:0 2px 6px rgba(0,0,0,0.25);' +
       'display:flex; align-items:center; justify-content:center; color:var(--on-accent);' +
-      'font-family:JetBrains Mono,monospace; font-size:9px; font-weight:700;';
+      'font-family:var(--font-data); font-size:9px; font-weight:700;';
     square.textContent = 'BUS';
     square.className = 'bus-pin-pulse';
     wrap.appendChild(square);
@@ -11769,7 +11734,7 @@ function mountGuideBottomSheet() {
            name labels appear above their dots on the map. Default ON. Visible
            only when there's at least one passenger. -->
       <div class="names-toggle-row" id="names-toggle-row" style="display:none; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--rule); margin-bottom:8px;">
-        <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink);">
+        <div style="font-family:var(--font-ui); font-size:13px; color:var(--ink);">
           Names on map
         </div>
         <button id="names-toggle-btn" class="vis-btn active" style="flex:0 0 auto; padding:6px 14px;">On</button>
@@ -11789,15 +11754,15 @@ function mountGuideBottomSheet() {
           <div style="font-family:'Fraunces',serif; font-style:italic; font-size:18px; color:var(--ink); margin-bottom:8px;">
             No passengers yet.
           </div>
-          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--rule); line-height:1.5;">
+          <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule); line-height:1.5;">
             Share this link to start:
           </div>
-          <div id="guide-share-link" style="margin-top:10px; padding:10px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:10px; word-break:break-all; user-select:all;">
+          <div id="guide-share-link" style="margin-top:10px; padding:10px 12px; background:var(--paper-2); border:1px solid var(--rule); border-radius:var(--r-s); font-family:var(--font-ui); font-size:13px; word-break:break-all; user-select:all;">
             ${SESSION ? inviteUrlFor(SESSION.id) : '—'}
           </div>
           <button
             id="guide-share-invite"
-            style="margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:10px 18px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;"
+            style="margin-top:10px; font-family:var(--font-ui); font-size:15px; font-weight:700; padding:10px 18px; background:var(--ink); color:var(--paper); border:none; border-radius:var(--r-s); cursor:pointer;"
           >Share invite</button>
         </div>
         <div class="guide-sheet-list" id="guide-sheet-list" style="display:none;">
@@ -12171,8 +12136,8 @@ function showToast(msg) {
   el.style.cssText =
     'position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));' +
     'transform:translateX(-50%);z-index:99998;max-width:82%;' +
-    'background:var(--ink);color:var(--paper);padding:12px 18px;border-radius:22px;' +
-    "font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.4;text-align:center;" +
+    'background:var(--ink);color:var(--paper);padding:12px 18px;border-radius:var(--r-l);' +
+    "font-family:var(--font-ui);font-size:13px;line-height:1.4;text-align:center;" +
     'box-shadow:0 6px 24px rgba(0,0,0,0.3);opacity:0;transition:opacity 200ms ease;';
   document.body.appendChild(el);
   requestAnimationFrame(() => { el.style.opacity = '1'; });
@@ -13283,23 +13248,23 @@ async function openMyQrScreen() {
     'display:flex; flex-direction:column; align-items:center; justify-content:center;' +
     'gap:14px; padding:32px; text-align:center; overflow-y:auto;';
   el.innerHTML = `
-    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--rule);">
+    <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule);">
       Fieldnote · My QR
     </div>
     <div style="font-family:'Fraunces',serif; font-style:italic; font-size:22px; color:var(--ink);">
       Your permanent tour code
     </div>
-    <div id="my-qr-box" style="display:flex; justify-content:center; padding:16px; background:#ffffff; border:2px solid var(--ink); border-radius:12px;"></div>
-    <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink); user-select:all;">${url}</div>
-    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--rule); max-width:280px; line-height:1.6;">
+    <div id="my-qr-box" style="display:flex; justify-content:center; padding:16px; background:#ffffff; border:2px solid var(--ink); border-radius:var(--r-m);"></div>
+    <div style="font-family:var(--font-ui); font-size:13px; color:var(--ink); user-select:all;">${url}</div>
+    <div style="font-family:var(--font-ui); font-size:13px; color:var(--rule); max-width:280px; line-height:1.6;">
       This code is yours forever — print it, laminate it, or save the image.
       Passengers who scan it join whichever tour you're running right now.
       Scanned before you start, it waits and joins automatically.
     </div>
     <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
-      <button id="my-qr-save" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; padding:12px 20px; background:var(--ink); color:var(--paper); border:none; border-radius:6px; cursor:pointer;">Save image</button>
-      <button id="my-qr-copy" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; padding:12px 20px; background:var(--paper-2); color:var(--ink); border:1px solid var(--ink); border-radius:6px; cursor:pointer;">Copy link</button>
-      <button id="my-qr-close" style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; padding:12px 20px; background:transparent; color:var(--rule); border:1px solid var(--rule); border-radius:6px; cursor:pointer;">Close</button>
+      <button id="my-qr-save" style="font-family:var(--font-ui); font-size:15px; font-weight:700; padding:12px 20px; background:var(--ink); color:var(--paper); border:none; border-radius:var(--r-s); cursor:pointer;">Save image</button>
+      <button id="my-qr-copy" style="font-family:var(--font-ui); font-size:15px; font-weight:700; padding:12px 20px; background:var(--paper-2); color:var(--ink); border:1px solid var(--ink); border-radius:var(--r-s); cursor:pointer;">Copy link</button>
+      <button id="my-qr-close" style="font-family:var(--font-ui); font-size:15px; font-weight:700; padding:12px 20px; background:transparent; color:var(--rule); border:1px solid var(--rule); border-radius:var(--r-s); cursor:pointer;">Close</button>
     </div>
   `;
   document.getElementById('phone').appendChild(el);
@@ -13330,7 +13295,7 @@ async function openMyQrScreen() {
         } catch (_e) { try { showToast('Could not save — screenshot this screen instead.'); } catch (_e2) {} }
       });
     } catch (err) {
-      box.innerHTML = '<div style="font-family:\'JetBrains Mono\',monospace; font-size:11px; color:var(--mark);">QR could not be generated.</div>';
+      box.innerHTML = '<div style="font-family:var(--font-ui); font-size:13px; color:var(--mark);">QR could not be generated.</div>';
     }
   }
   const copy = document.getElementById('my-qr-copy');
@@ -13376,10 +13341,10 @@ function openShareScreen() {
       }
     } catch (err) {
       console.warn('QR render failed', err);
-      qrEl.innerHTML = '<div style="font-family:\'JetBrains Mono\',monospace; font-size:11px; color:var(--mark);">QR could not be generated.</div>';
+      qrEl.innerHTML = '<div style="font-family:var(--font-ui); font-size:13px; color:var(--mark);">QR could not be generated.</div>';
     }
   } else if (qrEl) {
-    qrEl.innerHTML = '<div style="font-family:\'JetBrains Mono\',monospace; font-size:11px; color:var(--mark);">QR library not loaded.</div>';
+    qrEl.innerHTML = '<div style="font-family:var(--font-ui); font-size:13px; color:var(--mark);">QR library not loaded.</div>';
   }
 
   // Wire up the copy button (idempotent — re-binding is fine on re-open).
@@ -14814,6 +14779,13 @@ function renderHudTimer() {
   // attaches the [bus] line to the active stop, so an idle card has
   // nothing to do.
   el.classList.toggle('clickable', ROLE === 'guide' && hasActiveStop);
+  // Passengers at a stop get the return time as a full-width banner — it is
+  // the one fact they open the app for, so it must read at a glance outdoors.
+  // The guide keeps the compact card (it carries End stop + the bus signal).
+  const banner = ROLE !== 'guide' && hasActiveStop;
+  el.classList.toggle('banner', banner);
+  const hudEl = el.closest('.map-hud');
+  if (hudEl) hudEl.classList.toggle('has-banner', banner);
   // "End stop" under the time (trial-4 ask). Shown whenever the guide has ANY
   // active stop — including one without a departure set (soonestMs Infinity),
   // which is exactly when the list-pill was the only way out. Wired once;
@@ -14835,7 +14807,7 @@ function renderHudTimer() {
   // Label: "Departure" by default, "Time to head back" once a stop is
   // armed so it reads as a call-to-action rather than a passive readout.
   if (labelEl) {
-    labelEl.textContent = hasActiveStop ? t('hud_head_back') : t('hud_departure');
+    labelEl.textContent = banner ? t('hud_back_at_bus') : hasActiveStop ? t('hud_head_back') : t('hud_departure');
   }
   if (!hasActiveStop) {
     if (timeEl) timeEl.textContent = '—:—';
@@ -14854,7 +14826,11 @@ function renderHudTimer() {
     const absSec = Math.max(0, Math.floor(Math.abs(diffMs) / 1000));
     const mm = Math.floor(absSec / 60);
     const ss = absSec % 60;
-    if (!past) {
+    if (!past && banner && !isUrgent) {
+      // Banner: whole minutes read faster than a ticking clock next to the
+      // departure time. The last five minutes switch to m:ss below.
+      cdEl.textContent = t('hud_min_left', { n: Math.ceil(diffMs / 60000) });
+    } else if (!past) {
       // Counting down to departure.
       cdEl.textContent = `${mm}:${String(ss).padStart(2, '0')}`;
     } else if (absSec <= 120) {
@@ -14871,6 +14847,15 @@ function renderHudTimer() {
   // departure, or once departure has passed. Neutral dark ink otherwise,
   // even while the stop is active.
   el.classList.toggle('alarm', isUrgent || past);
+  // Banner bar: the share of the stop's time still left, shrinking to zero.
+  const barEl = document.getElementById('stop-timer-bar');
+  if (barEl && barEl.firstElementChild) {
+    const meta = ACTIVATION_META.get(soonestStopId);
+    const startMs = (meta && meta.activated_at) ? Date.parse(meta.activated_at) : NaN;
+    const frac = (Number.isFinite(startMs) && soonestMs > startMs)
+      ? Math.min(1, Math.max(0, diffMs / (soonestMs - startMs))) : 0;
+    barEl.firstElementChild.style.width = (frac * 100).toFixed(1) + '%';
+  }
   // Pulse drivers: in the alarm window, OR the guide already sent the bus
   // signal at least once for this stop (the [bus] line in the active row's
   // notes persists across reloads).
