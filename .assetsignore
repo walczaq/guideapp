@@ -22,3 +22,6 @@ v0.1.html
 v0.2.html
 v0.3.html
 v0.4.html
+
+# Test suite (dev-only; see tests/README.md).
+tests

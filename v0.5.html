@@ -88,10 +88,6 @@ window.__FN_SB = {
   } catch (e) { /* no head start — the app fetches as usual */ }
 })();
 </script>
-<!-- Fonts: only the preconnects live here; the stylesheet link is at the end
-     of <body>, after the lib scripts (see the note there). -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
   :root {
     --ink: #1a1d1a;
@@ -3533,17 +3529,18 @@ window.__FN_SB = {
 <script src="/vendor/supabase-js-2.118.0.umd.js"></script>
 <script src="/vendor/idb-8.0.4.umd.js"></script>
 <script src="/vendor/qrcode-generator-1.4.4.min.js"></script>
-<!-- Fonts stay on Google's CDN as graceful degradation: a failed font fetch on
-     weak signal only falls typography back to Georgia/monospace — it never
-     blocks boot (unlike the libs above, which the app cannot run without).
-     Two things keep that promise true:
+<!-- Fonts: SELF-HOSTED under /vendor/fonts-v1 (same files Google Fonts
+     serves) — no third-party request, and the service worker caches them
+     with the rest of the app. Still pure graceful degradation: a failed font
+     fetch only falls typography back to Georgia/monospace, it never blocks
+     boot. Two things keep that promise true:
        - NON-BLOCKING (media=print, flipped to all on load): as a plain
-         stylesheet a slow/stalled fonts.googleapis.com held back first paint
-         AND every script after it.
+         stylesheet a slow fetch held back first paint AND every script
+         after it.
        - AFTER the lib scripts: the parser only gets here once they have run,
          so the font files never compete with the libs for a thin connection
          (in <head> they cost ~0.5 s of boot on a weak signal — measured). -->
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link href="/vendor/fonts-v1/fonts.css" rel="stylesheet" media="print" onload="this.media='all'">
 <script>
 // Old-browser blank-page guard. This single inline script uses modern JS
 // (e.g. `??` nullish coalescing). A browser too old to PARSE it (iOS Safari
@@ -14047,6 +14044,7 @@ function subscribeStopActivations() {
       // disconnect get applied. The catch-up uses ACTIVE_STOP_IDS, which is
       // append-only, so re-running is safe even when we have nothing missed.
       dlog('[realtime] stop_activations channel status:', status);
+      _stopActivationChannelStatus = status;
       if (status === 'SUBSCRIBED' && _stopActivationSubscribed) {
         catchUpStopActivations().then(() => {
           renderPins();
@@ -14295,7 +14293,7 @@ function subscribeSession() {
       },
       (payload) => onSessionUpdated(payload.new)
     )
-    .subscribe();
+    .subscribe((status) => { _sessionChannelStatus = status; });
 }
 
 function onSessionUpdated(row) {
@@ -14355,8 +14353,24 @@ function showSessionEnded() {
 // The polling also reconciles ACTIVE_STOP_IDS — catches any activation or
 // deactivation realtime missed — and (passenger only) re-prompts any
 // arrival modal the user hasn't acknowledged yet.
+//
+// Cadence: every SESSION_POLL_MS while either realtime channel (session row,
+// stop activations) is NOT subscribed — that is when events are being
+// missed. While both are subscribed the poll is only insurance against a
+// silently dropped event, so it backs off to SESSION_POLL_IDLE_MS: two
+// requests per passenger every 15 s for a whole tour was the app's largest
+// steady background load. A missed activation therefore surfaces within
+// SESSION_POLL_IDLE_MS at worst (and at once on returning to the app).
 const SESSION_POLL_MS = 15000;
+const SESSION_POLL_IDLE_MS = 45000;
 let _sessionPollTimer = null;
+let _sessionPollAt = 0;
+let _sessionChannelStatus = '';          // last status of the sessions channel
+let _stopActivationChannelStatus = '';   // …and of the stop_activations channel
+function sessionPollDue() {
+  if (_sessionChannelStatus !== 'SUBSCRIBED' || _stopActivationChannelStatus !== 'SUBSCRIBED') return true;
+  return Date.now() - _sessionPollAt >= SESSION_POLL_IDLE_MS - 1000;   // -1 s: timer jitter
+}
 
 async function refetchSessionState() {
   if (!SESSION) return;
@@ -14407,7 +14421,10 @@ async function refetchSessionState() {
 
 function startSessionPoll() {
   if (_sessionPollTimer) return;
+  _sessionPollAt = Date.now();
   _sessionPollTimer = setInterval(() => {
+    if (!sessionPollDue()) return;
+    _sessionPollAt = Date.now();
     refetchSessionState().catch(err => console.warn('[poll] refetch failed', err));
   }, SESSION_POLL_MS);
   // Visibilitychange: when the tab/PWA returns to foreground (passenger
@@ -14415,6 +14432,7 @@ function startSessionPoll() {
   // refetch. This is the trigger for "re-show pop-up after lock screen."
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
+      _sessionPollAt = Date.now();
       refetchSessionState().catch(err => console.warn('[visibilitychange] refetch failed', err));
     }
   });

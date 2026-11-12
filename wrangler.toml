@@ -6,8 +6,13 @@ compatibility_date = "2024-09-23"
 directory = "./"
 binding = "ASSETS"
 
-# Runs before every deploy (GitHub Action and Workers Builds): stamps the
-# About-screen build line in v0.5.html with the deploy date + commit.
-# The script never fails the deploy — see tools/stamp-build.mjs.
+# Runs before every deploy (GitHub Action and Workers Builds), on the deploy
+# checkout only:
+#   1. stamp-build     — writes the deploy date + commit into the About
+#                        screen's build line in v0.5.html.
+#   2. strip-comments  — removes comments from v0.5.html's inline scripts and
+#                        styles (~40 % less to download; verified lossless by
+#                        tests/strip.test.mjs).
+# Neither script ever fails the deploy — on any problem the page ships as-is.
 [build]
-command = "node tools/stamp-build.mjs"
+command = "node tools/stamp-build.mjs && node tools/strip-comments.mjs"

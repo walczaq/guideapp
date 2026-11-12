@@ -1,0 +1,13 @@
+{
+  "name": "fieldnote-smoke-tests",
+  "private": true,
+  "type": "module",
+  "description": "Browser smoke tests for the Fieldnote web app, run against a mocked backend.",
+  "scripts": {
+    "test": "node --test --test-concurrency=4"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0",
+    "acorn": "8.14.1"
+  }
+}
