@@ -7,6 +7,11 @@
 - The repo owner (Filip) builds and guides with Fieldnote but has **no access to
   the operations/office side** of the tour company: the fleet GPS platform, the
   booking system, company accounts and billing (e.g. an SMS provider account).
+- **The repo is just Filip and Claude.** Nobody else reviews code or reads pull
+  requests. Don't offer to wait for reviewers or write PR descriptions for an
+  outside audience; keep them short and say plainly what was and wasn't
+  checked. (Filip said this on 2026-11-13 after being asked whether to watch
+  a PR for review comments.)
 - **Gísli** is the person the bosses designated to work with Filip on piloting.
   Anything that needs office/operations access — fleet tracker API details or
   keys, vehicle/tracker IDs, passenger phone lists from bookings, paid accounts —

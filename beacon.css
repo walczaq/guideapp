@@ -51,8 +51,8 @@
   --paper-2: #ece5d4;
   --paper-3: #e0d8c4;
   --ink:     #221f1d;
-  --muted:   #76705f;            /* was referenced but UNDEFINED — fixed */
-  --rule:    #76705f;            /* legacy: used as muted text color     */
+  --muted:   #5f5a4b;            /* 5.9:1 on --bg-page (was #76705f, 4.2:1) */
+  --rule:    #5f5a4b;            /* legacy: used as muted text color     */
   --rule-soft: rgba(34, 31, 29, 0.10);
   --line:        rgba(34, 31, 29, 0.10);   /* hairline borders           */
   --line-strong: rgba(34, 31, 29, 0.26);   /* emphasized borders         */
@@ -71,7 +71,12 @@
   --on-accent: #faf7ef;
   --route: #6b4f2e;
 
-  --r-s: 12px;  --r-m: 16px;  --r-l: 24px;
+  --r-s: 8px;  --r-m: 12px;  --r-l: 20px;   /* controls · cards + chips · sheets + dialogs */
+  /* Type roles. UI text is a sans made for legibility outdoors; mono is
+     for data only (clock times, countdowns, phone numbers, codes); the
+     serif stays for tour names and stories. Nothing is set below 13px. */
+  --font-ui:   'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-data: 'JetBrains Mono', ui-monospace, Menlo, monospace;
   --shadow-1: 0 2px 6px rgba(31, 26, 16, 0.07), 0 12px 32px rgba(31, 26, 16, 0.13);
   --shadow-2: 0 4px 10px rgba(31, 26, 16, 0.10), 0 24px 56px rgba(31, 26, 16, 0.20);
   --chip-blur: blur(10px);
@@ -126,8 +131,8 @@ html.role-guide.theme-light {
   --paper-2: #e2e5dd;
   --paper-3: #d4d8cd;
   --ink:     #1d211f;
-  --muted:   #6c746e;
-  --rule:    #6c746e;
+  --muted:   #58605a;
+  --rule:    #58605a;
   --rule-soft: rgba(29, 33, 31, 0.10);
   --line:        rgba(29, 33, 31, 0.10);
   --line-strong: rgba(29, 33, 31, 0.26);
@@ -262,7 +267,7 @@ body { background: #101210; }
   box-shadow: var(--shadow-1);
   background: color-mix(in srgb, var(--paper) 88%, transparent);
   -webkit-backdrop-filter: var(--chip-blur); backdrop-filter: var(--chip-blur);
-  font-size: 10px; color: var(--muted);
+  font-size: 13px; color: var(--muted);
 }
 .signal-dot { width: 7px; height: 7px; }
 
@@ -287,7 +292,7 @@ body { background: #101210; }
   background: color-mix(in srgb, var(--paper) 90%, transparent);
   -webkit-backdrop-filter: var(--chip-blur); backdrop-filter: var(--chip-blur);
 }
-.stop-timer-label { font-size: 8.5px; letter-spacing: 0.16em; color: var(--muted); }
+.stop-timer-label { font-size: 13px; color: var(--muted); }
 .stop-timer-time  { font-size: 20px; margin-top: 3px; }
 .stop-timer-countdown { color: var(--muted); }
 .stop-timer-bus-hint { border-top-color: var(--line-strong); color: var(--muted); }
@@ -464,7 +469,7 @@ html.role-guide .you-group polygon { fill: var(--accent); }
 
 .stops-section, .visibility-section { border-bottom-color: var(--line); }
 .stops-section-label, .visibility-section-label, .passengers-section-label {
-  font-size: 9px; letter-spacing: 0.18em; color: var(--muted);
+  font-size: 13px; color: var(--muted);
 }
 .stop-row { border-bottom-color: var(--line); }
 .stop-row-num { color: var(--muted); }
@@ -581,3 +586,145 @@ html.role-guide .you-group polygon { fill: var(--accent); }
 /* legacy #2563eb sweep — anything the sections above missed */
 .you-trail.guide { stroke: var(--accent); }
 .broadcast-banner::before { background: currentColor; }
+
+
+/* ── §11 · READABLE TYPE, ONE SHAPE (UI audit, Nov 2026) ─────────────
+   The audit measured 10px as the app's most common text size, most of it
+   uppercase monospace, with grey labels just under contrast minimums.
+   The base styles now floor text at 13px in --font-ui; this section
+   holds what the sweep could not express rule by rule. */
+
+/* Data keeps the monospace: clock times, countdowns, phone numbers, codes. */
+.stop-timer-time, .stop-timer-countdown, .stop-timer-headcount,
+.stop-arrival-info-value:not(.placeholder), .nsb-eta, .nsp-eta,
+.pk-contact-main small, #pk-cc, #pk-paste, .co-code, .pk-count b {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+
+/* One button shape: 48px tall, bold sentence case, small radius. */
+.pk-btn, .stop-arrival-ok, .stop-modal-btn, .popup-ok, .popup-arrived,
+.intro-btn, .boarding-start, .boarding-share, .session-ended-btn,
+.install-btn, .end-session-btn {
+  font-family: var(--font-ui);
+  font-size: 15px; font-weight: 700; letter-spacing: 0;
+  min-height: 48px;
+  border-radius: var(--r-s);
+}
+.notif-prompt-btn, .install-prompt-btn, .sm-btn, .menu-guidecard-btn, .stop-timer-end {
+  font-size: 14px; font-weight: 700; min-height: 44px;
+}
+.pk-btn.link { font-size: 14px; font-weight: 400; min-height: 44px; }
+
+/* Install used to be the app's only green pill. It is a primary action
+   like any other (and green-on-paper text was 2.3:1 in the dark console). */
+.install-btn, .install-btn:hover {
+  background: var(--ink); border-color: var(--ink); color: var(--paper);
+  border-radius: var(--r-s); box-shadow: none;
+}
+
+/* One dialog shape: the passenger stop card, update popup, pin popup and
+   tour-builder form match the guide's start-stop dialog (soft, borderless)
+   instead of the square double-bordered frame. */
+.stop-arrival-modal, .update-popup, .tb-form {
+  border: none; border-radius: var(--r-l);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}
+.stop-arrival-header { border-bottom-color: var(--line); }
+
+/* Muted text is already the lightest grey that passes contrast — no
+   extra fading on top of it. */
+.menu-sub, .menu-chevron { opacity: 1; color: var(--muted); }
+
+/* Tap targets that measured under 44px. */
+.menu-guidelogin-link, #menu-dev-info { min-height: 44px; display: inline-flex; align-items: center; }
+.stop-modal-duration-input, .notes-add-btn { min-height: 44px; }
+
+/* Section labels: sentence case, readable weight. */
+.pk-h { font-size: 14px; font-weight: 700; color: var(--ink); }
+.pk-h-sub { display: block; font-weight: 400; color: var(--muted); margin: 12px 0 6px; }
+.pk-note { font-size: 14px; }
+
+/* Pickup · "12 of 19 texted" and per-passenger status chips. */
+.pk-count {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;
+  padding: 4px 0 12px; border-bottom: 2px solid var(--ink);
+  font-family: var(--font-ui); font-size: 16px; color: var(--ink);
+}
+.pk-count b { font-size: 44px; line-height: 1; font-weight: 700; }
+.pk-count-failed { color: var(--mark); font-weight: 700; }
+.pk-contact { font-family: var(--font-ui); font-size: 15px; min-height: 52px; padding: 6px 2px; box-sizing: border-box; }
+.pk-status {
+  flex: none; font-size: 13px; font-weight: 700; letter-spacing: 0;
+  padding: 5px 9px; border-radius: 4px;
+  border: 1.5px dashed var(--muted); color: var(--muted);
+}
+.pk-status.sent   { border: 1.5px solid var(--good); background: var(--good); color: var(--paper); }
+.pk-status.failed { border: 1.5px solid var(--mark); background: var(--mark); color: var(--paper); cursor: pointer; }
+.pk-send { font-size: 14px; font-weight: 700; min-height: 44px; display: inline-flex; align-items: center; box-sizing: border-box; }
+.pk-x { min-width: 44px; min-height: 44px; }
+
+/* Pickup · two visible send choices instead of a clipped dropdown. */
+.pk-seg {
+  display: flex; border: 1px solid var(--rule); border-radius: var(--r-s);
+  overflow: hidden; background: var(--paper);
+}
+.pk-seg button {
+  flex: 1 1 0; min-width: 0; min-height: 48px; padding: 6px 8px;
+  background: transparent; color: var(--ink); border: none; cursor: pointer;
+  font-family: var(--font-ui); font-size: 14px; line-height: 1.25;
+}
+.pk-seg button + button { border-left: 1px solid var(--rule); }
+.pk-seg button.on { background: var(--ink); color: var(--paper); font-weight: 700; }
+
+/* Passenger return-time banner. While a stop is active the departure
+   card becomes a full-width sign under the HUD row: when to be back,
+   how long is left, and a bar that shrinks to zero. .hud-right dissolves
+   (display: contents) so the banner can take a row of its own. */
+.stop-timer-bar { display: none; }
+.map-hud.has-banner { flex-wrap: wrap; row-gap: 10px; }
+.map-hud.has-banner .hud-right { display: contents; }
+.map-hud.has-banner .signal { order: 2; }
+.stop-timer.banner {
+  order: 9; flex: 0 0 100%; box-sizing: border-box;
+  display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 2px 12px;
+  padding: 12px 16px 14px;
+  text-align: left;
+  background: var(--ink); color: var(--paper);
+  border: none; border-radius: var(--r-m);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  box-shadow: var(--shadow-2);
+}
+.stop-timer.banner .stop-timer-label {
+  grid-column: 1 / -1;
+  font-size: 15px; font-weight: 700; line-height: 1.2; color: var(--paper);
+}
+.stop-timer.banner .stop-timer-time {
+  font-size: 52px; line-height: 1; margin-top: 2px; letter-spacing: -0.02em; color: var(--paper);
+}
+.stop-timer.banner .stop-timer-countdown {
+  font-family: var(--font-ui); font-size: 17px; font-weight: 700; line-height: 1.2;
+  padding-bottom: 5px; text-align: right; color: var(--paper);
+}
+.stop-timer.banner .stop-timer-bar {
+  display: block; grid-column: 1 / -1; margin-top: 8px;
+  height: 8px; border-radius: 4px; overflow: hidden;
+  background: color-mix(in srgb, var(--paper) 28%, transparent);
+}
+.stop-timer.banner .stop-timer-bar i {
+  display: block; height: 100%; width: 0; background: var(--paper);
+  transition: width 1s linear;
+}
+.stop-timer.banner .stop-timer-headcount,
+.stop-timer.banner .stop-timer-bus-hint,
+.stop-timer.banner .stop-timer-end { display: none !important; }
+/* Last five minutes, or overdue: the whole sign turns red. */
+.stop-timer.banner.alarm { background: var(--mark); }
+.stop-timer.banner.alarm .stop-timer-label,
+.stop-timer.banner.alarm .stop-timer-time,
+.stop-timer.banner.alarm .stop-timer-countdown { color: var(--paper); }
+@media (prefers-reduced-motion: reduce) { .stop-timer.banner .stop-timer-bar i { transition: none; } }
+
+/* The stop card's quote was a fixed dark grey — unreadable on dark themes. */
+.stop-arrival-joke { color: color-mix(in srgb, var(--ink) 82%, var(--muted)); }

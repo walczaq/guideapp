@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   /* Tokens lifted from beacon.css §1 (passenger · daylight). This page is
      public-facing, so it stays on the warm paper palette regardless of any
@@ -22,7 +22,7 @@
     --paper-2: #ece5d4;
     --paper-3: #e0d8c4;
     --ink:     #221f1d;
-    --rule:    #76705f;
+    --rule:    #5f5a4b;
     --rule-soft: rgba(34, 31, 29, 0.10);
     --line:        rgba(34, 31, 29, 0.10);
     --line-strong: rgba(34, 31, 29, 0.26);
@@ -50,16 +50,15 @@
 
   .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
 
-  /* shared idiom: the mono uppercase eyebrow used all over the app */
+  /* shared idiom: the small label used all over the app */
   .eyebrow {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; font-weight: 500;
-    letter-spacing: 0.14em; text-transform: uppercase;
+    font-family: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px; font-weight: 500;
     color: var(--rule);
   }
   .mono {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12.5px; line-height: 1.65; color: var(--rule);
+    font-family: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px; line-height: 1.65; color: var(--rule);
   }
 
   /* ── header ─────────────────────────────────────────────────────── */
@@ -74,8 +73,8 @@
     letter-spacing: -0.01em;
   }
   .header-link {
-    font-family: 'JetBrains Mono', monospace; font-size: 11px;
-    letter-spacing: 0.1em; text-transform: uppercase;
+    font-family: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 13px;
+
     text-decoration: none; color: var(--ink);
     border: 1px solid var(--line-strong); border-radius: 6px;
     padding: 9px 16px; background: var(--paper);
@@ -98,8 +97,8 @@
   .hero p.note { max-width: 520px; margin-bottom: 32px; }
   .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
   .btn {
-    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500;
-    letter-spacing: 0.14em; text-transform: uppercase;
+    font-family: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 500;
+
     padding: 15px 28px; border-radius: 6px; text-decoration: none;
     display: inline-block; cursor: pointer;
   }
@@ -158,8 +157,8 @@
   }
   .shot-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .shot-label {
-    font-family: 'JetBrains Mono', monospace; font-size: 10px;
-    letter-spacing: 0.14em; text-transform: uppercase;
+    font-family: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 13px;
+
     color: var(--rule); opacity: 0.7; line-height: 2; padding: 0 16px;
   }
   .shot figcaption { text-align: center; max-width: 280px; }
@@ -176,9 +175,9 @@
   .access-card .mono { margin-bottom: 18px; }
   .access-card .mono a { color: var(--accent); text-decoration: underline; }
   .badge {
-    display: inline-block; font-family: 'JetBrains Mono', monospace;
-    font-size: 9px; font-weight: 700; letter-spacing: 0.14em;
-    text-transform: uppercase; padding: 4px 9px; border-radius: 999px;
+    display: inline-block; font-family: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px; font-weight: 700;
+ padding: 4px 9px; border-radius: 999px;
   }
   .badge-default { background: var(--accent-soft); color: var(--accent); }
   .badge-beta { background: var(--paper-3); color: var(--rule); }

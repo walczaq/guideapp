@@ -25,7 +25,7 @@
 // /sw.js itself is served no-cache (see /_headers), so SW updates propagate
 // on next app open; bumping SHELL_CACHE purges the old shell on activate.
 
-const SHELL_CACHE = 'fieldnote-shell-v9';   // bumped: supabase-js 2.118.0 + idb 8.0.4 (new /vendor filenames)
+const SHELL_CACHE = 'fieldnote-shell-v10';  // bumped: readable-type restyle (new fonts URL, beacon.css)
 
 // Same-origin shell assets — these MUST cache for the app to boot offline.
 // Includes the /vendor libs: same origin as the HTML, so if the first page
@@ -51,7 +51,7 @@ const SHELL_URLS = [
 // install). Only the fonts CSS remains since the libs moved to /vendor;
 // fonts are pure graceful degradation (typography, never boot).
 const CDN_URLS = [
-  'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;700&display=swap',
+  'https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;700&display=swap',
 ];
 
 const NAV_FALLBACK = '/v0.5';
