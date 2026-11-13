@@ -426,8 +426,8 @@ window.__FN_SB = {
   }
   .you-dot { fill: var(--you); stroke: var(--paper); stroke-width: 2.5; }
   .you-halo { fill: var(--ink); opacity: 0.12; }
-  /* The passenger's own breadcrumb — a treasure-map dotted line of where
-     they've walked. Coloured to match the you-dot (var() only resolves in CSS,
+  /* This phone's own breadcrumb — a treasure-map dotted line of where
+     its owner has walked. Coloured to match the you-dot (var() only resolves in CSS,
      not SVG presentation attributes, so stroke lives here). */
   .you-trail { fill: none; stroke: var(--you); }
   .you-trail.guide { stroke: #2563eb; }
@@ -439,6 +439,14 @@ window.__FN_SB = {
     fill: none; stroke: #6b4f2e; stroke-width: 3;
     stroke-linecap: round; stroke-dasharray: 7 5; pointer-events: none;
   }
+
+  /* Spot trail — the walking order between the spots of an active stop
+     (1 → 2 → 3, with a lighter branch out to each extra place). Finer than
+     the stop-to-stop route line and cased in paper so it reads on any map. */
+  .spot-trail, .spot-trail-case { fill: none; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+  .spot-trail-case { stroke: var(--paper); stroke-width: 6; opacity: 0.7; }
+  .spot-trail { stroke: #6b4f2e; stroke-width: 2.5; stroke-dasharray: 2 6; }
+  .spot-trail.side { stroke-width: 2; stroke-dasharray: 1 6; opacity: 0.75; }
 
   /* Boarding / headcount screen (guide, before "Start tour"). */
   .boarding-screen {
@@ -4620,6 +4628,22 @@ function computeSequenceLabels(pins) {
   }
   return out;
 }
+// The walking trail through one stop's spots. `pins` in sequence order.
+// main: the numbered spots in order (the line 1 → 2 → 3…). sides: one short
+// branch per extra place, from the numbered spot it is labelled after (6 → 6B,
+// 6 → 6C); an extra listed before any numbered spot hangs off the first one.
+function spotTrailShape(pins) {
+  const ok = (p) => Number.isFinite(p.lng) && Number.isFinite(p.lat);
+  const main = (pins || []).filter(p => isContentCat(p.category) && ok(p));
+  const sides = [];
+  let anchor = null;
+  for (const p of (pins || [])) {
+    if (!ok(p)) continue;
+    if (isContentCat(p.category)) anchor = p;
+    else if (isSideCat(p.category)) { const from = anchor || main[0]; if (from) sides.push([from, p]); }
+  }
+  return { main, sides };
+}
 function activeZones() { return activePins().filter(p => isZoneCat(p.category)); }
 function activeAmenities() { return activePins().filter(p => isAmenityCat(p.category)); }
 
@@ -7812,6 +7836,12 @@ function tbEnsureZoneLayers() {
     m.addLayer({ id: 'tb-zones-fill', type: 'fill', source: 'tb-zones', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.16 } });
     m.addLayer({ id: 'tb-zones-line', type: 'line', source: 'tb-zones', paint: { 'line-color': ['get', 'color'], 'line-width': 2, 'line-dasharray': [2, 1.5] } });
   }
+  // Spot trail of the selected stop — same walking line passengers see.
+  if (!m.getSource('tb-trail')) {
+    m.addSource('tb-trail', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    m.addLayer({ id: 'tb-trail-case', type: 'line', source: 'tb-trail', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 6, 'line-opacity': 0.7 } });
+    m.addLayer({ id: 'tb-trail-line', type: 'line', source: 'tb-trail', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#6b4f2e', 'line-width': 2.5, 'line-opacity': ['case', ['get', 'side'], 0.75, 1], 'line-dasharray': [0.8, 2.4] } });
+  }
   // Trigger/activation radius of the currently-highlighted stop or pin.
   if (!m.getSource('tb-hi')) {
     m.addSource('tb-hi', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
@@ -7841,6 +7871,17 @@ function renderTbMarkers() {
     }
     const src = _tbEditorMap.getSource('tb-zones');
     if (src) src.setData({ type: 'FeatureCollection', features: feats });
+
+    const trailFeats = [];
+    const selSt = tbSelStop();
+    if (selSt) {
+      const line = (pts, side) => ({ type: 'Feature', properties: { side }, geometry: { type: 'LineString', coordinates: pts.map(p => [p.lng, p.lat]) } });
+      const { main, sides } = spotTrailShape(selSt.pins);
+      if (main.length >= 2) trailFeats.push(line(main, false));
+      for (const leg of sides) trailFeats.push(line(leg, true));
+    }
+    const trailSrc = _tbEditorMap.getSource('tb-trail');
+    if (trailSrc) trailSrc.setData({ type: 'FeatureCollection', features: trailFeats });
 
     // Trigger/activation-area border of whatever marker is highlighted.
     const hiFeats = [];
@@ -9976,8 +10017,8 @@ async function prewarmOfflineTiles() {
 // are at the browser's discretion — we ask for high accuracy but don't get a guarantee.
 let geoWatchId = null;
 let _noFixNudgeTimer = null;
-// The passenger's own walking breadcrumb (in-memory, this session). Drawn as a
-// treasure-map dotted trail in the passenger view. Distance-gated so standing
+// This phone's own walking breadcrumb (in-memory, this session; passenger
+// and guide alike). Drawn as a treasure-map dotted trail behind the you-dot. Distance-gated so standing
 // still doesn't cluster dots from GPS jitter; capped so a full day stays bounded.
 let _youTrail = [];
 const YOU_TRAIL_MIN_M = 6;     // min metres between recorded breadcrumb points
@@ -9991,6 +10032,19 @@ function youTrailKey() { return (typeof SESSION !== 'undefined' && SESSION) ? ('
 function saveYouTrail() {
   const k = youTrailKey(); if (!k) return;
   try { localStorage.setItem(k, JSON.stringify(_youTrail)); } catch (_e) { /* quota/private — ignore */ }
+}
+// Add the current position to the breadcrumb. Called from every position
+// source (real GPS, the joystick simulator, a simulator teleport). `jump`
+// marks a point the person did not walk to, so the line breaks there.
+function recordYouTrail(jump) {
+  if (!Number.isFinite(state.youLng) || !Number.isFinite(state.youLat)) return;
+  const last = _youTrail[_youTrail.length - 1];
+  if (last && !jump && metersBetween(last.lng, last.lat, state.youLng, state.youLat) < YOU_TRAIL_MIN_M) return;
+  const pt = { lng: state.youLng, lat: state.youLat, ts: Date.now() };
+  if (jump) pt.jump = 1;
+  _youTrail.push(pt);
+  if (_youTrail.length > YOU_TRAIL_MAX) _youTrail.shift();
+  saveYouTrail();   // persist per session so it survives reload (#2)
 }
 function restoreYouTrail() {
   const k = youTrailKey(); if (!k) return;
@@ -10369,7 +10423,8 @@ function activeStopSince() {
 }
 
 // Draw a time-ordered point list as a treasure-map dotted trail on `layer`:
-// ordered, split into runs across offline gaps (>3 min, never bridged), each run
+// ordered, split into runs across offline gaps (>3 min, never bridged) and at
+// points flagged `jump` (a simulator teleport), each run
 // smoothed (Catmull-Rom) and round-dotted, with a STEEP per-position fade across
 // the whole trail (oldest faint → newest bright) so it's obvious which way the
 // person walked (#3). Chunks each run so opacity can ramp along it.
@@ -10391,7 +10446,7 @@ function drawDottedTrail(layer, points, opts) {
   for (let i = 0; i < ordered.length; i++) {
     if (i > 0) {
       const da = ms(ordered[i - 1].ts), db = ms(ordered[i].ts);
-      if (da && db && (db - da) > GAP_MS) { if (run.length) runs.push(run); run = []; }
+      if ((da && db && (db - da) > GAP_MS) || ordered[i].jump) { if (run.length) runs.push(run); run = []; }
     }
     run.push(ordered[i]);
   }
@@ -12012,15 +12067,8 @@ function onGpsSuccess(pos) {
   state.accuracy = pos.coords.accuracy;
   state.heading = pos.coords.heading;  // null if not moving
 
-  // Record the passenger's own walking breadcrumb for the dotted trail.
-  if (ROLE === 'passenger' && Number.isFinite(state.youLng) && Number.isFinite(state.youLat)) {
-    const last = _youTrail[_youTrail.length - 1];
-    if (!last || metersBetween(last.lng, last.lat, state.youLng, state.youLat) >= YOU_TRAIL_MIN_M) {
-      _youTrail.push({ lng: state.youLng, lat: state.youLat, ts: Date.now() });
-      if (_youTrail.length > YOU_TRAIL_MAX) _youTrail.shift();
-      saveYouTrail();   // persist per session so it survives reload (#2)
-    }
-  }
+  // Record this phone's own walking breadcrumb for the dotted trail.
+  recordYouTrail();
 
   updateSignal();
 
@@ -12249,8 +12297,9 @@ function repositionOverlay() {
     // per path, dozens of paths on a long walk) — rebuilding them at 60fps
     // re-created the zoom stutter whenever trails were in view. Throttle
     // path geometry to ~7/s; the breadcrumbs lag a gesture by ≤150ms, which
-    // is imperceptible. Route-line LEGS stay per-frame: they're a handful
-    // of cheap lines pinned to stop markers and would visibly detach.
+    // is imperceptible. Route-line LEGS and the spot trail (data-geo-live)
+    // stay per-frame: they're a handful of cheap shapes pinned to markers
+    // and would visibly detach.
     for (const el of layer.querySelectorAll('[data-geo]')) {
       if (el.dataset.geo === 'line' && el.__geoA && el.__geoB) {
         const a = project(el.__geoA.lng, el.__geoA.lat);
@@ -12259,7 +12308,7 @@ function repositionOverlay() {
           el.setAttribute('x1', a.x); el.setAttribute('y1', a.y);
           el.setAttribute('x2', b.x); el.setAttribute('y2', b.y);
         }
-      } else if (rebuildPaths && el.dataset.geo === 'path' && el.__geoPts) {
+      } else if ((rebuildPaths || el.dataset.geoLive) && el.dataset.geo === 'path' && el.__geoPts) {
         const d = trailSmoothPath(el.__geoPts.map(t => project(t.lng, t.lat)));
         if (d) el.setAttribute('d', d);
       }
@@ -12386,9 +12435,35 @@ function renderRouteLine(layer) {
   }
 }
 
+// Spot trail — joins the spots of each active stop in walking order, behind
+// the markers, on both passenger + guide maps. Straight from the known spot
+// coordinates (smoothed), not a surveyed footpath.
+function renderSpotTrail(layer) {
+  if (!layer || !map || !TOUR) return;
+  const add = (pts, cls) => {
+    const d = trailSmoothPath(pts.map(t => project(t.lng, t.lat)));
+    if (!d) return;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('class', cls);
+    path.setAttribute('d', d);
+    // Camera fast path (repositionOverlay): geo points cached as a JS prop.
+    path.dataset.geo = 'path';
+    path.dataset.geoLive = '1';   // pinned to markers → re-projected every frame
+    path.__geoPts = pts.map(t => ({ lng: t.lng, lat: t.lat }));
+    layer.appendChild(path);
+  };
+  for (const stop of TOUR.stops) {
+    if (!ACTIVE_STOP_IDS.has(stop.id)) continue;
+    const { main, sides } = spotTrailShape(stop.pins);
+    if (main.length >= 2) { add(main, 'spot-trail-case'); add(main, 'spot-trail'); }
+    for (const leg of sides) { add(leg, 'spot-trail-case'); add(leg, 'spot-trail side'); }
+  }
+}
+
 function renderPins() {
   pinsLayer.innerHTML = '';
   renderRouteLine(pinsLayer);   // session-log route, behind the pins (both roles)
+  renderSpotTrail(pinsLayer);   // walking order between an active stop's spots
   const ppm = pxPerMeter();
 
   // ── Danger / border ZONES — drawn first (underneath everything) as a
@@ -12545,7 +12620,7 @@ function addTitlePlates() {
   });
 }
 
-// Draw the passenger's own breadcrumb as a treasure-map dotted line — same look
+// Draw this phone's own breadcrumb as a treasure-map dotted line — same look
 // as the guide's passenger trails: time-ordered, split into runs across >3-min
 // gaps, smoothed (Catmull-Rom) and dotted, older runs faded. Coloured via the
 // .you-trail CSS class (matches the you-dot).
@@ -12562,7 +12637,7 @@ function renderYouTrail() {
 
 function renderYou() {
   youLayer.innerHTML = '';
-  if (ROLE === 'passenger') renderYouTrail();   // breadcrumb behind the you-dot
+  renderYouTrail();   // this phone's breadcrumb, behind the you-dot (both roles)
   if (state.youLng == null) return;
   const { x, y } = project(state.youLng, state.youLat);
   const ppm = pxPerMeter();
@@ -16774,6 +16849,7 @@ function teleportSimTo(lng, lat) {
   state.youLat = lat;
   state.gpsMode = 'simulated';
   state.accuracy = 5;
+  recordYouTrail(true);   // a jump, not a walk — the breadcrumb breaks here
   if (ROLE === 'passenger') { checkTriggers(); checkDangerZones(); checkBusArrival(); maybeAutoDetailZoom(); }
   if (ROLE === 'guide' && SESSION) checkStopGeofences();
   updateSignal();
@@ -16809,6 +16885,7 @@ function startJoystickLoop() {
     state.youLng += dLng;
     state.heading = (headingRad * 180 / Math.PI + 360) % 360;
     state.gpsMode = 'simulated';
+    recordYouTrail();
 
     // Mirror the onGpsSuccess side-effects (minus the queue, which we do
     // separately at a throttled cadence).
