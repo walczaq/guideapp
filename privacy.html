@@ -8,7 +8,7 @@
   /* Matches the app's paper/ink palette; standalone on purpose (this page
      must not depend on the app shell, its SW cache, or beacon.css). */
   :root {
-    --paper: #f1ece0; --ink: #221f1d; --muted: #76705f; --rule: #9a9384;
+    --paper: #f1ece0; --ink: #221f1d; --muted: #5f5a4b; --rule: #9a9384;
     --accent: #b2472e;
   }
   @media (prefers-color-scheme: dark) {
@@ -21,8 +21,8 @@
   }
   main { max-width: 680px; margin: 0 auto; padding: 48px 24px 80px; }
   .stamp {
-    font: 11px/1.4 'Courier New', monospace; letter-spacing: 0.14em;
-    text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+    font: 700 13px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    color: var(--muted); margin-bottom: 8px;
   }
   h1 { font-size: 30px; font-style: italic; font-weight: 400; margin: 0 0 6px; }
   .updated { color: var(--muted); font-size: 14px; margin-bottom: 32px; }
