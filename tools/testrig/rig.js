@@ -186,6 +186,15 @@ class Rig {
       await sleep(everyMs);
     }
   }
+  // Stand still for `ms`, re-reporting the position with ~1 m of jitter each
+  // second — a real phone keeps producing fixes; a fixed fake one does not.
+  async hold(page, at, ms, { everyMs = 1000, accuracy = 6 } = {}) {
+    for (let t = 0; t < ms; t += everyMs) {
+      const j = () => (Math.random() - 0.5) * 2e-5;
+      await page.context().setGeolocation({ latitude: at[0] + j(), longitude: at[1] + j() * 2, accuracy });
+      await sleep(everyMs);
+    }
+  }
   // Feed the session tracker fixes for the bus, as the bus_gps function would.
   async driveBus(sessionId, waypoints, { speed = 12, everyMs = 1000, onStep } = {}) {
     const pts = densify(waypoints, speed * everyMs / 1000);

@@ -12169,7 +12169,20 @@ function onGpsError(err) {
 
 function showGpsBanner(msg) {
   gpsBannerMsg.textContent = msg;
+  placeGpsBanner();
   gpsBanner.classList.add('show');
+}
+// The passenger's full-width return-time banner sits where the GPS banner
+// normally goes; when it is up, drop the GPS banner just below it so "when
+// do I need to be back" is never covered by "location unavailable".
+function placeGpsBanner() {
+  const timer = document.getElementById('stop-timer');
+  const host = gpsBanner.offsetParent;
+  if (timer && host && timer.classList.contains('banner') && timer.offsetHeight) {
+    gpsBanner.style.top = Math.round(timer.getBoundingClientRect().bottom - host.getBoundingClientRect().top + 8) + 'px';
+  } else {
+    gpsBanner.style.top = '';
+  }
 }
 function hideGpsBanner() {
   gpsBanner.classList.remove('show');
@@ -13693,9 +13706,8 @@ async function activateStop(stop, opts) {
   updateBusHeadcount();
   renderPassengerList();
   _stopsListExpanded = false;   // fresh stop → context switches to its panel
-  renderPins();
+  renderAll();   // pins + passenger trails + own breadcrumb + NEXT banner
   renderStopList();
-  updateNextStopBanner();
   return { ok: true, row: data };
 }
 
@@ -13780,9 +13792,8 @@ async function deactivateStop(stop) {
   if (BUS_PIN_ON || BUS_PIN) {
     await clearBusPin({ retract: true });
   }
-  renderPins();
+  renderAll();   // pins + passenger trails + own breadcrumb + NEXT banner
   renderStopList();
-  updateNextStopBanner();
   return { ok: true };
 }
 
@@ -14132,8 +14143,9 @@ function onStopActivated(row) {
 
   const stop = TOUR ? TOUR.stops.find(s => s.id === row.stop_id) : null;
   _stopsListExpanded = false;   // context switch on the receiving device too
-  renderPins();
-  updateNextStopBanner();   // in-transit banner must go the moment a stop starts
+  // Full redraw, not just the pins: trails and the NEXT banner are keyed to
+  // "a stop is active" too, and nothing else redraws them until the next fix.
+  renderAll();
   if (ROLE === 'guide') renderStopList();
 
   // Passenger-side arrival announcement: chime + center modal. If the user
@@ -14169,8 +14181,7 @@ function onStopDeactivated(row) {
   }
   if (!ACTIVE_STOP_IDS.has(row.stop_id)) return;
   ACTIVE_STOP_IDS.delete(row.stop_id);
-  renderPins();
-  updateNextStopBanner();   // back in transit → the NEXT banner returns
+  renderAll();   // pins, trails and the NEXT banner all change when a stop ends
   if (ROLE === 'guide') renderStopList();
 }
 
@@ -14835,6 +14846,7 @@ function updateBusHeadcount() {
 function renderHudTimer() {
   const el = document.getElementById('stop-timer');
   if (!el) return;
+  if (gpsBanner.classList.contains('show')) placeGpsBanner();   // follow the banner appearing/leaving
   updateBusHeadcount();
   const labelEl = document.querySelector('#stop-timer .stop-timer-label');
   const timeEl = document.getElementById('stop-timer-time');
