@@ -44,6 +44,8 @@ Scenarios so far (each prints PASS/FAIL lines or a summary, and screenshots):
   no-location passenger, reload mid-stop, end stop, end session.
 - `pickup-bus.js` — before the tour: "your bus is on its way", arrival, stale tracker.
 - `full-bus.js` — the guide's map with 19 passengers walking at once.
+- `footpaths.js` — real map only: the builder fetches walking paths, the
+  passenger's spot trail follows them.
 
 `geysir-walk.js` is the simplest pattern. The main calls:
 

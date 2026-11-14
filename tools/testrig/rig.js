@@ -150,8 +150,8 @@ class Rig {
   }
   // Tap by CSS selector ('#id', '.class') or by exact visible text.
   async tap(page, what, { settle = 600 } = {}) {
-    if (/^[#.\[]/.test(what)) await page.click(what, { timeout: 4000 });
-    else await page.getByText(what, { exact: true }).first().click({ timeout: 4000 });
+    if (/^[#.\[]/.test(what)) await page.click(what, { timeout: 12000 });
+    else await page.getByText(what, { exact: true }).first().click({ timeout: 12000 });
     await sleep(settle);
   }
   // Walk a fresh passenger window through language → name → intro to the map.
@@ -266,7 +266,16 @@ class Rig {
         return route.fulfill({ status: 200, contentType: 'font/woff2', headers: { 'access-control-allow-origin': '*' }, body: fs.readFileSync(file) });
       }
       if (url.hostname === 'fonts.googleapis.com') return route.fulfill({ status: 200, contentType: 'text/css', body: fontCss() });
-      if (url.hostname === 'api.mapbox.com' && this.map === 'mapbox') return route.continue();
+      if (url.hostname === 'api.mapbox.com' && this.map === 'mapbox') {
+        // Page-level API calls (Directions) are fetched by Playwright and handed
+        // back: letting the browser send them itself fails here with a bogus
+        // CORS error. Map tiles/styles (fetched by Mapbox's workers) pass through.
+        if (url.pathname.startsWith('/directions/')) {
+          const resp = await route.fetch();
+          return route.fulfill({ response: resp, headers: { ...resp.headers(), 'access-control-allow-origin': '*' } });
+        }
+        return route.continue();
+      }
       if (url.hostname === 'api.mapbox.com') {
         if (url.pathname.startsWith('/styles/v1/')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(this.mapStyle()) });
         return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });

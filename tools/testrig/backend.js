@@ -224,6 +224,10 @@ const RPC = {
   },
   reorder_stops({ p_guide_token, p_tour_id, p_stop_ids }) { this.ownTour(p_tour_id, this.guide(p_guide_token)); p_stop_ids.forEach((id, i) => { const s = this.t.stops.find(x => x.id == id); if (s) s.ordinal = i + 1; }); },
   set_tour_drive_etas({ p_guide_token, p_stop_ids, p_secs }) { this.guide(p_guide_token); (p_stop_ids || []).forEach((id, i) => { const s = this.t.stops.find(x => x.id == id); if (s) s.drive_secs_from_prev = p_secs[i]; }); },
+  set_stop_walk_path({ p_guide_token, p_stop_id, p_path }) {
+    const s = this.t.stops.find(x => x.id == p_stop_id); if (!s) this.fail('Stop not found or not editable');
+    this.ownTour(s.tour_id, this.guide(p_guide_token)); s.walk_path = p_path || null;
+  },
   create_pin({ p_guide_token, p_stop_id, p_title, p_body, p_lng, p_lat, p_trigger_radius_m, p_category }) {
     const s = this.t.stops.find(x => x.id == p_stop_id); if (!s) this.fail('Stop not found.'); this.ownTour(s.tour_id, this.guide(p_guide_token));
     const pin = { id: this.nextId(), stop_id: s.id, ordinal: this.t.pins.filter(p => p.stop_id === s.id).length + 1, title: p_title, body: p_body || '', lng: p_lng, lat: p_lat, trigger_radius_m: p_trigger_radius_m || 25, category: p_category || 'pin', title_i18n: null, body_i18n: null };

@@ -4644,6 +4644,58 @@ function spotTrailShape(pins) {
   }
   return { main, sides };
 }
+// A leg of the spot trail is identified by its two spots' coordinates, so a
+// saved footpath (stops.walk_path, migration 052) stops matching — and the
+// leg falls back to a straight line — as soon as either spot moves.
+function walkLegKey(a, b) {
+  const f = (p) => Number(p.lng).toFixed(5) + ',' + Number(p.lat).toFixed(5);
+  return f(a) + ';' + f(b);
+}
+// One leg as a point list: the saved footpath when there is one, with the
+// spots themselves as its ends (a spot can sit a few metres off the path);
+// otherwise just the two spots.
+function walkLegPoints(a, b, legs) {
+  const saved = legs && legs[walkLegKey(a, b)];
+  const ends = [{ lng: a.lng, lat: a.lat }, { lng: b.lng, lat: b.lat }];
+  if (!Array.isArray(saved) || saved.length < 2) return ends;
+  const mid = saved.filter(c => Array.isArray(c) && Number.isFinite(c[0]) && Number.isFinite(c[1])).map(c => ({ lng: c[0], lat: c[1] }));
+  return [ends[0]].concat(mid, [ends[1]]);
+}
+// The spot trail of one stop as drawable lines: `main` through the numbered
+// spots, plus one line per extra place. `legs` = the stop's saved footpaths.
+function spotTrailLines(pins, legs) {
+  const { main, sides } = spotTrailShape(pins);
+  let mainPts = [];
+  for (let i = 0; i + 1 < main.length; i++) {
+    const leg = walkLegPoints(main[i], main[i + 1], legs);
+    mainPts = mainPts.concat(i === 0 ? leg : leg.slice(1));
+  }
+  return { main: mainPts, sides: sides.map(([a, b]) => walkLegPoints(a, b, legs)), routed: !!legs };
+}
+// Passenger/guide map: fetch the saved footpaths for this tour's stops. A
+// separate, forgiving query (not part of the tour load) so a database that
+// does not have the column yet, or a dropped connection, only costs the
+// footpaths — the trail is then drawn straight. Last good answer is kept on
+// the device for weak-signal reloads.
+async function loadWalkPaths() {
+  if (!TOUR || !TOUR.stops || !TOUR.stops.length) return;
+  const cacheKey = 'fieldnote_walk_' + TOUR.id;
+  const apply = (rows) => {
+    let any = false;
+    for (const r of (rows || [])) {
+      const st = TOUR.stops.find(x => x.id === r.id);
+      if (st && r.walk_path && r.walk_path.legs) { st.walkLegs = r.walk_path.legs; any = true; }
+    }
+    if (any && typeof map !== 'undefined' && map) { try { renderPins(); } catch (_e) {} }
+  };
+  try { const c = JSON.parse(localStorage.getItem(cacheKey) || 'null'); if (Array.isArray(c)) apply(c); } catch (_e) {}
+  try {
+    const { data, error } = await supabaseClient.from('stops').select('id, walk_path').in('id', TOUR.stops.map(s => s.id));
+    if (error || !Array.isArray(data)) return;
+    apply(data);
+    try { localStorage.setItem(cacheKey, JSON.stringify(data.filter(r => r.walk_path))); } catch (_e) {}
+  } catch (_e) { /* offline — cached or straight */ }
+}
 function activeZones() { return activePins().filter(p => isZoneCat(p.category)); }
 function activeAmenities() { return activePins().filter(p => isAmenityCat(p.category)); }
 
@@ -5438,6 +5490,7 @@ async function loadSessionAndTour(sessionId, opts) {
     startPresenceHeartbeat();
     restoreYouTrail();   // bring back this session's breadcrumb after a reload (#2)
   }
+  loadWalkPaths();       // saved footpaths for the spot trail (both roles, best-effort)
 
   // Now that we have a session, start the sync worker. It will pick up any
   // leftover rows from a previous page-load and stream new fixes to Supabase.
@@ -7343,6 +7396,11 @@ async function tbLoadTourDetail(tourId) {
   if (data && data.stops) {
     data.stops.sort((a, b) => a.ordinal - b.ordinal);
     data.stops.forEach(s => (s.pins || []).sort((a, b) => a.ordinal - b.ordinal));
+    // Saved footpaths — separate forgiving query (see loadWalkPaths).
+    try {
+      const wp = await supabaseClient.from('stops').select('id, walk_path').in('id', data.stops.map(s => s.id));
+      if (!wp.error) for (const r of (wp.data || [])) { const st = data.stops.find(x => x.id === r.id); if (st) st.walk_path = r.walk_path || null; }
+    } catch (_e) {}
   }
   return data;
 }
@@ -7548,6 +7606,7 @@ async function openTourEditor(tourId) {
   _tbSelStopId = _tbTour.stops && _tbTour.stops[0] ? _tbTour.stops[0].id : null;
   _tbExpandedStops = new Set(_tbSelStopId ? [_tbSelStopId] : []);   // first stop open, rest collapsed
   _tbEta = null; _tbEtaSig = null;   // recomputed for this tour's stops
+  _tbWalkSig = null;
   _tbPlace = null; _tbStopDeleteConfirm = null; _tbPinDeleteConfirm = null; _tbHi = null;
 
   let el = document.getElementById('tour-editor');
@@ -7814,6 +7873,84 @@ async function tbMaybeFetchEtas() {
   } catch (_e) { _tbEta = null; }   // sig stays set → no refetch loop; straight-line fallback
 }
 
+// ── Footpaths for the spot trail ──
+// For every leg of every stop's spot trail that has no saved footpath yet, ask
+// Mapbox Directions (walking) once and store the answer on the stop
+// (set_stop_walk_path), so passengers draw the trail along real paths for
+// free. Runs quietly whenever the builder panel renders; a signature of all
+// spot coordinates keeps it from refetching until something moves.
+const WALK_SNAP_MAX_M = 40;     // a spot further than this from any path → leave the leg straight
+let _tbWalkSig = null;
+function tbWalkLegsNeeded(stop) {
+  const { main, sides } = spotTrailShape(stop.pins || []);
+  const out = [];
+  for (let i = 0; i + 1 < main.length; i++) out.push([main[i], main[i + 1]]);
+  return out.concat(sides);
+}
+// Drop points that add less than ~1.5 m of shape (Douglas–Peucker), so a path
+// is a few dozen points, not hundreds.
+function tbSimplifyPath(coords, tolM) {
+  if (coords.length < 3) return coords;
+  const kx = 111320 * Math.cos(coords[0][1] * Math.PI / 180), ky = 111320;
+  const P = coords.map(c => [c[0] * kx, c[1] * ky]);
+  const keep = new Array(P.length).fill(false); keep[0] = keep[P.length - 1] = true;
+  const stack = [[0, P.length - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop(); let worst = 0, at = -1;
+    const dx = P[b][0] - P[a][0], dy = P[b][1] - P[a][1], len = Math.hypot(dx, dy) || 1e-9;
+    for (let i = a + 1; i < b; i++) { const d = Math.abs((P[i][0] - P[a][0]) * dy - (P[i][1] - P[a][1]) * dx) / len; if (d > worst) { worst = d; at = i; } }
+    if (worst > tolM) { keep[at] = true; stack.push([a, at], [at, b]); }
+  }
+  return coords.filter((_c, i) => keep[i]);
+}
+// One leg from Mapbox. Returns a point list, or [] when there is no sensible
+// footpath (a spot far from any path, or a "route" that wanders off by road),
+// or null when the request itself failed (try again another time).
+async function tbFetchWalkLeg(a, b) {
+  const url = `https://api.mapbox.com/directions/v5/mapbox/walking/${a.lng},${a.lat};${b.lng},${b.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
+  let data;
+  try { const resp = await fetch(url); if (!resp.ok) return null; data = await resp.json(); } catch (_e) { return null; }
+  const route = data && data.routes && data.routes[0];
+  if (!data || data.code !== 'Ok' || !route || !route.geometry || !Array.isArray(route.geometry.coordinates)) return (data && data.code && data.code !== 'Ok') ? [] : null;
+  const straight = metersBetween(a.lng, a.lat, b.lng, b.lat);
+  const snaps = (data.waypoints || []).map(w => w && w.location);
+  const snapA = snaps[0] ? metersBetween(a.lng, a.lat, snaps[0][0], snaps[0][1]) : 0;
+  const snapB = snaps[1] ? metersBetween(b.lng, b.lat, snaps[1][0], snaps[1][1]) : 0;
+  if (snapA > WALK_SNAP_MAX_M || snapB > WALK_SNAP_MAX_M) return [];
+  if (route.distance > Math.max(straight * 2.5, straight + 150)) return [];
+  return tbSimplifyPath(route.geometry.coordinates, 1.5).map(c => [Math.round(c[0] * 1e6) / 1e6, Math.round(c[1] * 1e6) / 1e6]);
+}
+async function tbMaybeFetchWalkPaths() {
+  if (!_tbTour || !getStoredGuideToken()) return;
+  const tour = _tbTour;
+  const stops = (tour.stops || []);
+  const sig = tour.id + '|' + stops.map(s => tbWalkLegsNeeded(s).map(([a, b]) => walkLegKey(a, b)).join('/')).join('|');
+  if (sig === _tbWalkSig) return;   // nothing moved / a run is already under way
+  _tbWalkSig = sig;
+  for (const stop of stops) {
+    const needed = tbWalkLegsNeeded(stop);
+    const old = (stop.walk_path && stop.walk_path.legs) || {};
+    const legs = {}; let changed = false, failed = false;
+    for (const [a, b] of needed) {
+      const key = walkLegKey(a, b);
+      if (Array.isArray(old[key])) { legs[key] = old[key]; continue; }
+      const pts = await tbFetchWalkLeg(a, b);
+      if (_tbTour !== tour) return;            // builder moved to another tour
+      if (pts === null) { failed = true; continue; }
+      legs[key] = pts; changed = true;
+    }
+    if (Object.keys(old).some(k => !(k in legs))) changed = true;   // legs that no longer exist
+    if (!changed) { if (failed) _tbWalkSig = null; continue; }
+    stop.walk_path = { v: 1, legs };
+    try {
+      const { error } = await supabaseClient.rpc('set_stop_walk_path', { p_guide_token: getStoredGuideToken(), p_stop_id: stop.id, p_path: stop.walk_path });
+      if (error) console.warn('[tb] walk path not saved', error.message || error);
+    } catch (_e) { /* best-effort — still shown in the builder */ }
+    if (failed) _tbWalkSig = null;             // retry the missing legs on a later render
+    if (_tbTour === tour && stop.id === _tbSelStopId) { try { renderTbMarkers(); } catch (_e) {} }
+  }
+}
+
 // A GeoJSON polygon approximating a metric circle — used to draw danger/border
 // zones at their real radius on the (Mapbox) builder map.
 function circlePolygon(lng, lat, radiusM, n = 64) {
@@ -7876,7 +8013,7 @@ function renderTbMarkers() {
     const selSt = tbSelStop();
     if (selSt) {
       const line = (pts, side) => ({ type: 'Feature', properties: { side }, geometry: { type: 'LineString', coordinates: pts.map(p => [p.lng, p.lat]) } });
-      const { main, sides } = spotTrailShape(selSt.pins);
+      const { main, sides } = spotTrailLines(selSt.pins, selSt.walk_path && selSt.walk_path.legs);
       if (main.length >= 2) trailFeats.push(line(main, false));
       for (const leg of sides) trailFeats.push(line(leg, true));
     }
@@ -8097,6 +8234,7 @@ function renderTbEditorPanel() {
   // Refresh driving ETAs in the background (no-op if stops unchanged). When the
   // result arrives it re-renders once to paint the numbers in.
   tbMaybeFetchEtas();
+  tbMaybeFetchWalkPaths();
 }
 
 // Render one pin row. seqList = ordered route+side pins (for ↑/↓ index),
@@ -12449,8 +12587,8 @@ function renderRouteLine(layer) {
 }
 
 // Spot trail — joins the spots of each active stop in walking order, behind
-// the markers, on both passenger + guide maps. Straight from the known spot
-// coordinates (smoothed), not a surveyed footpath.
+// the markers, on both passenger + guide maps. Each leg follows the footpath
+// the builder saved for it (stops.walk_path); a leg without one is straight.
 function renderSpotTrail(layer) {
   if (!layer || !map || !TOUR) return;
   const add = (pts, cls) => {
@@ -12467,7 +12605,7 @@ function renderSpotTrail(layer) {
   };
   for (const stop of TOUR.stops) {
     if (!ACTIVE_STOP_IDS.has(stop.id)) continue;
-    const { main, sides } = spotTrailShape(stop.pins);
+    const { main, sides } = spotTrailLines(stop.pins, stop.walkLegs);
     if (main.length >= 2) { add(main, 'spot-trail-case'); add(main, 'spot-trail'); }
     for (const leg of sides) { add(leg, 'spot-trail-case'); add(leg, 'spot-trail side'); }
   }
