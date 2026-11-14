@@ -67,7 +67,14 @@ class Rig {
     rig.backend = new Backend();
     rig.guideAccount = rig.backend.seed(opts.seed || SEED);
     rig.seed = opts.seed || SEED;
-    rig.browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+    // map: 'grid' (blank + 100 m grid, no network) or 'mapbox' (the real map;
+    // needs api.mapbox.com reachable, through the environment's proxy if set).
+    rig.map = opts.map || process.env.RIG_MAP || 'grid';
+    const proxy = process.env.HTTPS_PROXY || process.env.https_proxy;
+    rig.browser = await chromium.launch({
+      args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+      proxy: rig.map === 'mapbox' && proxy ? { server: proxy } : undefined,
+    });
     rig.pages = new Set();
     rig.errors = [];       // uncaught page errors, all windows
     rig.blocked = new Set(); // outside URLs the app tried and the rig refused
@@ -259,6 +266,7 @@ class Rig {
         return route.fulfill({ status: 200, contentType: 'font/woff2', headers: { 'access-control-allow-origin': '*' }, body: fs.readFileSync(file) });
       }
       if (url.hostname === 'fonts.googleapis.com') return route.fulfill({ status: 200, contentType: 'text/css', body: fontCss() });
+      if (url.hostname === 'api.mapbox.com' && this.map === 'mapbox') return route.continue();
       if (url.hostname === 'api.mapbox.com') {
         if (url.pathname.startsWith('/styles/v1/')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(this.mapStyle()) });
         return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });

@@ -45,16 +45,19 @@
   rollout is 7–20 tours a day (roughly 270–760 texts a day), so anything
   built for the pilot should not assume a single phone or a single guide.
 
-## Testing without the backend (offline rig)
+## Testing in cloud sessions (the rig)
 
-- Cloud sessions here cannot reach Supabase or Mapbox (network policy), and
-  Filip works from his phone, where the approval to change that cannot be
-  given. Don't keep proposing environment changes; use the rig.
 - `tools/testrig/` runs the real `v0.5.html` in headless Chromium with a fake
   in-memory backend, guide + passenger windows, simulated walking and a
-  simulated bus. Start with `tools/testrig/README.md`; run
-  `node tools/testrig/scenarios/geysir-walk.js` and read the screenshots in
-  `tools/testrig/out/`.
-- It shows no street map (blank map with a 100 m grid) and imitates the
-  server functions by hand, so say plainly that a rig pass does not cover the
-  real database or a real phone.
+  simulated bus. Start with `tools/testrig/README.md`; scenarios are in
+  `tools/testrig/scenarios/`, screenshots land in `tools/testrig/out/`.
+- **Map:** since 2026-11-14 the Default environment allows `api.mapbox.com`,
+  the Fieldnote Supabase host, `fonts.gstatic.com` and `api.open-meteo.com`
+  (Filip approved it from the desktop view of claude.ai on his phone — the
+  phone app itself cannot approve environment changes). Run scenarios with
+  `RIG_MAP=mapbox` to get the real Mapbox map; without it the rig draws a
+  blank map with a 100 m grid and needs no network.
+- **Backend:** the rig's backend is still the fake one, so test sessions
+  write nothing to the live database. Say plainly that a rig pass does not
+  cover the real database or a real phone. Using the live Supabase project
+  for a test (a test guide account, test sessions) is Filip's call — ask.

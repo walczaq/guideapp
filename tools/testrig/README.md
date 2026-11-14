@@ -1,9 +1,8 @@
 # Offline test rig
 
 Runs the real app (`v0.5.html` from this working copy) in headless Chromium
-with a guide window and passenger windows, without reaching Supabase or
-Mapbox. Built because the cloud sessions Claude works in cannot reach either
-host. It is a stand-in, not the real thing — see "What it cannot tell you".
+with a guide window and passenger windows, against a fake backend (nothing
+is written to the live database). It is a stand-in, not the real thing — see "What it cannot tell you".
 
 ```
 cd tools/testrig
@@ -22,8 +21,11 @@ Playwright and Chromium come from the environment (`require('playwright')`).
   which forwards every table query, RPC and realtime subscription to
   `backend.js` — one in-memory store in Node shared by all windows, so a
   guide's action reaches the passenger window as a realtime event.
-- **Map**: the real Mapbox GL engine (camera, projection, overlays) with a
-  blank style and a 100 m grid (bold every 500 m) around each stop. No tiles.
+- **Map**: the real Mapbox GL engine (camera, projection, overlays). By
+  default a blank style with a 100 m grid (bold every 500 m) around each stop,
+  no network. With `RIG_MAP=mapbox` (or `Rig.start({ map: 'mapbox' })`) the
+  real Mapbox map is loaded through the environment's proxy — needs
+  `api.mapbox.com` allowed.
 - **GPS**: each window gets real browser geolocation, moved by `rig.walk()`,
   so fixes go through the app's own `onGpsSuccess` path. The joystick
   simulator also works.
@@ -63,7 +65,7 @@ imitate — add them to `RPC` in `backend.js`).
 
 ## What it cannot tell you
 
-- **The street map.** Spots and trails sit on a grid, not on terrain or paths.
+- **The street map**, unless run with `RIG_MAP=mapbox`.
 - **The real database.** No row-level security, no SQL from `migrations/`;
   each function in `backend.js` is a hand-written imitation and can drift
   from the migration it copies. Pickup texts, push, chat photos, translation
