@@ -220,10 +220,11 @@ class Rig {
     return { data: null, error: { message: 'rig: unknown call' } };
   }
   mapStyle() {
-    // Blank paper + a 100 m grid (bold every 500 m) around every stop, so
+    // Blank paper + a 100 m grid (bold every 500 m) around every stop and the tour's home, so
     // distances can be read off a map that has no tiles.
     const feats = [];
-    for (const s of this.backend.t.stops) {
+    const centres = this.backend.t.stops.concat(this.backend.t.tours.filter(t => t.home_lat != null).map(t => ({ lat: t.home_lat, lng: t.home_lng })));
+    for (const s of centres) {
       const dLat = 100 / M_PER_DEG, dLng = 100 / (M_PER_DEG * Math.cos(s.lat * Math.PI / 180)), N = 25;
       for (let i = -N; i <= N; i++) {
         const major = i % 5 === 0;

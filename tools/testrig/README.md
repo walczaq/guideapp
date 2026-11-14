@@ -35,7 +35,15 @@ Playwright and Chromium come from the environment (`require('playwright')`).
 
 ## Writing a scenario
 
-`scenarios/geysir-walk.js` is the pattern. The main calls:
+Scenarios so far (each prints PASS/FAIL lines or a summary, and screenshots):
+
+- `geysir-walk.js` — one stop start to finish, passenger loop walk, bus drives in.
+- `thingvellir-day.js` — geofence prompt, extra spot, danger zone, late joiner,
+  no-location passenger, reload mid-stop, end stop, end session.
+- `pickup-bus.js` — before the tour: "your bus is on its way", arrival, stale tracker.
+- `full-bus.js` — the guide's map with 19 passengers walking at once.
+
+`geysir-walk.js` is the simplest pattern. The main calls:
 
 | Call | Does |
 | --- | --- |
