@@ -440,14 +440,20 @@ window.__FN_SB = {
     stroke-linecap: round; stroke-dasharray: 7 5; pointer-events: none;
   }
 
-  /* Spot trail — the walking order between the spots of an active stop
-     (1 → 2 → 3, with a dotted branch out to each extra place). A solid line
-     in the spots' own red with a white casing, so it stands out from the
-     map's footpaths, roads and the dashed stop-to-stop route line. */
+  /* Spot trail — three things share the map during a stop and must not be
+     confused:
+       the way to go   → thin solid line in the numbered spots' red, with one
+                          arrowhead per leg showing the direction (1 → 2 → 3);
+       an extra place  → dashed line in the extra badges' amber, no arrow;
+       where you walked → the round-dot breadcrumb (.you-trail) — the only
+                          dotted thing on the map.
+     White casing so the lines read on any map background. */
   .spot-trail, .spot-trail-case { fill: none; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
-  .spot-trail-case { stroke: #fff; stroke-width: 9; opacity: 0.92; }
-  .spot-trail { stroke: #c2462c; stroke-width: 4.5; }
-  .spot-trail.side { stroke-width: 3.5; stroke-dasharray: 1 8; }
+  .spot-trail-case { stroke: #fff; stroke-width: 5.5; opacity: 0.9; }
+  .spot-trail { stroke: #c2462c; stroke-width: 2.5; }
+  .spot-trail.side { stroke: #d97706; stroke-dasharray: 6 5; }
+  .spot-trail-arrow { pointer-events: none; }
+  .spot-trail-arrow polygon { fill: #c2462c; stroke: #fff; stroke-width: 1.5; stroke-linejoin: round; paint-order: stroke; }
 
   /* Boarding / headcount screen (guide, before "Start tour"). */
   .boarding-screen {
@@ -4667,11 +4673,13 @@ function walkLegPoints(a, b, legs) {
 function spotTrailLines(pins, legs) {
   const { main, sides } = spotTrailShape(pins);
   let mainPts = [];
+  const mainLegs = [];
   for (let i = 0; i + 1 < main.length; i++) {
     const leg = walkLegPoints(main[i], main[i + 1], legs);
+    mainLegs.push(leg);
     mainPts = mainPts.concat(i === 0 ? leg : leg.slice(1));
   }
-  return { main: mainPts, sides: sides.map(([a, b]) => walkLegPoints(a, b, legs)), routed: !!legs };
+  return { main: mainPts, mainLegs, sides: sides.map(([a, b]) => walkLegPoints(a, b, legs)), routed: !!legs };
 }
 // Passenger/guide map: fetch the saved footpaths for this tour's stops. A
 // separate, forgiving query (not part of the tour load) so a database that
@@ -7977,9 +7985,9 @@ function tbEnsureZoneLayers() {
   // Spot trail of the selected stop — same walking line passengers see.
   if (!m.getSource('tb-trail')) {
     m.addSource('tb-trail', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-    m.addLayer({ id: 'tb-trail-case', type: 'line', source: 'tb-trail', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 9, 'line-opacity': 0.92 } });
-    m.addLayer({ id: 'tb-trail-line', type: 'line', source: 'tb-trail', filter: ['!', ['get', 'side']], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#c2462c', 'line-width': 4.5 } });
-    m.addLayer({ id: 'tb-trail-side', type: 'line', source: 'tb-trail', filter: ['get', 'side'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#c2462c', 'line-width': 3.5, 'line-dasharray': [0.3, 2.3] } });
+    m.addLayer({ id: 'tb-trail-case', type: 'line', source: 'tb-trail', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 5.5, 'line-opacity': 0.9 } });
+    m.addLayer({ id: 'tb-trail-line', type: 'line', source: 'tb-trail', filter: ['!', ['get', 'side']], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#c2462c', 'line-width': 2.5 } });
+    m.addLayer({ id: 'tb-trail-side', type: 'line', source: 'tb-trail', filter: ['get', 'side'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#d97706', 'line-width': 2.5, 'line-dasharray': [2.4, 2] } });
   }
   // Trigger/activation radius of the currently-highlighted stop or pin.
   if (!m.getSource('tb-hi')) {
@@ -12605,11 +12613,42 @@ function renderSpotTrail(layer) {
     path.__geoPts = pts.map(t => ({ lng: t.lng, lat: t.lat }));
     layer.appendChild(path);
   };
+  // One arrowhead halfway along a leg, pointing the walking direction. The
+  // map never rotates or tilts, so the angle is fixed; only the position is
+  // re-projected on camera frames (geoStamp).
+  const addArrow = (leg) => {
+    if (leg.length < 2) return;
+    const k = Math.cos(leg[0].lat * Math.PI / 180);
+    const seg = (a, b) => Math.hypot((b.lng - a.lng) * k, b.lat - a.lat);
+    let total = 0; for (let i = 1; i < leg.length; i++) total += seg(leg[i - 1], leg[i]);
+    if (!(total > 0)) return;
+    let run = 0;
+    for (let i = 1; i < leg.length; i++) {
+      const d = seg(leg[i - 1], leg[i]);
+      if (run + d >= total / 2 && d > 0) {
+        const t = (total / 2 - run) / d, a = leg[i - 1], b = leg[i];
+        const lng = a.lng + (b.lng - a.lng) * t, lat = a.lat + (b.lat - a.lat) * t;
+        const pa = project(a.lng, a.lat), pb = project(b.lng, b.lat), at = project(lng, lat);
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', 'spot-trail-arrow');
+        g.setAttribute('transform', `translate(${at.x}, ${at.y})`);
+        geoStamp(g, lng, lat);
+        const head = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        head.setAttribute('points', '-7,-7.5 10,0 -7,7.5 -3,0');
+        head.setAttribute('transform', `rotate(${Math.atan2(pb.y - pa.y, pb.x - pa.x) * 180 / Math.PI})`);
+        g.appendChild(head);
+        layer.appendChild(g);
+        return;
+      }
+      run += d;
+    }
+  };
   for (const stop of TOUR.stops) {
     if (!ACTIVE_STOP_IDS.has(stop.id)) continue;
-    const { main, sides } = spotTrailLines(stop.pins, stop.walkLegs);
-    if (main.length >= 2) { add(main, 'spot-trail-case'); add(main, 'spot-trail'); }
+    const { main, mainLegs, sides } = spotTrailLines(stop.pins, stop.walkLegs);
     for (const leg of sides) { add(leg, 'spot-trail-case'); add(leg, 'spot-trail side'); }
+    if (main.length >= 2) { add(main, 'spot-trail-case'); add(main, 'spot-trail'); }
+    for (const leg of mainLegs) addArrow(leg);
   }
 }
 
