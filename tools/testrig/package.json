@@ -1,0 +1,11 @@
+{
+  "name": "fieldnote-testrig",
+  "private": true,
+  "description": "Offline test rig for Fieldnote (see README.md). Playwright comes from the environment; these packages only supply the app's fonts so screenshots match the real type.",
+  "scripts": { "geysir": "node scenarios/geysir-walk.js" },
+  "devDependencies": {
+    "@fontsource/atkinson-hyperlegible": "^5.0.0",
+    "@fontsource/fraunces": "^5.0.0",
+    "@fontsource/jetbrains-mono": "^5.0.0"
+  }
+}

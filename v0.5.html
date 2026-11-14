@@ -14133,6 +14133,7 @@ function onStopActivated(row) {
   const stop = TOUR ? TOUR.stops.find(s => s.id === row.stop_id) : null;
   _stopsListExpanded = false;   // context switch on the receiving device too
   renderPins();
+  updateNextStopBanner();   // in-transit banner must go the moment a stop starts
   if (ROLE === 'guide') renderStopList();
 
   // Passenger-side arrival announcement: chime + center modal. If the user
@@ -14169,6 +14170,7 @@ function onStopDeactivated(row) {
   if (!ACTIVE_STOP_IDS.has(row.stop_id)) return;
   ACTIVE_STOP_IDS.delete(row.stop_id);
   renderPins();
+  updateNextStopBanner();   // back in transit → the NEXT banner returns
   if (ROLE === 'guide') renderStopList();
 }
 

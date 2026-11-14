@@ -44,3 +44,17 @@
   maximum, doubled as a safety margin. The pilot is one driver. If it works,
   rollout is 7–20 tours a day (roughly 270–760 texts a day), so anything
   built for the pilot should not assume a single phone or a single guide.
+
+## Testing without the backend (offline rig)
+
+- Cloud sessions here cannot reach Supabase or Mapbox (network policy), and
+  Filip works from his phone, where the approval to change that cannot be
+  given. Don't keep proposing environment changes; use the rig.
+- `tools/testrig/` runs the real `v0.5.html` in headless Chromium with a fake
+  in-memory backend, guide + passenger windows, simulated walking and a
+  simulated bus. Start with `tools/testrig/README.md`; run
+  `node tools/testrig/scenarios/geysir-walk.js` and read the screenshots in
+  `tools/testrig/out/`.
+- It shows no street map (blank map with a 100 m grid) and imitates the
+  server functions by hand, so say plainly that a rig pass does not cover the
+  real database or a real phone.
