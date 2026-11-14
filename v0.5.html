@@ -441,12 +441,13 @@ window.__FN_SB = {
   }
 
   /* Spot trail — the walking order between the spots of an active stop
-     (1 → 2 → 3, with a lighter branch out to each extra place). Finer than
-     the stop-to-stop route line and cased in paper so it reads on any map. */
+     (1 → 2 → 3, with a dotted branch out to each extra place). A solid line
+     in the spots' own red with a white casing, so it stands out from the
+     map's footpaths, roads and the dashed stop-to-stop route line. */
   .spot-trail, .spot-trail-case { fill: none; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
-  .spot-trail-case { stroke: var(--paper); stroke-width: 6; opacity: 0.7; }
-  .spot-trail { stroke: #6b4f2e; stroke-width: 2.5; stroke-dasharray: 2 6; }
-  .spot-trail.side { stroke-width: 2; stroke-dasharray: 1 6; opacity: 0.75; }
+  .spot-trail-case { stroke: #fff; stroke-width: 9; opacity: 0.92; }
+  .spot-trail { stroke: #c2462c; stroke-width: 4.5; }
+  .spot-trail.side { stroke-width: 3.5; stroke-dasharray: 1 8; }
 
   /* Boarding / headcount screen (guide, before "Start tour"). */
   .boarding-screen {
@@ -7976,8 +7977,9 @@ function tbEnsureZoneLayers() {
   // Spot trail of the selected stop — same walking line passengers see.
   if (!m.getSource('tb-trail')) {
     m.addSource('tb-trail', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-    m.addLayer({ id: 'tb-trail-case', type: 'line', source: 'tb-trail', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 6, 'line-opacity': 0.7 } });
-    m.addLayer({ id: 'tb-trail-line', type: 'line', source: 'tb-trail', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#6b4f2e', 'line-width': 2.5, 'line-opacity': ['case', ['get', 'side'], 0.75, 1], 'line-dasharray': [0.8, 2.4] } });
+    m.addLayer({ id: 'tb-trail-case', type: 'line', source: 'tb-trail', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 9, 'line-opacity': 0.92 } });
+    m.addLayer({ id: 'tb-trail-line', type: 'line', source: 'tb-trail', filter: ['!', ['get', 'side']], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#c2462c', 'line-width': 4.5 } });
+    m.addLayer({ id: 'tb-trail-side', type: 'line', source: 'tb-trail', filter: ['get', 'side'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#c2462c', 'line-width': 3.5, 'line-dasharray': [0.3, 2.3] } });
   }
   // Trigger/activation radius of the currently-highlighted stop or pin.
   if (!m.getSource('tb-hi')) {
