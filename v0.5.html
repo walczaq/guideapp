@@ -12634,7 +12634,7 @@ function renderSpotTrail(layer) {
         g.setAttribute('transform', `translate(${at.x}, ${at.y})`);
         geoStamp(g, lng, lat);
         const head = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-        head.setAttribute('points', '-7,-7.5 10,0 -7,7.5 -3,0');
+        head.setAttribute('points', '-10,-10.5 14,0 -10,10.5 -4,0');
         head.setAttribute('transform', `rotate(${Math.atan2(pb.y - pa.y, pb.x - pa.x) * 180 / Math.PI})`);
         g.appendChild(head);
         layer.appendChild(g);
